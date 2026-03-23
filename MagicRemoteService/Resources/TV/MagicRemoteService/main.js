@@ -94,6 +94,7 @@ const aSensor = {
 	dFactor: 50,
 	dSpeed: 9,
 }
+const dCursorSpeed = 1.0;
 const strAppId = "com.cathwyler.magicremoteservice";
 
 const strPath = webOS.fetchAppRootPath();
@@ -356,19 +357,20 @@ function SubscriptionScreenSaverRequest() {
 		onSuccess: function(inResponse) {
 			switch(inResponse.subscribed) {
 				case undefined:
-					if(AppVisible() && AppFocus() && iCursor == 0) {
-						webOS.service.request("luna://com.webos.service.tvpower", { 
-							method: "power/responseScreenSaverRequest", 
+					if(AppVisible()) {
+						var bConnected = socClient !== null && socClient.readyState === WebSocket.OPEN;
+						webOS.service.request("luna://com.webos.service.tvpower", {
+							method: "power/responseScreenSaverRequest",
 							parameters: {
 								clientName: strAppId,
-								ack: socClient === null || socClient.readyState !== WebSocket.OPEN,
+								ack: !bConnected,
 								timestamp: inResponse.timestamp
 							},
 							onSuccess: function(inResponse) {
 								LogIfDebug(oString.strResponseScreenSaverRequestSuccess);
 							},
 							onFailure: function(inError) {
-								switch(inError.errorCode) {
+								switch(String(inError.errorCode)) {
 									case "-13":
 										console.error(oString.strResponseScreenSaverRequestFailure + " [", inError.errorCode, ", ", inError.errorText, "]");
 										break;
@@ -389,7 +391,7 @@ function SubscriptionScreenSaverRequest() {
 			}
 		}, 
 		onFailure: function(inError) {
-			switch(inError.errorCode) {
+			switch(String(inError.errorCode)) {
 				case "-1":
 				case "-3":
 					console.error(oString.strRegisterScreenSaverRequestFailure + " [", inError.errorCode, ", ", inError.errorText, "]");
@@ -502,8 +504,8 @@ function SubscriptionGetSensorData() {
 								var dRhoAcceleration = Smooth2(dRho, 75, 1, 0.5);
 								pCurrent.dRhoAccelerationTotal += dRhoAcceleration;
 								if(!TestRemoteEvent()) {
-									pCurrent.dX += dRhoAcceleration * -Math.sin(dTheta);
-									pCurrent.dY += dRhoAcceleration * -Math.cos(dTheta);
+									pCurrent.dX += dRhoAcceleration * dCursorSpeed * -Math.sin(dTheta);
+									pCurrent.dY += dRhoAcceleration * dCursorSpeed * -Math.cos(dTheta);
 									TestLongClick();
 									pCurrent.sRoundX = Math.round(pCurrent.dX);
 									pCurrent.sRoundY = Math.round(pCurrent.dY);
@@ -548,29 +550,13 @@ function SubscriptionGetSensorData() {
 				}
 		},
 		onFailure: function(inError) {
-			switch(inError.errorCode) {
+			switch(String(inError.errorCode)) {
 				case "1301":
+				case "1003":
 					LogIfDebug(oString.strGetSensorDataFailure + " [", inError.errorCode, ", ", inError.errorText, "]");
-					if(arrVersion[0] > 2) {
-						document.oneEventListener("cursorStateChange", function(inEvent) {
-							if(inEvent.detail.visibility) {
-								SubscriptionGetSensorData();
-								return true;
-							} else {
-								return false;
-							}
-						});
-					} else {
-						window.oneEventListener("keydown", function(inEvent) {
-							switch(inEvent.keyCode) {
-								case 0x600:
-									SubscriptionGetSensorData();
-									return true;
-								default:
-									return false;
-							}
-						});
-					}
+					setTimeout(function() {
+						SubscriptionGetSensorData();
+					}, 3000);
 					break;
 				default:
 					Error(oString.strGetSensorDataFailure + " [", inError.errorCode, ", ", inError.errorText, "]");
@@ -763,18 +749,33 @@ function SubscriptionDomEvent() {
 		SetRemoteEvent();
 	});
 
+	var dScrollVelocity = 0;
+	var iScrollInterval = 0;
+	function SmoothScroll() {
+		if(Math.abs(dScrollVelocity) < 0.3) {
+			dScrollVelocity = 0;
+			clearInterval(iScrollInterval);
+			iScrollInterval = 0;
+			return;
+		}
+		var sStep = Math.sign(dScrollVelocity) * Math.max(1, Math.round(Math.abs(dScrollVelocity)));
+		SendWheel({ sY: sStep });
+		dScrollVelocity *= 0.85;
+	}
 	if(arrVersion[0] > 1) {
 		deVideo.addEventListener("wheel", function(inEvent) {
-			SendWheel({
-				sY: inEvent.deltaY
-			});
+			dScrollVelocity += inEvent.deltaY * 0.07;
+			if(!iScrollInterval) {
+				iScrollInterval = setInterval(SmoothScroll, 16);
+			}
 			SetRemoteEvent();
 		});
 	} else {
 		deVideo.addEventListener("mousewheel", function(inEvent) {
-			SendWheel({
-				sY: inEvent.wheelDeltaY
-			});
+			dScrollVelocity += inEvent.wheelDeltaY * 0.07;
+			if(!iScrollInterval) {
+				iScrollInterval = setInterval(SmoothScroll, 16);
+			}
 			SetRemoteEvent();
 		});
 	}
@@ -1254,11 +1255,11 @@ function Load() {
 		SubscriptionInputStatus();
 		SubscriptionGetSensorData();
 		SubscriptionDomEvent();
+		SubscriptionScreenSaverRequest();
 		if(bOverlay) {
 			SubscriptionClose();
 			LaunchInput();
 		} else {
-			SubscriptionScreenSaverRequest();
 			var deSource = document.createElement("source");
 			deSource.setAttribute("src", strInputSource);
 			deSource.setAttribute("type", "service/webos-external");
