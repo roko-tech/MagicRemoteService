@@ -1229,6 +1229,7 @@ namespace MagicRemoteService {
 							if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
 								ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 							}
+							System.Threading.Thread.Sleep(1);
 							break;
 						default:
 							throw new System.Exception("Unmanaged handle error");
