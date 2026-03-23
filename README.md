@@ -11,6 +11,7 @@ Use your LG Magic Remote as a Windows mouse and control your PC with the LG Magi
 - **webOS 25 sensor compatibility**: Added error code `1003` handling alongside `1301` for `getSensorData`, with automatic 3-second retry. The Magic Remote gyroscope now works reliably on webOS 25.
 - **errorCode type coercion**: webOS 25 may return errorCode as a number instead of a string. Added `String()` coercion to all switch statements to prevent silent failures.
 - **CPU usage reduction**: The user input polling timer was firing every 10ms (100 times/sec), consuming ~20% CPU constantly. Reduced to 500ms (2 times/sec) while maintaining responsiveness.
+- **WebSocket receive loop CPU spin**: When the TV is connected, the async receive loop would spin at 100% CPU (400%+ across multiple cores) due to synchronous completions in the socket receive callback. Added a 1ms yield after each receive to cap throughput at ~1000 msg/sec — more than sufficient for 60fps remote input with no perceptible latency.
 
 ### New Features
 - **Mac-style smooth scrolling**: Replaced the jerky stepped scrolling with momentum-based smooth scrolling. Uses velocity accumulation, 60fps rendering, and friction decay for a natural feel.
