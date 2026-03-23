@@ -226,6 +226,12 @@ if(bOverlay){
 
 	serService.activityManager.create("MagicRemoteServiceKeepAlive");
 
+	// Heartbeat: re-create keep-alive activity every 60s to prevent
+	// webOS from killing the service due to inactivity (webOS 25 fix)
+	setInterval(function() {
+		serService.activityManager.create("MagicRemoteServiceKeepAlive");
+	}, 60000);
+
 	var dClose = {};
 	var metClose = serService.register("close");
 	metClose.on("request", function(mMessage) {
