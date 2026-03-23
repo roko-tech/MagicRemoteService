@@ -719,14 +719,14 @@ namespace MagicRemoteService {
 				System.Threading.ManualResetEvent mreClientStop = new System.Threading.ManualResetEvent(false);
 
 				System.Timers.Timer tUserInput = new System.Timers.Timer {
-					Interval = 10,
+					Interval = 500,
 					AutoReset = true
 				};
 				tUserInput.Elapsed += delegate (object oSource, System.Timers.ElapsedEventArgs eElapsed) {
 					WinApi.LastInputInfo lii = new WinApi.LastInputInfo();
 					lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(lii);
 					if(!WinApi.User32.GetLastInputInfo(ref lii)) {
-					} else if(((uint)System.Environment.TickCount - lii.dwTime) < 10) {
+					} else if(((uint)System.Environment.TickCount - lii.dwTime) < 500) {
 						System.Diagnostics.Process pProcess = new System.Diagnostics.Process();
 						pProcess.StartInfo.FileName = "shutdown";
 						pProcess.StartInfo.Arguments = "/a";
