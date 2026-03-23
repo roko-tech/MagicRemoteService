@@ -1,8 +1,22 @@
-# MagicRemoteService
-Use your LG Magic Remote as a Windows mouse and control your PC with the LG Magic Remote from your LG WebOS TV. MagicRemoteService is a Windows service providing computer remote control from a WebOS app on LG WebOS TV. MagicRemoteService work without rooting your TV. Tested with WebOS 6.0 (OLED65C1, OLED48C1) and Windows 10.
+# MagicRemoteService (Fork)
+Use your LG Magic Remote as a Windows mouse and control your PC with the LG Magic Remote from your LG WebOS TV. MagicRemoteService is a Windows service providing computer remote control from a WebOS app on LG WebOS TV. MagicRemoteService works without rooting your TV. Tested with webOS 6.0 (OLED65C1, OLED48C1), webOS 25 (OLED48C26LA/LG C2), and Windows 10/11.
 
-- [Source](https://github.com/Cathwyler/MagicRemoteService)
-- [Release](https://github.com/Cathwyler/MagicRemoteService/releases)
+- [Original Source](https://github.com/Cathwyler/MagicRemoteService)
+- [This Fork](https://github.com/rokogan/MagicRemoteService)
+
+## What's New in This Fork
+
+### Bug Fixes
+- **Screensaver suppression (fixes [#66](https://github.com/Cathwyler/MagicRemoteService/issues/66))**: The screensaver would activate even while the PC was connected. Fixed inverted `ack` parameter, simplified the activation condition, and enabled it in overlay mode.
+- **webOS 25 sensor compatibility**: Added error code `1003` handling alongside `1301` for `getSensorData`, with automatic 3-second retry. The Magic Remote gyroscope now works reliably on webOS 25.
+- **errorCode type coercion**: webOS 25 may return errorCode as a number instead of a string. Added `String()` coercion to all switch statements to prevent silent failures.
+- **CPU usage reduction**: The user input polling timer was firing every 10ms (100 times/sec), consuming ~20% CPU constantly. Reduced to 500ms (2 times/sec) while maintaining responsiveness.
+
+### New Features
+- **Mac-style smooth scrolling**: Replaced the jerky stepped scrolling with momentum-based smooth scrolling. Uses velocity accumulation, 60fps rendering, and friction decay for a natural feel.
+- **Adjustable cursor speed**: Added a `dCursorSpeed` constant for configuring pointer sensitivity (0.5 = slow, 1.0 = normal, 2.0 = fast).
+- **Service keepalive heartbeat**: Re-creates the ActivityManager KeepAlive every 60 seconds to prevent webOS 25 from killing the service after inactivity.
+- **One-command installer**: `install.sh` script that auto-installs all prerequisites and sets up both PC service and TV app interactively.
 
 ## Introduction
 
@@ -16,7 +30,20 @@ There is no encryption data between the TV and the PC. Don't use it if you are u
 - I already tried Node.js net (TCP) for the main data exchange to get ride of the WebSockets exchange protocol, but using service on TV had really poor performance compared to WebSockets.
 - Find a way to detect focus in TextBox control on Windows to automatically pop up the WebOS keyboard.
 
-## Installation
+## Quick Install (This Fork)
+
+1. Clone this repo to your PC
+2. Enable Developer Mode on your LG TV (install "Developer Mode" from LG Content Store)
+3. Open Git Bash as Administrator
+4. Run: `bash install.sh`
+
+The script will:
+- Auto-install all prerequisites (Node.js, ares-cli, VS Build Tools, .NET 4.7.2) via winget
+- Build and install the PC Windows service
+- Configure and deploy the TV app to your LG TV
+- Add firewall rules automatically
+
+### Manual Installation (Original Method)
 
 - Install WebOS Command line interface on your PC. Please refer to [CLI Installation](https://webostv.developer.lge.com/develop/tools/cli-installation#how-to-install).
 - Install and activate developer mode app on your LG WebOS TV. Please refer to [Installing Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app#installing-developer-mode-app) and [Turning Developer Mode on](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app#turning-developer-mode-on).
@@ -24,10 +51,15 @@ There is no encryption data between the TV and the PC. Don't use it if you are u
 - Add your TV. You need to switch on the "Key Server" option on the developer mode app on your LG WebOS TV before confirm. Please refer to [Connecting with CLI](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app#connecting-with-cli).
 - Select a TV then configure and install it.
 - Configure PC and save.
-- (Optionnal) Configure Remote and save.
+- (Optional) Configure Remote and save.
 - Others
-  - (Optionnal) Setup Wake-on-LAN on your motherboard's PC.
-  - (Optionnal) Setup Windows auto logon. Please refer to [Turn on automatic logon in Windows](https://docs.microsoft.com/en-us/troubleshoot/windows-server/user-profiles-and-logon/turn-on-automatic-logon).
+  - (Optional) Setup Wake-on-LAN on your motherboard's PC.
+  - (Optional) Setup Windows auto logon. Please refer to [Turn on automatic logon in Windows](https://docs.microsoft.com/en-us/troubleshoot/windows-server/user-profiles-and-logon/turn-on-automatic-logon).
+
+### Troubleshooting
+- **"Service is busy" or "service is not running"**: Reboot your TV and relaunch the app
+- **Pointer not working but scroll works**: Wave the Magic Remote at the TV to activate the gyroscope sensor. It retries every 3 seconds.
+- **"Failed to get sensor data [1003]"**: Normal on webOS 25 — the sensor subscription will auto-retry
 
 ## Using MagicRemoteService
 MagicRemoteService need to run PC and TV app. TV and PC need properly network and video input wired as you configured in installation step.
