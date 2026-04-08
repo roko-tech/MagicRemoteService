@@ -17,18 +17,24 @@ Window.prototype.oneEventListener = function(strType, fListener) {
 Element.prototype.oneEventListener = Window.prototype.oneEventListener;
 Document.prototype.oneEventListener = Window.prototype.oneEventListener;
 
-Object.prototype.spread = function(o) {
-	for(var strProperty in this) {
-		if(strProperty in o) {
-			this[strProperty] = o[strProperty];
+Object.defineProperty(Object.prototype, "spread", {
+	value: function(o) {
+		for(var strProperty in this) {
+			if(this.hasOwnProperty(strProperty) && strProperty in o) {
+				this[strProperty] = o[strProperty];
+			}
 		}
-	}
-};
+	},
+	enumerable: false,
+	writable: true,
+	configurable: true
+});
 
-Object.prototype.toString = function() {
+Object.defineProperty(Object.prototype, "toString", {
+	value: function() {
 	const arrAncestor = [];
-	return JSON.stringify(this, function(k, o) {
-		if(typeof o !== "object" || o === null) {
+	return JSON.stringify(obj, function(k, o) {
+		if(typeof x !== "object" || x === null) {
 			return o;
 		} else {
 			while(arrAncestor.length > 0 && arrAncestor[arrAncestor.length - 1] !== this) {
@@ -41,7 +47,11 @@ Object.prototype.toString = function() {
 			return o;
 		}
 	});
-};
+	},
+	enumerable: false,
+	writable: true,
+	configurable: true
+});
 
 function startInterval(callback, ms) {
 	callback();
@@ -183,7 +193,7 @@ function ScreenCancel(deScreen, bCursor) {
 function Log() {
 	console.log.apply(console, arguments);
 	Toast(oString.strLogTitle, Array.prototype.slice.call(arguments).map(function(x) {
-		if(typeof o !== "object" || o === null) {
+		if(typeof x !== "object" || x === null) {
 			return x;
 		} else {
 			return x.toString();
@@ -201,7 +211,7 @@ if(bDebug) {
 function Warn() {
 	console.warn.apply(console, arguments);
 	Toast(oString.strWarnTitle, Array.prototype.slice.call(arguments).map(function(x) {
-		if(typeof o !== "object" || o === null) {
+		if(typeof x !== "object" || x === null) {
 			return x;
 		} else {
 			return x.toString();
@@ -212,7 +222,7 @@ function Warn() {
 function Error() {
 	console.error.apply(console, arguments);
 	Toast(oString.strErrorTitle, Array.prototype.slice.call(arguments).map(function(x) {
-		if(typeof o !== "object" || o === null) {
+		if(typeof x !== "object" || x === null) {
 			return x;
 		} else {
 			return x.toString();
@@ -950,17 +960,18 @@ function SocketOpen() {
 		if(socClient !== null && !iIntervalRetryOpen) {
 			CursorShowCountIf0();
 			SocketClosed();
+			SocketOpen();
 			iIntervalRetryOpen = setInterval(function() {
-				if(socClient.readyState === WebSocket.CONNECTING) {
+				if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
 					socClient.close();
 				}
 				SocketOpen();
 			}, 5000);
-			SocketOpen();
 		}
 	};
 	socClient.onmessage = function(e) {
 		if(e.data instanceof ArrayBuffer) {
+			if(e.data.byteLength < 1) return;
 			var dwData = new DataView(e.data);
 			switch(dwData.getUint8(0)) {
 				case 0x01:
@@ -998,20 +1009,22 @@ function SocketOpen() {
 function SocketClose() {
 	var soc = socClient;
 	socClient = null;
-	soc.close();
+	if(soc !== null) {
+		soc.close();
+	}
 }
 function Open() {
 	if(socClient !== null) {
 		Error(oString.strSocketErrorOpen);
 	} else {
 		SocketClosed();
+		SocketOpen();
 		iIntervalRetryOpen = setInterval(function() {
-			if(socClient.readyState === WebSocket.CONNECTING) {
+			if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
 				socClient.close();
 			}
 			SocketOpen();
 		}, 5000);
-		SocketOpen();
 	}
 }
 function Close() {
@@ -1190,7 +1203,7 @@ webOS.service.request("luna://com.webos.settingsservice", {
 				if(i < arr.length){
 					readJson(function(oInfo) {
 						if(oInfo !== undefined){
-							oString.spread(oInfo);
+							oString, oInfo);
 						}
 						readJsonLocale(i + 1, arr);
 					}, strPath + "resources/" + arr.slice(0, i + 1).join("/") + "/appstring.json");

@@ -49,23 +49,28 @@ metLog.on("cancel", function(mMessage) {
 	delete dLog[mMessage.uniqueToken]; 
 });
 
-Object.prototype.toString = function() {
-	var arrAncestor = [];
-	return JSON.stringify(this, function(k, o) {
-		if(typeof o !== "object" || o === null) {
-			return o;
-		} else {
-			while(arrAncestor.length > 0 && arrAncestor[arrAncestor.length - 1] !== this) {
-				arrAncestor.pop();
+Object.defineProperty(Object.prototype, "toString", {
+	value: function() {
+		var arrAncestor = [];
+		return JSON.stringify(this, function(k, o) {
+			if(typeof x !== "object" || x === null) {
+				return o;
+			} else {
+				while(arrAncestor.length > 0 && arrAncestor[arrAncestor.length - 1] !== this) {
+					arrAncestor.pop();
+				}
+				if(arrAncestor.indexOf(o) !== -1 ) {
+					return "[Circular]";
+				}
+				arrAncestor.push(o);
+				return o;
 			}
-			if(arrAncestor.indexOf(o) !== -1 ) {
-				return "[Circular]";
-			}
-			arrAncestor.push(o);
-			return o;
-		}
-	});
-};
+		});
+	},
+	enumerable: false,
+	writable: true,
+	configurable: true
+});
 function SendLog() {
 	try {
 		if(Object.keys(dLog).length > 0){
@@ -96,7 +101,7 @@ function Log() {
 		bConsole: false,
 		iType: 0,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -119,7 +124,7 @@ function Warn() {
 		bConsole: false,
 		iType: 1,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -135,7 +140,7 @@ function Error() {
 		bConsole: false,
 		iType: 2,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -151,7 +156,7 @@ function ConsoleLog() {
 		bConsole: true,
 		iType: 0,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -167,7 +172,7 @@ function ConsoleWarn() {
 		bConsole: true,
 		iType: 1,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -183,7 +188,7 @@ function ConsoleError() {
 		bConsole: true,
 		iType: 2,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
-			if(typeof o !== "object" || o === null) {
+			if(typeof x !== "object" || x === null) {
 				return x;
 			} else {
 				return x.toString();
@@ -198,7 +203,7 @@ socClient.on("listening", function() {
 	socClient.setBroadcast(true);
 });
 
-var bufWol = new Buffer(102);
+var bufWol = Buffer.alloc(102);
 bufWol.fill(0xFF, 0, 6);
 var metWol = serService.register("wol");
 metWol.on("request", function(mMessage) {
@@ -381,7 +386,7 @@ if(bOverlay){
 	});
 
 	function SsapLaunch() {
-		var strSsapWebSocketClientKey = new Buffer("13-" + Date.now()).toString("base64");
+		var strSsapWebSocketClientKey = Buffer.from("13-" + Date.now()).toString("base64");
 		var haSsapWebSocketShaSum = Crypto.createHash("sha1");
 		haSsapWebSocketShaSum.update(strSsapWebSocketClientKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
@@ -585,7 +590,7 @@ if(bOverlay){
 		} else {
 			ulOffsetData = ulOffsetMask;
 		}
-		bufData = new Buffer(ulOffsetData + ulLenData);
+		bufData = Buffer.alloc(ulOffsetData + ulLenData);
 		bufData[0] = (bFin ? 0x80 : 0x00);
 		bufData[0] |= (bRsv1 ? 0x40 : 0x00);
 		bufData[0] |= (bRsv2 ? 0x20 : 0x00);

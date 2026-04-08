@@ -118,7 +118,9 @@ namespace MagicRemoteService {
 				case ServiceType.Server:
 					ssServiceStatus.dwCurrentState = WinApi.ServiceCurrentState.SERVICE_START_PENDING;
 					ssServiceStatus.dwWaitHint = 100000;
-					bool truc = WinApi.Advapi32.SetServiceStatus(this.ServiceHandle, ref ssServiceStatus);
+					if(!WinApi.Advapi32.SetServiceStatus(this.ServiceHandle, ref ssServiceStatus)) {
+					Service.Warn("Failed to set service status to START_PENDING");
+				}
 					break;
 				case ServiceType.Both:
 				case ServiceType.Client:
@@ -211,6 +213,7 @@ namespace MagicRemoteService {
 					}
 					break;
 			}
+			rkMagicRemoteService?.Close();
 			switch(this.stType) {
 				case ServiceType.Server:
 					Service.ewhServerStarted.Set();
@@ -409,9 +412,13 @@ namespace MagicRemoteService {
 			if(uiSessionId == 0xFFFFFFFF) {
 				return 0;
 			} else {
-				System.Diagnostics.Process pWinlogon = System.Array.Find<System.Diagnostics.Process>(System.Diagnostics.Process.GetProcessesByName("winlogon"), delegate (System.Diagnostics.Process p) {
+				System.Diagnostics.Process[] arrWinlogon = System.Diagnostics.Process.GetProcessesByName("winlogon");
+				System.Diagnostics.Process pWinlogon = System.Array.Find<System.Diagnostics.Process>(arrWinlogon, delegate (System.Diagnostics.Process p) {
 					return (uint)p.SessionId == uiSessionId;
 				});
+				foreach(System.Diagnostics.Process pWl in arrWinlogon) {
+					if(pWl != pWinlogon) pWl.Dispose();
+				};
 				if(pWinlogon == null) {
 					throw new System.Exception("Unable to get winlogon process");
 				}
@@ -768,7 +775,7 @@ namespace MagicRemoteService {
 					WinApi.LastInputInfo lii = new WinApi.LastInputInfo();
 					lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(lii);
 					if(!WinApi.User32.GetLastInputInfo(ref lii)) {
-					} else if(((uint)System.Environment.TickCount - lii.dwTime) < 500) {
+					} else if((unchecked((uint)System.Environment.TickCount - lii.dwTime)) < 500) {
 						using(System.Diagnostics.Process pProcessAbort = new System.Diagnostics.Process()) {
 							pProcessAbort.StartInfo.FileName = "shutdown";
 							pProcessAbort.StartInfo.Arguments = "/a";
@@ -790,7 +797,7 @@ namespace MagicRemoteService {
 					Service.Warn("Client timeout pong inactivity on socket [" + socClient.GetHashCode() + "]");
 				};
 				System.Timers.Timer tInactivity = new System.Timers.Timer {
-					Interval = this.iTimeoutInactivity - 300000,
+					Interval = System.Math.Max(1000, this.iTimeoutInactivity - 300000),
 					AutoReset = false
 				};
 				tInactivity.Elapsed += delegate (object oSource, System.Timers.ElapsedEventArgs eElapsed) {
@@ -800,7 +807,7 @@ namespace MagicRemoteService {
 				};
 
 				System.Timers.Timer tVideoInput = new System.Timers.Timer {
-					Interval = this.iTimeoutVideoInput - 300000,
+					Interval = System.Math.Max(1000, this.iTimeoutVideoInput - 300000),
 					AutoReset = false
 				};
 				tVideoInput.Elapsed += delegate (object oSource, System.Timers.ElapsedEventArgs eElapsed) {
@@ -1252,14 +1259,15 @@ namespace MagicRemoteService {
 														Service.LogIfDebug("Processed binary message send/shutdown [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
 														break;
 													default:
-														Service.Warn("Uprocessed binary message [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
+														Service.Warn("Unprocessed binary message [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
 														break;
 												}
 											}
 											break;
 										case (byte)MagicRemoteService.WebSocketOpCode.ConnectionClose:
+											// Strip mask bit and send unmasked close frame
+											tabData[ulOffsetFrame + 1] = (byte)(tabData[ulOffsetFrame + 1] & 0b01111111);
 											if(bMask) {
-												tabData[ulOffsetFrame + 1] = (byte)((0b10000000 & 0b10000000) | (tabData[ulOffsetFrame] & 0b01111111));
 												for(ulong ul = 0; ul < ulLenData; ul++) {
 													tabData[ulOffsetMask + ul] = tabData[ulOffsetData + ul];
 												}
@@ -1270,8 +1278,8 @@ namespace MagicRemoteService {
 											break;
 										case (byte)MagicRemoteService.WebSocketOpCode.Ping:
 											tabData[ulOffsetFrame] = (byte)((tabData[ulOffsetFrame] & 0xF0) | (0x0A & 0x0F));
+											tabData[ulOffsetFrame + 1] = (byte)(tabData[ulOffsetFrame + 1] & 0b01111111);
 											if(bMask) {
-												tabData[ulOffsetFrame + 1] = (byte)((0b10000000 & 0b10000000) | (tabData[ulOffsetFrame] & 0b01111111));
 												for(ulong ul = 0; ul < ulLenData; ul++) {
 													tabData[ulOffsetMask + ul] = tabData[ulOffsetData + ul];
 												}
@@ -1292,7 +1300,7 @@ namespace MagicRemoteService {
 															pProcessInact.Start();
 														}
 														tUserInput.Start();
-														Service.LogIfDebug("Pong incativity received on socket [" + socClient.GetHashCode() + "]");
+														Service.LogIfDebug("Pong inactivity received on socket [" + socClient.GetHashCode() + "]");
 														break;
 													default:
 														Service.Warn("Unprocessed pong message [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
