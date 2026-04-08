@@ -913,6 +913,7 @@ if(bInputDirect){
 function SocketClosed() {};
 if(bInputDirect){
 	SocketClosed = function() {
+		Toast(oString.strAppTittle || "MagicRemoteService", "Connecting to " + strIP + "...");
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
 			deScreenOpen = Dialog(oString.strAppTittle, oString.strSocketOpenTimeout, []);
@@ -971,6 +972,7 @@ function SocketOpen() {
 	socClient.binaryType = "arraybuffer";
 	socClient.onopen = function(e) {
 		LogIfDebug(oString.strSocketOpened);
+		Toast(oString.strAppTittle || "MagicRemoteService", "Connected to " + strIP);
 		SocketOpened();
 		clearInterval(iIntervalRetryOpen);
 		iIntervalRetryOpen = 0;
@@ -986,6 +988,7 @@ function SocketOpen() {
 	};
 	socClient.onclose = function(e) {
 		LogIfDebug(oString.strSocketClosed);
+		Toast(oString.strAppTittle || "MagicRemoteService", "Disconnected — reconnecting...");
 		if(socClient !== null && !iIntervalRetryOpen) {
 			CursorShowCountIf0();
 			SocketClosed();

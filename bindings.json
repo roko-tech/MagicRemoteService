@@ -1,0 +1,42 @@
+{
+  "_comment": "MagicRemoteService Key Bindings. Remote key code (hex) -> array of actions.",
+  "_types": "mouse (left/right/middle), keyboard (virtualKey + scanCode + extended), action (shutdown/keyboard), command (shell command)",
+  "bindings": {
+    "0x0001": [{ "type": "mouse", "value": "left" }],
+    "0x0002": [{ "type": "mouse", "value": "right" }],
+    "0x0008": [{ "type": "keyboard", "virtualKey": 8, "scanCode": 14, "extended": false }],
+    "0x000D": [{ "type": "keyboard", "virtualKey": 13, "scanCode": 28, "extended": false }],
+    "0x0021": [
+      { "type": "keyboard", "virtualKey": 162, "scanCode": 29, "extended": false },
+      { "type": "keyboard", "virtualKey": 67, "scanCode": 46, "extended": false }
+    ],
+    "0x0022": [
+      { "type": "keyboard", "virtualKey": 162, "scanCode": 29, "extended": false },
+      { "type": "keyboard", "virtualKey": 86, "scanCode": 47, "extended": false }
+    ],
+    "0x0025": [{ "type": "keyboard", "virtualKey": 37, "scanCode": 75, "extended": true }],
+    "0x0026": [{ "type": "keyboard", "virtualKey": 38, "scanCode": 72, "extended": true }],
+    "0x0027": [{ "type": "keyboard", "virtualKey": 39, "scanCode": 77, "extended": true }],
+    "0x0028": [{ "type": "keyboard", "virtualKey": 40, "scanCode": 80, "extended": true }],
+    "0x0030": [{ "type": "keyboard", "virtualKey": 96, "scanCode": 82, "extended": false }],
+    "0x0031": [{ "type": "keyboard", "virtualKey": 97, "scanCode": 79, "extended": false }],
+    "0x0032": [{ "type": "keyboard", "virtualKey": 98, "scanCode": 80, "extended": false }],
+    "0x0033": [{ "type": "keyboard", "virtualKey": 99, "scanCode": 81, "extended": false }],
+    "0x0034": [{ "type": "keyboard", "virtualKey": 100, "scanCode": 75, "extended": false }],
+    "0x0035": [{ "type": "keyboard", "virtualKey": 101, "scanCode": 76, "extended": false }],
+    "0x0036": [{ "type": "keyboard", "virtualKey": 102, "scanCode": 77, "extended": false }],
+    "0x0037": [{ "type": "keyboard", "virtualKey": 103, "scanCode": 71, "extended": false }],
+    "0x0038": [{ "type": "keyboard", "virtualKey": 104, "scanCode": 72, "extended": false }],
+    "0x0039": [{ "type": "keyboard", "virtualKey": 105, "scanCode": 73, "extended": false }],
+    "0x0193": [{ "type": "action", "value": "shutdown" }],
+    "0x0194": [{ "type": "keyboard", "virtualKey": 91, "scanCode": 91, "extended": true }],
+    "0x0195": [{ "type": "mouse", "value": "right" }],
+    "0x0196": [{ "type": "action", "value": "keyboard" }],
+    "0x01CD": [{ "type": "keyboard", "virtualKey": 27, "scanCode": 1, "extended": false }],
+    "0x019F": [{ "type": "keyboard", "virtualKey": 250, "scanCode": 0, "extended": false }],
+    "0x0013": [{ "type": "keyboard", "virtualKey": 19, "scanCode": 0, "extended": false }],
+    "0x01A1": [{ "type": "keyboard", "virtualKey": 176, "scanCode": 0, "extended": false }],
+    "0x019C": [{ "type": "keyboard", "virtualKey": 177, "scanCode": 0, "extended": false }],
+    "0x019D": [{ "type": "keyboard", "virtualKey": 178, "scanCode": 0, "extended": false }]
+  }
+}
