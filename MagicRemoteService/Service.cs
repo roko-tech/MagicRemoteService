@@ -29,6 +29,7 @@ namespace MagicRemoteService {
 		private volatile bool bVideoInput;
 		private int iTimeoutVideoInput;
 		private System.Threading.Thread thrSsdp;
+		private System.Threading.Thread thrHttpSettings;
 		private static readonly string SSDP_MULTICAST = "239.255.255.250";
 		private static readonly int SSDP_PORT = 1900;
 		private static readonly string SSDP_USN = "urn:magicremoteservice:service:remote:1";
@@ -159,6 +160,11 @@ namespace MagicRemoteService {
 						this.bVideoInput = (int)rkMagicRemoteService.GetValue("VideoInput", 1) != 0;
 						System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, (int)rkMagicRemoteService.GetValue("TimeoutVideoInput", 900000));
 					}
+					// Try loading from bindings.json first (next to exe)
+					string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+					if(System.IO.File.Exists(strBindingsPath)) {
+						this.LoadBindingsFromJson(strBindingsPath);
+					} else {
 					Microsoft.Win32.RegistryKey rkMagicRemoteServiceRemoteBind = (MagicRemoteService.Program.bElevated ? Microsoft.Win32.Registry.LocalMachine : Microsoft.Win32.Registry.CurrentUser).OpenSubKey(@"Software\MagicRemoteService\Remote\Bind");
 					if(rkMagicRemoteServiceRemoteBind == null) {
 						this.dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
@@ -215,6 +221,7 @@ namespace MagicRemoteService {
 							this.dBind[ushort.Parse(sKey.Substring(2), System.Globalization.NumberStyles.HexNumber)] = liBind.ToArray();
 						}
 					}
+					}
 					break;
 			}
 			rkMagicRemoteService?.Close();
@@ -242,6 +249,12 @@ namespace MagicRemoteService {
 					this.thrSsdp.IsBackground = true;
 					this.thrSsdp.Start();
 					Service.Log("SSDP discovery responder started on port " + SSDP_PORT);
+					this.thrHttpSettings = new System.Threading.Thread(delegate () {
+						this.ThreadHttpSettings();
+					});
+					this.thrHttpSettings.IsBackground = true;
+					this.thrHttpSettings.Start();
+					Service.Log("Web settings UI started on http://localhost:" + (this.iPort + 1));
 					break;
 				case ServiceType.Client:
 					break;
@@ -486,6 +499,126 @@ namespace MagicRemoteService {
 
 				return piProcess.dwProcessId;
 			}
+		}
+		private void LoadBindingsFromJson(string strPath) {
+			try {
+				string strJson = System.IO.File.ReadAllText(strPath);
+				using(System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(strJson)) {
+					System.Text.Json.JsonElement elBindings = doc.RootElement.GetProperty("bindings");
+					foreach(System.Text.Json.JsonProperty prop in elBindings.EnumerateObject()) {
+						ushort usKey = ushort.Parse(prop.Name.Replace("0x", ""), System.Globalization.NumberStyles.HexNumber);
+						System.Collections.Generic.List<Bind> liBind = new System.Collections.Generic.List<Bind>();
+						foreach(System.Text.Json.JsonElement el in prop.Value.EnumerateArray()) {
+							string strType = el.GetProperty("type").GetString();
+							switch(strType) {
+								case "mouse":
+									string strMouse = el.GetProperty("value").GetString();
+									BindMouseValue bmv = strMouse == "left" ? BindMouseValue.Left : strMouse == "right" ? BindMouseValue.Right : BindMouseValue.Middle;
+									liBind.Add(new BindMouse(bmv));
+									break;
+								case "keyboard":
+									liBind.Add(new BindKeyboard((byte)el.GetProperty("virtualKey").GetInt32(), (byte)el.GetProperty("scanCode").GetInt32(), el.GetProperty("extended").GetBoolean()));
+									break;
+								case "action":
+									string strAction = el.GetProperty("value").GetString();
+									liBind.Add(new BindAction(strAction == "shutdown" ? BindActionValue.Shutdown : BindActionValue.Keyboard));
+									break;
+								case "command":
+									liBind.Add(new BindCommand(el.GetProperty("command").GetString()));
+									break;
+							}
+						}
+						this.dBind[usKey] = liBind.ToArray();
+					}
+				}
+				Service.Log("Loaded key bindings from " + strPath);
+			} catch(System.Exception ex) {
+				Service.Warn("Failed to load bindings.json: " + ex.Message);
+			}
+		}
+		private void ThreadHttpSettings() {
+			int iHttpPort = this.iPort + 1;
+			System.Net.HttpListener hlSettings = null;
+			try {
+				hlSettings = new System.Net.HttpListener();
+				hlSettings.Prefixes.Add("http://localhost:" + iHttpPort + "/");
+				hlSettings.Prefixes.Add("http://127.0.0.1:" + iHttpPort + "/");
+				hlSettings.Start();
+				while(!Service.mreStop.WaitOne(System.TimeSpan.Zero)) {
+					System.IAsyncResult arContext = hlSettings.BeginGetContext(null, null);
+					int iWait = System.Threading.WaitHandle.WaitAny(new System.Threading.WaitHandle[] { Service.mreStop, arContext.AsyncWaitHandle }, 1000);
+					if(iWait == 1) {
+						System.Net.HttpListenerContext ctx = hlSettings.EndGetContext(arContext);
+						try {
+							string strReqPath = ctx.Request.Url.AbsolutePath;
+							if(strReqPath == "/api/settings" && ctx.Request.HttpMethod == "GET") {
+								string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+								string strBindings = System.IO.File.Exists(strBindingsFile) ? System.IO.File.ReadAllText(strBindingsFile) : "{}";
+								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"bindings\":" + strBindings + "}";
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strJson);
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+							} else if(strReqPath == "/api/bindings" && ctx.Request.HttpMethod == "POST") {
+								using(System.IO.StreamReader sr = new System.IO.StreamReader(ctx.Request.InputStream)) {
+									string strBody = sr.ReadToEnd();
+									System.Text.Json.JsonDocument.Parse(strBody).Dispose();
+									string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+									System.IO.File.WriteAllText(strBindingsFile, strBody);
+									byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"saved\":true}");
+									ctx.Response.ContentType = "application/json";
+									ctx.Response.ContentLength64 = buf.Length;
+									ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+									Service.Log("Key bindings saved via web UI");
+								}
+							} else {
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(GetSettingsHtml());
+								ctx.Response.ContentType = "text/html; charset=utf-8";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+							}
+						} catch(System.Exception ex) {
+							Service.LogIfDebug("HTTP request error: " + ex.Message);
+						} finally {
+							ctx.Response.Close();
+						}
+					} else if(iWait == 0) {
+						break;
+					}
+				}
+			} catch(System.Exception ex) {
+				Service.Warn("HTTP settings server error: " + ex.Message);
+			} finally {
+				hlSettings?.Stop();
+				hlSettings?.Close();
+			}
+		}
+		private static string GetSettingsHtml() {
+			return @"<!DOCTYPE html><html><head><meta charset=utf-8><title>MagicRemoteService Settings</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:system-ui,-apple-system,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:900px;margin:0 auto}
+h1{color:#fff;margin-bottom:20px;font-size:24px}h2{color:#aaa;margin:20px 0 10px;font-size:18px;border-bottom:1px solid #333;padding-bottom:5px}
+.card{background:#16213e;border-radius:8px;padding:20px;margin-bottom:15px}
+.row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1a1a2e}.row:last-child{border:none}
+.label{font-weight:500;color:#ccc}.value{color:#4ecca3;font-family:monospace;font-size:14px}
+textarea{width:100%;height:400px;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:4px;padding:12px;font-family:monospace;font-size:13px;resize:vertical}
+button{background:#4ecca3;color:#1a1a2e;border:none;padding:10px 24px;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;margin-top:10px}button:hover{background:#3dbb91}
+.status{padding:8px 16px;border-radius:4px;margin-top:10px;display:none}.ok{background:#1b4332;color:#95d5b2;display:block}.err{background:#442222;color:#f88;display:block}
+</style></head><body>
+<h1>MagicRemoteService Settings</h1>
+<div class=card id=info><h2>Service Status</h2><div id=status>Loading...</div></div>
+<div class=card><h2>Key Bindings</h2><p style='color:#888;margin-bottom:10px'>Edit the JSON below and click Save. Changes take effect on next client connection.</p>
+<textarea id=bindings></textarea><br><button onclick=save()>Save Bindings</button><div class=status id=msg></div></div>
+<script>
+fetch('/api/settings').then(function(r){return r.json()}).then(function(d){
+document.getElementById('status').innerHTML=
+'<div class=row><span class=label>Port</span><span class=value>'+d.port+'</span></div>'+
+'<div class=row><span class=label>Inactivity Shutdown</span><span class=value>'+(d.inactivity?'Enabled':'Disabled')+'</span></div>'+
+'<div class=row><span class=label>Inactivity Timeout</span><span class=value>'+(d.timeoutInactivity/60000)+' min</span></div>'+
+'<div class=row><span class=label>Video Input Monitor</span><span class=value>'+(d.videoInput?'Enabled':'Disabled')+'</span></div>';
+document.getElementById('bindings').value=JSON.stringify(d.bindings,null,2)});
+function save(){var m=document.getElementById('msg');try{JSON.parse(document.getElementById('bindings').value)}catch(e){m.className='status err';m.textContent='Invalid JSON: '+e.message;return}
+fetch('/api/bindings',{method:'POST',body:document.getElementById('bindings').value}).then(function(r){return r.json()}).then(function(d){m.className='status ok';m.textContent='Saved! Restart service or reconnect TV for changes to take effect.'}).catch(function(e){m.className='status err';m.textContent='Error: '+e})}
+</script></body></html>";
 		}
 		private void ThreadSsdp() {
 			try {
