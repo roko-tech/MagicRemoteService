@@ -147,7 +147,7 @@ namespace MagicRemoteService {
 	}
 	internal static class WebOSCLI {
 		private static string ExecWebOSCLICommand(string strCommand, string strArgument, System.Collections.Generic.Dictionary<ushort, string> dInput = null, string strWorkingDirectory = null) {
-			System.Diagnostics.Process pProcess = new System.Diagnostics.Process();
+			using(System.Diagnostics.Process pProcess = new System.Diagnostics.Process()) {
 			pProcess.StartInfo.FileName = "cmd";
 			if(!string.IsNullOrEmpty(strWorkingDirectory)) {
 				pProcess.StartInfo.WorkingDirectory = strWorkingDirectory;
@@ -189,6 +189,7 @@ namespace MagicRemoteService {
 				throw new MagicRemoteService.WebOSCLIException(strErr);
 			}
 			return strOutput;
+			}
 		}
 		public static MagicRemoteService.WebOSCLIDeviceInput[] InputList() {
 			return new MagicRemoteService.WebOSCLIDeviceInput[] {

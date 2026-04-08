@@ -4,6 +4,43 @@
 
 set -e
 
+# Input validation helpers
+validate_ip() {
+    local ip="$1"
+    if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        echo "ERROR: Invalid IP address format: $ip"
+        return 1
+    fi
+}
+validate_mac() {
+    local mac="$1"
+    if [[ ! "$mac" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+        echo "ERROR: Invalid MAC address format: $mac (expected XX:XX:XX:XX:XX:XX)"
+        return 1
+    fi
+}
+validate_port() {
+    local port="$1"
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        echo "ERROR: Invalid port number: $port (must be 1-65535)"
+        return 1
+    fi
+}
+validate_name() {
+    local name="$1"
+    if [[ "$name" =~ [\;\`\$\|\&\>\<'] ]]; then
+        echo "ERROR: Name contains invalid characters: $name"
+        return 1
+    fi
+}
+validate_number() {
+    local num="$1"
+    if [[ ! "$num" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        echo "ERROR: Invalid number: $num"
+        return 1
+    fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/MagicRemoteService/Resources/TV"
 BUILD_DIR="$SCRIPT_DIR/build-output"
@@ -292,7 +329,7 @@ install_pc_service() {
     mkdir -p "$INSTALL_DIR_UNIX"
     cp "$SCRIPT_DIR/MagicRemoteService/bin/Release/MagicRemoteService.exe" "$INSTALL_DIR_UNIX/"
     cp "$SCRIPT_DIR/MagicRemoteService/bin/Release/MagicRemoteService.exe.config" "$INSTALL_DIR_UNIX/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/MagicRemoteService/bin/Release/"*.dll "$INSTALL_DIR_UNIX/"
+    cp "$SCRIPT_DIR/MagicRemoteService/bin/Release/"*.dll "$INSTALL_DIR_UNIX/" 2>/dev/null || true
     for lang in es fr; do
         if [ -d "$SCRIPT_DIR/MagicRemoteService/bin/Release/$lang" ]; then
             mkdir -p "$INSTALL_DIR_UNIX/$lang"
@@ -311,8 +348,9 @@ install_pc_service() {
     fi
 
     # Firewall rule
-    echo "  Adding firewall rule for port 41230..."
-    powershell -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-Command', 'New-NetFirewallRule -DisplayName \"MagicRemoteService\" -Direction Inbound -Protocol TCP -LocalPort 41230 -Action Allow -ErrorAction SilentlyContinue'" 2>/dev/null || true
+    FW_PORT=${PC_PORT:-41230}
+    echo "  Adding firewall rule for port $FW_PORT..."
+    powershell -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-Command', 'Remove-NetFirewallRule -DisplayName \"MagicRemoteService\" -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName \"MagicRemoteService\" -Direction Inbound -Protocol TCP -LocalPort $FW_PORT -Action Allow'" 2>/dev/null || echo "  WARNING: Failed to create firewall rule. You may need to add it manually."
 
     sleep 2
     SERVICE_STATUS=$(powershell -Command "(Get-Service MagicRemoteService).Status" 2>/dev/null || echo "NotFound")
@@ -346,10 +384,12 @@ install_tv_app() {
         echo "Make sure Developer Mode is enabled on your TV."
         echo ""
         read -p "TV name (e.g., MyTV, C2): " NEW_TV_NAME
+        validate_name "$NEW_TV_NAME" || return 1
         read -p "TV IP address: " NEW_TV_IP
+        validate_ip "$NEW_TV_IP" || return 1
         read -p "TV passphrase (from Developer Mode app): " NEW_TV_PASS
         ares-setup-device -a "$NEW_TV_NAME" -i "host=$NEW_TV_IP" -i "port=9922" -i "username=prisoner"
-        ares-novacom --device "$NEW_TV_NAME" --getkey --passphrase "$NEW_TV_PASS" 2>/dev/null || true
+        ares-novacom --device "$NEW_TV_NAME" --getkey --passphrase "$NEW_TV_PASS" || echo "  WARNING: Key exchange may have failed. Check passphrase."
         echo ""
         ares-setup-device --list
         echo ""
@@ -357,11 +397,15 @@ install_tv_app() {
 
     read -p "TV device name: " TV_DEVICE
     read -p "PC IP address: " PC_IP
+    validate_ip "$PC_IP" || return 1
     read -p "PC MAC address (XX:XX:XX:XX:XX:XX): " PC_MAC
+    validate_mac "$PC_MAC" || return 1
     read -p "Subnet mask [255.255.255.0]: " SUBNET_MASK
     SUBNET_MASK=${SUBNET_MASK:-255.255.255.0}
+    validate_ip "$SUBNET_MASK" || return 1
     read -p "PC listen port [41230]: " PC_PORT
     PC_PORT=${PC_PORT:-41230}
+    validate_port "$PC_PORT" || return 1
 
     echo ""
     echo "HDMI port your PC is connected to:"
@@ -378,6 +422,7 @@ install_tv_app() {
 
     read -p "Cursor speed [1.0] (0.5=slow, 2.0=fast): " CURSOR_SPEED
     CURSOR_SPEED=${CURSOR_SPEED:-1.0}
+    validate_number "$CURSOR_SPEED" || return 1
 
     APP_ID="com.cathwyler.magicremoteservice.${HDMI_SHORT}"
     SERVICE_ID="${APP_ID}.service"

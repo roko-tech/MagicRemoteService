@@ -100,6 +100,7 @@ namespace MagicRemoteService {
 			Screen.UpdateScreen();
 		}
 		private static void UpdateScreen() {
+			try {
 			uint uiPathCount;
 			uint uiModeCount;
 			if(0 != WinApi.User32.GetDisplayConfigBufferSizes(WinApi.QueryDisplayConfigFlags.QDC_ALL_PATHS, out uiPathCount, out uiModeCount)) {
