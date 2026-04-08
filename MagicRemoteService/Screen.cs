@@ -187,6 +187,11 @@ namespace MagicRemoteService {
 					Screen.recDesktopBounds = System.Drawing.Rectangle.Union(Screen.recDesktopBounds, scr.Bounds);
 				}
 			}
+			} catch(System.ComponentModel.Win32Exception) {
+				// Display config query failed — keep previous screen state
+			} catch(System.InvalidOperationException) {
+				// Screen enumeration failed — keep previous screen state
+			}
 		}
 	}
 }

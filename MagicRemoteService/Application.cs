@@ -112,6 +112,7 @@ namespace MagicRemoteService {
 				}
 				rkMagicRemoteService.SetValue("Version", vCurrent.ToString(), Microsoft.Win32.RegistryValueKind.String);
 			}
+			rkMagicRemoteService.Close();
 		}
 		public void Invoke(System.Delegate methode) {
 			MagicRemoteService.Application.iInvoker.Invoke(methode);
