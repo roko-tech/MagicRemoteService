@@ -203,6 +203,76 @@ socClient.on("listening", function() {
 	socClient.setBroadcast(true);
 });
 
+// SSDP Auto-Discovery
+var SSDP_MULTICAST = "239.255.255.250";
+var SSDP_PORT = 1900;
+var SSDP_USN = "urn:magicremoteservice:service:remote:1";
+
+var metDiscover = serService.register("discover");
+metDiscover.on("request", function(mMessage) {
+	var timeout = mMessage.payload.timeout || 3000;
+	var socSsdp = Dgram.createSocket({type: "udp4", reuseAddr: true});
+	var discovered = null;
+
+	var searchMsg = "M-SEARCH * HTTP/1.1\r\n" +
+		"HOST: " + SSDP_MULTICAST + ":" + SSDP_PORT + "\r\n" +
+		"MAN: \"ssdp:discover\"\r\n" +
+		"MX: 2\r\n" +
+		"ST: " + SSDP_USN + "\r\n\r\n";
+
+	socSsdp.on("message", function(msg, rinfo) {
+		try {
+			var response = msg.toString();
+			if(response.indexOf(SSDP_USN) !== -1) {
+				var locationMatch = response.match(/LOCATION:\s*ws:\/\/(\S+):(\d+)/i);
+				if(locationMatch) {
+					discovered = {
+						ip: locationMatch[1],
+						port: parseInt(locationMatch[2], 10),
+						source: rinfo.address
+					};
+					ConsoleLog("SSDP: Discovered MagicRemoteService at " + discovered.ip + ":" + discovered.port);
+					socSsdp.close();
+					mMessage.respond({
+						returnValue: true,
+						found: true,
+						ip: discovered.ip,
+						port: discovered.port
+					});
+				}
+			}
+		} catch(e) {
+			ConsoleWarn("SSDP: Parse error: " + e);
+		}
+	});
+
+	socSsdp.on("error", function(err) {
+		ConsoleWarn("SSDP: Socket error: " + err);
+		mMessage.respond({
+			returnValue: true,
+			found: false,
+			error: err.toString()
+		});
+	});
+
+	socSsdp.bind(function() {
+		var buf = Buffer.from(searchMsg);
+		socSsdp.send(buf, 0, buf.length, SSDP_PORT, SSDP_MULTICAST);
+		ConsoleLog("SSDP: Sent M-SEARCH for " + SSDP_USN);
+	});
+
+	setTimeout(function() {
+		if(!discovered) {
+			try { socSsdp.close(); } catch(e) {}
+			ConsoleLog("SSDP: Discovery timeout after " + timeout + "ms");
+			mMessage.respond({
+				returnValue: true,
+				found: false
+			});
+		}
+	}, timeout);
+});
+
 var bufWol = Buffer.alloc(102);
 bufWol.fill(0xFF, 0, 6);
 var metWol = serService.register("wol");

@@ -90,16 +90,17 @@ const strInputId = "HDMI";
 const strInputAppId = "com.webos.app.hdmi";
 const strInputName = "HDMI";
 const strInputSource = "ext://hdmi";
-const strIP = "127.0.0.1";
-const uiPort = 41230;
+var strIP = "127.0.0.1";
+var uiPort = 41230;
 const strMask = "255.255.255.0";
 const strMac = "AA:AA:AA:AA:AA:AA";
-const strBroadcast = strIP.split(".").map(function(x, i) {
+var strBroadcast = strIP.split(".").map(function(x, i) {
 	return(x | (parseInt(strMask.split(".")[i], 10) ^ 0xFF)).toString(10);
 }).join(".");
 const arrMac = strMac.split(":").map(function(x) {
 	return parseInt(x, 16);
 });
+var bAutoDiscovered = false;
 const aSensor = {
 	dFactor: 50,
 	dSpeed: 9,
@@ -491,10 +492,10 @@ function SubscriptionGetSensorData() {
 	webOS.service.request("luna://com.webos.service.mrcu", {
 		method: "sensor/getSensorData",
 		parameters: arrVersion[0] > 1 ? {
-			callbackInterval: 1,
+			callbackInterval: 16,
 			subscribe: true
 		} : {
-			callbackInterval: 1,
+			callbackInterval: 16,
 			subscribe: true,
 			sleep: true,
 			autoAlign: false
@@ -937,6 +938,34 @@ if(bInputDirect){
 		]);
 	};
 }
+function DiscoverService(fCallback) {
+	if(bAutoDiscovered || strIP !== "127.0.0.1") {
+		fCallback();
+		return;
+	}
+	webOS.service.request("luna://" + strAppId + ".service", {
+		method: "discover",
+		parameters: { timeout: 3000 },
+		onSuccess: function(inResponse) {
+			if(inResponse.found) {
+				strIP = inResponse.ip;
+				uiPort = inResponse.port;
+				strBroadcast = strIP.split(".").map(function(x, i) {
+					return(x | (parseInt(strMask.split(".")[i], 10) ^ 0xFF)).toString(10);
+				}).join(".");
+				bAutoDiscovered = true;
+				Log("Auto-discovered PC at " + strIP + ":" + uiPort);
+			} else {
+				LogIfDebug("Auto-discovery: no PC found, using configured IP");
+			}
+			fCallback();
+		},
+		onFailure: function(inError) {
+			LogIfDebug("Auto-discovery failed: " + inError.errorText);
+			fCallback();
+		}
+	});
+}
 function SocketOpen() {
 	socClient = new WebSocket("ws://" + strIP + ":" + uiPort);
 	socClient.binaryType = "arraybuffer";
@@ -1018,7 +1047,9 @@ function Open() {
 		Error(oString.strSocketErrorOpen);
 	} else {
 		SocketClosed();
-		SocketOpen();
+		DiscoverService(function() {
+			SocketOpen();
+		});
 		iIntervalRetryOpen = setInterval(function() {
 			if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
 				socClient.close();

@@ -396,8 +396,13 @@ install_tv_app() {
     fi
 
     read -p "TV device name: " TV_DEVICE
-    read -p "PC IP address: " PC_IP
-    validate_ip "$PC_IP" || return 1
+    read -p "PC IP address (leave empty for auto-discovery): " PC_IP
+    if [ -z "$PC_IP" ]; then
+        PC_IP="127.0.0.1"
+        echo "  -> Auto-discovery enabled (TV will find PC automatically)"
+    else
+        validate_ip "$PC_IP" || return 1
+    fi
     read -p "PC MAC address (XX:XX:XX:XX:XX:XX): " PC_MAC
     validate_mac "$PC_MAC" || return 1
     read -p "Subnet mask [255.255.255.0]: " SUBNET_MASK

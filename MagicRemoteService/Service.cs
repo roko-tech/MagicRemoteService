@@ -28,6 +28,10 @@ namespace MagicRemoteService {
 		private int iTimeoutInactivity;
 		private volatile bool bVideoInput;
 		private int iTimeoutVideoInput;
+		private System.Threading.Thread thrSsdp;
+		private static readonly string SSDP_MULTICAST = "239.255.255.250";
+		private static readonly int SSDP_PORT = 1900;
+		private static readonly string SSDP_USN = "urn:magicremoteservice:service:remote:1";
 		private readonly System.Collections.Generic.Dictionary<ushort, Bind[]> dBind = new System.Collections.Generic.Dictionary<ushort, Bind[]>() {
 			{ 0x0001, null },
 			{ 0x0002, null },
@@ -229,6 +233,19 @@ namespace MagicRemoteService {
 				this.ThreadServer();
 			});
 			this.thrServer.Start();
+			switch(this.stType) {
+				case ServiceType.Server:
+				case ServiceType.Both:
+					this.thrSsdp = new System.Threading.Thread(delegate () {
+						this.ThreadSsdp();
+					});
+					this.thrSsdp.IsBackground = true;
+					this.thrSsdp.Start();
+					Service.Log("SSDP discovery responder started on port " + SSDP_PORT);
+					break;
+				case ServiceType.Client:
+					break;
+			}
 			switch(this.stType) {
 				case ServiceType.Server:
 					Service.Log("Service server started");
@@ -468,6 +485,45 @@ namespace MagicRemoteService {
 				}
 
 				return piProcess.dwProcessId;
+			}
+		}
+		private void ThreadSsdp() {
+			try {
+				using(System.Net.Sockets.UdpClient udpSsdp = new System.Net.Sockets.UdpClient()) {
+					udpSsdp.ExclusiveAddressUse = false;
+					udpSsdp.Client.SetSocketOption(System.Net.Sockets.SocketOptionLevel.Socket, System.Net.Sockets.SocketOptionName.ReuseAddress, true);
+					udpSsdp.Client.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Any, SSDP_PORT));
+					udpSsdp.JoinMulticastGroup(System.Net.IPAddress.Parse(SSDP_MULTICAST));
+
+					while(!Service.mreStop.WaitOne(System.TimeSpan.Zero)) {
+						if(udpSsdp.Available > 0) {
+							System.Net.IPEndPoint epRemote = new System.Net.IPEndPoint(System.Net.IPAddress.Any, 0);
+							byte[] data = udpSsdp.Receive(ref epRemote);
+							string request = System.Text.Encoding.UTF8.GetString(data);
+							if(request.Contains("M-SEARCH") && request.Contains(SSDP_USN)) {
+								string localIp = ((System.Net.IPEndPoint)udpSsdp.Client.LocalEndPoint).Address.ToString();
+								// Determine our IP that can reach the requester
+								using(System.Net.Sockets.Socket tempSock = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, System.Net.Sockets.ProtocolType.Udp)) {
+									tempSock.Connect(epRemote.Address, 1);
+									localIp = ((System.Net.IPEndPoint)tempSock.LocalEndPoint).Address.ToString();
+								}
+								string response = "HTTP/1.1 200 OK\r\n" +
+									"ST: " + SSDP_USN + "\r\n" +
+									"USN: " + SSDP_USN + "\r\n" +
+									"LOCATION: ws://" + localIp + ":" + this.iPort + "\r\n" +
+									"CACHE-CONTROL: max-age=1800\r\n" +
+									"SERVER: MagicRemoteService/1.0\r\n\r\n";
+								byte[] responseBytes = System.Text.Encoding.UTF8.GetBytes(response);
+								udpSsdp.Send(responseBytes, responseBytes.Length, epRemote);
+								Service.LogIfDebug("SSDP: Responded to M-SEARCH from " + epRemote.Address);
+							}
+						} else {
+							System.Threading.Thread.Sleep(100);
+						}
+					}
+				}
+			} catch(System.Exception ex) {
+				Service.Warn("SSDP thread error: " + ex.Message);
 			}
 		}
 		private void ThreadServer() {
