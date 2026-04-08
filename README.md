@@ -55,7 +55,7 @@ The script will:
 - (Optional) Configure Remote and save.
 - Others
   - (Optional) Setup Wake-on-LAN on your motherboard's PC.
-  - (Optional) Setup Windows auto logon. Please refer to [Turn on automatic logon in Windows](https://docs.microsoft.com/en-us/troubleshoot/windows-server/user-profiles-and-logon/turn-on-automatic-logon).
+  - (Optional) Setup Windows auto logon. Please refer to [Turn on automatic logon in Windows](https://learn.microsoft.com/en-us/troubleshoot/windows-server/user-profiles-and-logon/turn-on-automatic-logon).
 
 ### Troubleshooting
 - **"Service is busy" or "service is not running"**: Reboot your TV and relaunch the app

@@ -23,11 +23,11 @@ namespace MagicRemoteService {
 		Shutdown = 0x06
 	}
 	public partial class Service : System.ServiceProcess.ServiceBase {
-		private volatile int iPort;
+		private int iPort;
 		private volatile bool bInactivity;
-		private volatile int iTimeoutInactivity;
+		private int iTimeoutInactivity;
 		private volatile bool bVideoInput;
-		private volatile int iTimeoutVideoInput;
+		private int iTimeoutVideoInput;
 		private readonly System.Collections.Generic.Dictionary<ushort, Bind[]> dBind = new System.Collections.Generic.Dictionary<ushort, Bind[]>() {
 			{ 0x0001, null },
 			{ 0x0002, null },
@@ -129,9 +129,9 @@ namespace MagicRemoteService {
 				case ServiceType.Server:
 				case ServiceType.Both:
 					if(rkMagicRemoteService == null) {
-						this.iPort = 41230;
+						System.Threading.Interlocked.Exchange(ref this.iPort, 41230);
 					} else {
-						this.iPort = (int)rkMagicRemoteService.GetValue("Port", 41230);
+						System.Threading.Interlocked.Exchange(ref this.iPort, (int)rkMagicRemoteService.GetValue("Port", 41230));
 					}
 					break;
 				case ServiceType.Client:
@@ -144,14 +144,14 @@ namespace MagicRemoteService {
 				case ServiceType.Client:
 					if(rkMagicRemoteService == null) {
 						this.bInactivity = true;
-						this.iTimeoutInactivity = 7200000;
+						System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, 7200000);
 						this.bVideoInput = true;
-						this.iTimeoutVideoInput = 900000;
+						System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, 900000);
 					} else {
 						this.bInactivity = (int)rkMagicRemoteService.GetValue("Inactivity", 1) != 0;
-						this.iTimeoutInactivity = (int)rkMagicRemoteService.GetValue("TimeoutInactivity", 7200000);
+						System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, (int)rkMagicRemoteService.GetValue("TimeoutInactivity", 7200000));
 						this.bVideoInput = (int)rkMagicRemoteService.GetValue("VideoInput", 1) != 0;
-						this.iTimeoutVideoInput = (int)rkMagicRemoteService.GetValue("TimeoutVideoInput", 900000);
+						System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, (int)rkMagicRemoteService.GetValue("TimeoutVideoInput", 900000));
 					}
 					Microsoft.Win32.RegistryKey rkMagicRemoteServiceRemoteBind = (MagicRemoteService.Program.bElevated ? Microsoft.Win32.Registry.LocalMachine : Microsoft.Win32.Registry.CurrentUser).OpenSubKey(@"Software\MagicRemoteService\Remote\Bind");
 					if(rkMagicRemoteServiceRemoteBind == null) {
@@ -282,7 +282,7 @@ namespace MagicRemoteService {
 					break;
 			}
 			Service.mreStop.Set();
-			this.thrServer.Join();
+			this.thrServer.Join(System.TimeSpan.FromSeconds(10));
 			this.thrServer = null;
 			switch(this.stType) {
 				case ServiceType.Server:
@@ -353,6 +353,36 @@ namespace MagicRemoteService {
 		}
 		public static void Error(string sError) {
 			Service.elEventLog.WriteEntry(sError, System.Diagnostics.EventLogEntryType.Error);
+		}
+		private static void SerializeSocketInfo(System.IO.Stream stream, System.Net.Sockets.SocketInformation si) {
+			byte[] protocolInfo = si.ProtocolInformation;
+			byte[] lenBytes = System.BitConverter.GetBytes(protocolInfo.Length);
+			stream.Write(lenBytes, 0, lenBytes.Length);
+			stream.Write(protocolInfo, 0, protocolInfo.Length);
+			byte[] optBytes = System.BitConverter.GetBytes((int)si.Options);
+			stream.Write(optBytes, 0, optBytes.Length);
+			stream.Flush();
+		}
+		private static System.Net.Sockets.SocketInformation DeserializeSocketInfo(System.IO.Stream stream) {
+			byte[] lenBytes = new byte[4];
+			int bytesRead = stream.Read(lenBytes, 0, 4);
+			if(bytesRead < 4) throw new System.IO.IOException("Failed to read socket info length");
+			int len = System.BitConverter.ToInt32(lenBytes, 0);
+			if(len < 0 || len > 4096) throw new System.IO.IOException("Invalid socket info length: " + len);
+			byte[] protocolInfo = new byte[len];
+			int totalRead = 0;
+			while(totalRead < len) {
+				bytesRead = stream.Read(protocolInfo, totalRead, len - totalRead);
+				if(bytesRead <= 0) throw new System.IO.IOException("Failed to read socket info data");
+				totalRead += bytesRead;
+			}
+			byte[] optBytes = new byte[4];
+			bytesRead = stream.Read(optBytes, 0, 4);
+			if(bytesRead < 4) throw new System.IO.IOException("Failed to read socket info options");
+			return new System.Net.Sockets.SocketInformation {
+				ProtocolInformation = protocolInfo,
+				Options = (System.Net.Sockets.SocketInformationOptions)System.BitConverter.ToInt32(optBytes, 0)
+			};
 		}
 		private static bool SetThreadInputDesktop() {
 			System.IntPtr hInputDesktop = WinApi.User32.OpenInputDesktop(0, true, 0x10000000);
@@ -434,7 +464,6 @@ namespace MagicRemoteService {
 			}
 		}
 		private void ThreadServer() {
-			System.Runtime.Serialization.Formatters.Binary.BinaryFormatter bf = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
 
 			try {
 				switch(this.stType) {
@@ -474,10 +503,10 @@ namespace MagicRemoteService {
 								case 0:
 									break;
 								case 1:
-									if(psServer.IsConnected && Service.ewhClientStarted.WaitOne(System.TimeSpan.Zero) && !pClient.HasExited) {
+									if(pClient != null && psServer.IsConnected && Service.ewhClientStarted.WaitOne(System.TimeSpan.Zero) && !pClient.HasExited) {
 										Service.ewhSessionChanged.Set();
 									} else if(socClientToSend != null) {
-										if(!psServer.IsConnected || pClient.HasExited) {
+										if(!psServer.IsConnected || pClient == null || pClient.HasExited) {
 											areWaitForExitExited.Reset();
 											OpenUserInteractiveProcess(System.Reflection.Assembly.GetExecutingAssembly().Location, "-c");
 										}
@@ -498,7 +527,7 @@ namespace MagicRemoteService {
 									pClient.Exited += ClientWaitForExitExited;
 									pClient.EnableRaisingEvents = true;
 									if(socClientToSend != null) {
-										bf.Serialize(psServer, socClientToSend.DuplicateAndClose(pClient.Id));
+										Service.SerializeSocketInfo(psServer, socClientToSend.DuplicateAndClose(pClient.Id));
 										Service.ewhServerMessage.Set();
 										socClientToSend.Dispose();
 										socClientToSend = null;
@@ -510,13 +539,13 @@ namespace MagicRemoteService {
 										socClientToSend.Dispose();
 										socClientToSend = null;
 									}
-									if(psServer.IsConnected && Service.ewhClientStarted.WaitOne(System.TimeSpan.Zero) && !pClient.HasExited) {
-										bf.Serialize(psServer, eaServerAcceptAsync.AcceptSocket.DuplicateAndClose(pClient.Id));
+									if(pClient != null && psServer.IsConnected && Service.ewhClientStarted.WaitOne(System.TimeSpan.Zero) && !pClient.HasExited) {
+										Service.SerializeSocketInfo(psServer, eaServerAcceptAsync.AcceptSocket.DuplicateAndClose(pClient.Id));
 										Service.ewhServerMessage.Set();
 										eaServerAcceptAsync.AcceptSocket.Dispose();
 									} else {
 										socClientToSend = eaServerAcceptAsync.AcceptSocket;
-										if(!psServer.IsConnected || pClient.HasExited) {
+										if(!psServer.IsConnected || pClient == null || pClient.HasExited) {
 											areWaitForExitExited.Reset();
 											OpenUserInteractiveProcess(System.Reflection.Assembly.GetExecutingAssembly().Location, "-c");
 										}
@@ -614,7 +643,7 @@ namespace MagicRemoteService {
 						} while(!Service.mreStop.WaitOne(System.TimeSpan.Zero));
 
 						liClientBoth.RemoveAll(delegate (System.Threading.Thread thr) {
-							thr.Join();
+							thr.Join(System.TimeSpan.FromSeconds(10));
 							return true;
 						});
 
@@ -665,19 +694,14 @@ namespace MagicRemoteService {
 									}
 									break;
 								case 3:
-									switch(bf.Deserialize(psClient)) {
-										case System.Net.Sockets.SocketInformation si:
-											System.Net.Sockets.Socket socClient = new System.Net.Sockets.Socket(si);
+									System.Net.Sockets.SocketInformation si = Service.DeserializeSocketInfo(psClient);
+									System.Net.Sockets.Socket socClient = new System.Net.Sockets.Socket(si);
 
-											System.Threading.Thread thrClient = new System.Threading.Thread(delegate () {
-												this.ThreadClient(socClient);
-											});
-											thrClient.Start();
-											liClient.Add(thrClient);
-											break;
-										default:
-											throw new System.Exception("Communication error");
-									}
+									System.Threading.Thread thrClient = new System.Threading.Thread(delegate () {
+										this.ThreadClient(socClient);
+									});
+									thrClient.Start();
+									liClient.Add(thrClient);
 									break;
 								default:
 									throw new System.Exception("Unmanaged handle error");
@@ -688,13 +712,31 @@ namespace MagicRemoteService {
 						psClient.Dispose();
 
 						liClient.RemoveAll(delegate (System.Threading.Thread thr) {
-							thr.Join();
+							thr.Join(System.TimeSpan.FromSeconds(10));
 							return true;
 						});
 						break;
 				}
-			} catch(System.Exception eException) {
-				Service.Error(eException.ToString());
+			} catch(System.IO.IOException eException) {
+				Service.Error("IO error in server thread: " + eException.ToString());
+				System.Threading.Tasks.Task.Run(delegate () {
+					this.ServiceStop();
+					this.ServiceStart();
+				});
+			} catch(System.Net.Sockets.SocketException eException) {
+				Service.Error("Socket error in server thread: " + eException.ToString());
+				System.Threading.Tasks.Task.Run(delegate () {
+					this.ServiceStop();
+					this.ServiceStart();
+				});
+			} catch(System.ObjectDisposedException eException) {
+				Service.Error("Object disposed in server thread: " + eException.ToString());
+				System.Threading.Tasks.Task.Run(delegate () {
+					this.ServiceStop();
+					this.ServiceStart();
+				});
+			} catch(System.InvalidOperationException eException) {
+				Service.Error("Invalid operation in server thread: " + eException.ToString());
 				System.Threading.Tasks.Task.Run(delegate () {
 					this.ServiceStop();
 					this.ServiceStart();
@@ -727,11 +769,13 @@ namespace MagicRemoteService {
 					lii.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(lii);
 					if(!WinApi.User32.GetLastInputInfo(ref lii)) {
 					} else if(((uint)System.Environment.TickCount - lii.dwTime) < 500) {
-						System.Diagnostics.Process pProcess = new System.Diagnostics.Process();
-						pProcess.StartInfo.FileName = "shutdown";
-						pProcess.StartInfo.Arguments = "/a";
-						pProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-						pProcess.Start();
+						using(System.Diagnostics.Process pProcessAbort = new System.Diagnostics.Process()) {
+							pProcessAbort.StartInfo.FileName = "shutdown";
+							pProcessAbort.StartInfo.Arguments = "/a";
+							pProcessAbort.StartInfo.UseShellExecute = false;
+							pProcessAbort.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+							pProcessAbort.Start();
+						}
 						tUserInput.Stop();
 						Service.Log("Client user input activity on socket [" + socClient.GetHashCode() + "]");
 					}
@@ -1008,17 +1052,26 @@ namespace MagicRemoteService {
 					case 2:
 						ulong ulLenMessage = (ulong)eaClientReceiveAsync.BytesTransferred;
 						if(tabData[0] == 'G' && tabData[1] == 'E' && tabData[2] == 'T') {
-							socClient.Send(System.Text.Encoding.UTF8.GetBytes(
-								"HTTP/1.1 101 Switching Protocols\r\n" +
-								"Connection: Upgrade\r\n" +
-								"Upgrade: websocket\r\n" +
-								"Sec-WebSocket-Accept: " + System.Convert.ToBase64String(System.Security.Cryptography.SHA1.Create().ComputeHash(System.Text.Encoding.UTF8.GetBytes(System.Text.RegularExpressions.Regex.Match(System.Text.Encoding.UTF8.GetString(tabData), "Sec-WebSocket-Key: (.*)\r\n").Groups[1].Value + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))) + "\r\n\r\n"));
+							string strHandshake = System.Text.Encoding.UTF8.GetString(tabData, 0, (int)ulLenMessage);
+							System.Text.RegularExpressions.Match mWebSocketKey = System.Text.RegularExpressions.Regex.Match(strHandshake, "Sec-WebSocket-Key: (.*)\r\n");
+							if(!mWebSocketKey.Success || string.IsNullOrEmpty(mWebSocketKey.Groups[1].Value)) {
+								mreClientStop.Set();
+								Service.Warn("Invalid WebSocket handshake: missing Sec-WebSocket-Key on socket [" + socClient.GetHashCode() + "]");
+							} else {
+								using(System.Security.Cryptography.SHA1 sha1 = System.Security.Cryptography.SHA1.Create()) {
+									socClient.Send(System.Text.Encoding.UTF8.GetBytes(
+										"HTTP/1.1 101 Switching Protocols\r\n" +
+										"Connection: Upgrade\r\n" +
+										"Upgrade: websocket\r\n" +
+										"Sec-WebSocket-Accept: " + System.Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(mWebSocketKey.Groups[1].Value.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))) + "\r\n\r\n"));
+								}
 
-							//TODO Something to ask TV if cursor visible
-							Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
-							tPing.Start();
-							if(this.bInactivity) {
-								tInactivity.Start();
+								//TODO Something to ask TV if cursor visible
+								Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
+								tPing.Start();
+								if(this.bInactivity) {
+									tInactivity.Start();
+								}
 							}
 						} else {
 							mreClientStop.Set();
@@ -1045,6 +1098,11 @@ namespace MagicRemoteService {
 							ulong ulLenMessage = (ulong)eaClientReceiveAsync.BytesTransferred;
 							ulong ulOffsetFrame = 0;
 							while(!(ulOffsetFrame == ulLenMessage)) {
+								// Bounds check: need at least 2 bytes for frame header
+								if(ulOffsetFrame + 1 >= ulLenMessage) {
+									Service.Warn("Incomplete WebSocket frame header on socket [" + socClient.GetHashCode() + "]");
+									break;
+								}
 								bool bFin = (tabData[ulOffsetFrame] & 0b10000000) == 0b10000000;
 								bool bRsv1 = (tabData[ulOffsetFrame] & 0b01000000) == 0b01000000;
 								bool bRsv2 = (tabData[ulOffsetFrame] & 0b00100000) == 0b00100000;
@@ -1055,9 +1113,17 @@ namespace MagicRemoteService {
 								ulong ulLenData;
 								ulong ulOffsetMask;
 								if((tabData[ulOffsetFrame + 1] & 0b01111111) == 0b01111111) {
+									if(ulOffsetFrame + 9 >= ulLenMessage) {
+										Service.Warn("Incomplete 64-bit length in WebSocket frame on socket [" + socClient.GetHashCode() + "]");
+										break;
+									}
 									ulLenData = System.BitConverter.ToUInt64(new byte[] { tabData[ulOffsetFrame + 9], tabData[ulOffsetFrame + 8], tabData[ulOffsetFrame + 7], tabData[ulOffsetFrame + 6], tabData[ulOffsetFrame + 5], tabData[ulOffsetFrame + 4], tabData[ulOffsetFrame + 3], tabData[ulOffsetFrame + 2] }, 0);
 									ulOffsetMask = ulOffsetFrame + 10;
 								} else if((tabData[ulOffsetFrame + 1] & 0b01111111) == 0b01111110) {
+									if(ulOffsetFrame + 3 >= ulLenMessage) {
+										Service.Warn("Incomplete 16-bit length in WebSocket frame on socket [" + socClient.GetHashCode() + "]");
+										break;
+									}
 									ulLenData = System.BitConverter.ToUInt16(new byte[] { tabData[ulOffsetFrame + 3], tabData[ulOffsetFrame + 2] }, 0);
 									ulOffsetMask = ulOffsetFrame + 4;
 								} else {
@@ -1068,11 +1134,23 @@ namespace MagicRemoteService {
 								ulong ulOffsetData;
 								if(bMask) {
 									ulOffsetData = ulOffsetMask + 4;
+								} else {
+									ulOffsetData = ulOffsetMask;
+								}
+
+								// Validate frame data fits within received message and buffer
+								if(ulOffsetData + ulLenData > (ulong)tabData.Length || ulOffsetData + ulLenData > ulLenMessage) {
+									Service.Warn("WebSocket frame data exceeds buffer bounds on socket [" + socClient.GetHashCode() + "]");
+									break;
+								}
+								if(bMask) {
+									if(ulOffsetMask + 3 >= (ulong)tabData.Length) {
+										Service.Warn("WebSocket mask exceeds buffer on socket [" + socClient.GetHashCode() + "]");
+										break;
+									}
 									for(ulong ul = 0; ul < ulLenData; ul++) {
 										tabData[ulOffsetData + ul] ^= tabData[ulOffsetMask + (ul % 4)];
 									}
-								} else {
-									ulOffsetData = ulOffsetMask;
 								}
 								if(!bFin) {
 									Service.Warn("Unable to process split frame on socket [" + socClient.GetHashCode() + "]");
@@ -1134,11 +1212,14 @@ namespace MagicRemoteService {
 																Service.LogIfDebug("Processed binary message send/key action [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
 															} else if(dBindCommandDown.TryGetValue(usCode, out string[] arrString)) {
 																foreach(string strCommand in arrString) {
-																	System.Diagnostics.Process pCommand = new System.Diagnostics.Process();
-																	pCommand.StartInfo.FileName = "cmd";
-																	pCommand.StartInfo.Arguments = "/c " + strCommand;
-																	pCommand.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-																	pCommand.Start();
+																	using(System.Diagnostics.Process pCommand = new System.Diagnostics.Process()) {
+																		pCommand.StartInfo.FileName = "cmd";
+																		pCommand.StartInfo.Arguments = "/c " + strCommand;
+																		pCommand.StartInfo.UseShellExecute = false;
+																		pCommand.StartInfo.CreateNoWindow = true;
+																		pCommand.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+																		pCommand.Start();
+																	}
 																}
 																Service.LogIfDebug("Processed binary message send/key command [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
 															} else {
@@ -1161,11 +1242,13 @@ namespace MagicRemoteService {
 														Service.LogIfDebug("Processed binary message send/unicode [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.Text.Encoding.UTF8.GetString(tabData, (int)ulOffsetData + 1, 2));
 														break;
 													case (byte)MagicRemoteService.MessageType.Shutdown:
-														System.Diagnostics.Process pProcess = new System.Diagnostics.Process();
-														pProcess.StartInfo.FileName = "shutdown";
-														pProcess.StartInfo.Arguments = "/s /t 0";
-														pProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-														pProcess.Start();
+														using(System.Diagnostics.Process pProcessShutdown = new System.Diagnostics.Process()) {
+															pProcessShutdown.StartInfo.FileName = "shutdown";
+															pProcessShutdown.StartInfo.Arguments = "/s /t 0";
+															pProcessShutdown.StartInfo.UseShellExecute = false;
+															pProcessShutdown.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+															pProcessShutdown.Start();
+														}
 														Service.LogIfDebug("Processed binary message send/shutdown [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
 														break;
 													default:
@@ -1201,11 +1284,13 @@ namespace MagicRemoteService {
 												switch(tabData[ulOffsetData + 0]) {
 													case 0x01:
 														tPongUserInput.Stop();
-														System.Diagnostics.Process pProcess = new System.Diagnostics.Process();
-														pProcess.StartInfo.FileName = "shutdown";
-														pProcess.StartInfo.Arguments = "/s /t 300";
-														pProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-														pProcess.Start();
+														using(System.Diagnostics.Process pProcessInact = new System.Diagnostics.Process()) {
+															pProcessInact.StartInfo.FileName = "shutdown";
+															pProcessInact.StartInfo.Arguments = "/s /t 300";
+															pProcessInact.StartInfo.UseShellExecute = false;
+															pProcessInact.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+															pProcessInact.Start();
+														}
 														tUserInput.Start();
 														Service.LogIfDebug("Pong incativity received on socket [" + socClient.GetHashCode() + "]");
 														break;
@@ -1237,13 +1322,20 @@ namespace MagicRemoteService {
 				}
 				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
 				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
+				MagicRemoteService.Application.naehPowerSettingNotificationArrived -= PowerSettingNotificationArrived;
 				tPing.Stop();
+				tPing.Dispose();
 				tPong.Stop();
-				if(this.bInactivity) {
-					tInactivity.Stop();
-					tVideoInput.Stop();
-					tPongUserInput.Stop();
-				}
+				tPong.Dispose();
+				tUserInput.Stop();
+				tUserInput.Dispose();
+				tInactivity.Stop();
+				tInactivity.Dispose();
+				tVideoInput.Stop();
+				tVideoInput.Dispose();
+				tPongUserInput.Stop();
+				tPongUserInput.Dispose();
+				mreClientStop.Dispose();
 				eaClientReceiveAsync.Completed -= ClientReceiveAsyncCompleted;
 				eaClientReceiveAsync.Dispose();
 				areClientReceiveAsyncCompleted.Close();
@@ -1251,10 +1343,22 @@ namespace MagicRemoteService {
 				socClient.Close();
 				socClient.Dispose();
 				Service.Log("Socket closed [" + socClient.GetHashCode() + "]");
-			} catch(System.Exception eException) {
+			} catch(System.IO.IOException eException) {
 				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
 				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
-				Service.Error(eException.ToString());
+				Service.Error("IO error in client thread: " + eException.ToString());
+			} catch(System.ObjectDisposedException eException) {
+				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
+				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
+				Service.Error("Object disposed in client thread: " + eException.ToString());
+			} catch(System.Net.Sockets.SocketException eException) {
+				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
+				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
+				Service.Error("Socket error in client thread: " + eException.ToString());
+			} catch(System.InvalidOperationException eException) {
+				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
+				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
+				Service.Error("Invalid operation in client thread: " + eException.ToString());
 			}
 		}
 	}
