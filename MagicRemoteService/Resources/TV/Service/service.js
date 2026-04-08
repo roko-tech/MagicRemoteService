@@ -53,7 +53,7 @@ Object.defineProperty(Object.prototype, "toString", {
 	value: function() {
 		var arrAncestor = [];
 		return JSON.stringify(this, function(k, o) {
-			if(typeof x !== "object" || x === null) {
+			if(typeof o !== "object" || o === null) {
 				return o;
 			} else {
 				while(arrAncestor.length > 0 && arrAncestor[arrAncestor.length - 1] !== this) {

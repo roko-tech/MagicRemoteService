@@ -33,8 +33,8 @@ Object.defineProperty(Object.prototype, "spread", {
 Object.defineProperty(Object.prototype, "toString", {
 	value: function() {
 	const arrAncestor = [];
-	return JSON.stringify(obj, function(k, o) {
-		if(typeof x !== "object" || x === null) {
+	return JSON.stringify(this, function(k, o) {
+		if(typeof o !== "object" || o === null) {
 			return o;
 		} else {
 			while(arrAncestor.length > 0 && arrAncestor[arrAncestor.length - 1] !== this) {
@@ -1203,7 +1203,7 @@ webOS.service.request("luna://com.webos.settingsservice", {
 				if(i < arr.length){
 					readJson(function(oInfo) {
 						if(oInfo !== undefined){
-							oString, oInfo);
+							oString.spread(oInfo);
 						}
 						readJsonLocale(i + 1, arr);
 					}, strPath + "resources/" + arr.slice(0, i + 1).join("/") + "/appstring.json");

@@ -13,11 +13,16 @@
 		};
 		private static readonly System.Collections.Generic.IDictionary<WinApi.OemCursorRessourceId, System.IntPtr> dSystemCursor = new System.Collections.Generic.Dictionary<WinApi.OemCursorRessourceId, System.IntPtr>();
 		private static readonly int iMagicRemoteServiceMouseSpeed = 10;
-		private static readonly System.IntPtr hMagicRemoteServiceMouseAccel = System.Runtime.InteropServices.GCHandle.Alloc(new int[3] { 0, 0, 0 }, System.Runtime.InteropServices.GCHandleType.Pinned).AddrOfPinnedObject();
+		private static readonly int[] arrMagicRemoteServiceMouseAccel = new int[3] { 0, 0, 0 };
+		private static readonly System.Runtime.InteropServices.GCHandle ghMagicRemoteServiceMouseAccel = System.Runtime.InteropServices.GCHandle.Alloc(arrMagicRemoteServiceMouseAccel, System.Runtime.InteropServices.GCHandleType.Pinned);
+		private static readonly System.IntPtr hMagicRemoteServiceMouseAccel = ghMagicRemoteServiceMouseAccel.AddrOfPinnedObject();
 		private static readonly int iDefaultMouseSpeed = 0;
-		private static readonly System.IntPtr hDefaultMouseSpeed = System.Runtime.InteropServices.GCHandle.Alloc(MagicRemoteService.SystemCursor.iDefaultMouseSpeed, System.Runtime.InteropServices.GCHandleType.Pinned).AddrOfPinnedObject();
+		private static readonly int[] arrDefaultMouseSpeedHolder = new int[1] { 0 };
+		private static readonly System.Runtime.InteropServices.GCHandle ghDefaultMouseSpeed = System.Runtime.InteropServices.GCHandle.Alloc(arrDefaultMouseSpeedHolder, System.Runtime.InteropServices.GCHandleType.Pinned);
+		private static readonly System.IntPtr hDefaultMouseSpeed = ghDefaultMouseSpeed.AddrOfPinnedObject();
 		private static readonly int[] arrDefaultMouseAccel = new int[3] { 0, 0, -1 };
-		private static readonly System.IntPtr hDefaultMouseAccel = System.Runtime.InteropServices.GCHandle.Alloc(arrDefaultMouseAccel, System.Runtime.InteropServices.GCHandleType.Pinned).AddrOfPinnedObject();
+		private static readonly System.Runtime.InteropServices.GCHandle ghDefaultMouseAccel = System.Runtime.InteropServices.GCHandle.Alloc(arrDefaultMouseAccel, System.Runtime.InteropServices.GCHandleType.Pinned);
+		private static readonly System.IntPtr hDefaultMouseAccel = ghDefaultMouseAccel.AddrOfPinnedObject();
 		private static System.IntPtr GetCursor(byte[] arrCursor) {
 			string strCursor = System.IO.Path.GetTempFileName();
 			System.IO.File.WriteAllBytes(strCursor, arrCursor);
