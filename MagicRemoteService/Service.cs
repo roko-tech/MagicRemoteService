@@ -1181,22 +1181,26 @@ namespace MagicRemoteService {
 											if(ulLenData != 0) {
 												switch(tabData[ulOffsetData + 0]) {
 													case (byte)MagicRemoteService.MessageType.PositionRelative:
+											if(ulLenData < 5) break;
 														piPositionRelative[0].u.mi.dx = System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1);
 														piPositionRelative[0].u.mi.dy = System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 3);
 														Service.SendInputAdmin(piPositionRelative);
 														break;
 													case (byte)MagicRemoteService.MessageType.PositionAbsolute:
+											if(ulLenData < 5) break;
 														piPositionAbsolute[0].u.mi.dx = ((scrDisplay.Bounds.X + ((scrDisplay.Bounds.Width * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1)) / 1920)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Width;
 														piPositionAbsolute[0].u.mi.dy = ((scrDisplay.Bounds.Y + ((scrDisplay.Bounds.Height * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 3)) / 1080)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Height;
 														Service.SendInputAdmin(piPositionAbsolute);
 														break;
 													case (byte)MagicRemoteService.MessageType.Wheel:
+											if(ulLenData < 3) break;
 														piWheel[0].u.mi.mouseData = (uint)(-System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1) * 3);
 														Service.SendInputAdmin(piWheel);
 														Service.LogIfDebug("Processed binary message send/wheel [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], sY: " + (-System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1)).ToString());
 														break;
 
 													case (byte)MagicRemoteService.MessageType.Visible:
+											if(ulLenData < 2) break;
 														if(System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 1)) {
 															MagicRemoteService.SystemCursor.SetMagicRemoteServiceSystemCursor();
 															MagicRemoteService.SystemCursor.SetMagicRemoteServiceMouseSpeedAccel();
@@ -1207,6 +1211,7 @@ namespace MagicRemoteService {
 														Service.LogIfDebug("Processed binary message send/visible [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], bV: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 1).ToString());
 														break;
 													case (byte)MagicRemoteService.MessageType.Key:
+											if(ulLenData < 4) break;
 														ushort usCode = System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1);
 														if((tabData[ulOffsetData + 3] & 0x01) == 0x01) {
 															if(dBindDown.TryGetValue(usCode, out WinApi.Input[] arrInput)) {
@@ -1242,6 +1247,7 @@ namespace MagicRemoteService {
 														}
 														break;
 													case (byte)MagicRemoteService.MessageType.Unicode:
+											if(ulLenData < 3) break;
 														ushort usScan = System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1);
 														piUnicode[0].u.ki.wScan = usScan;
 														piUnicode[1].u.ki.wScan = usScan;

@@ -28,7 +28,7 @@ validate_port() {
 }
 validate_name() {
     local name="$1"
-    if [[ "$name" =~ [\;\`\$\|\&\>\<'] ]]; then
+    if [[ "$name" =~ [\;\`\$\|\&\>\<\'\"] ]]; then
         echo "ERROR: Name contains invalid characters: $name"
         return 1
     fi
@@ -44,7 +44,7 @@ validate_number() {
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/MagicRemoteService/Resources/TV"
 BUILD_DIR="$SCRIPT_DIR/build-output"
-VERSION="1.2.2"
+VERSION="1.2.5.4"
 
 # ========================================
 # PATH SETUP — find Node.js, npm, ares-cli
