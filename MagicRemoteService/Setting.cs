@@ -447,6 +447,36 @@ namespace MagicRemoteService {
 					}
 				}
 			}
+			// Also export to bindings.json so web UI stays in sync
+			try {
+				var dJsonBindings = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<object>>();
+				foreach(System.Collections.Generic.KeyValuePair<ushort, BindControl> kvp in this.dBindControl) {
+					if(kvp.Value.Value != null) {
+						string strKey = "0x" + kvp.Key.ToString("X4");
+						var liActions = new System.Collections.Generic.List<object>();
+						foreach(Bind b in kvp.Value.Value) {
+							switch(b) {
+								case MagicRemoteService.BindMouse bm:
+									liActions.Add(new { type = "mouse", value = bm.bmvValue == BindMouseValue.Left ? "left" : bm.bmvValue == BindMouseValue.Right ? "right" : "middle" });
+									break;
+								case MagicRemoteService.BindKeyboard bk:
+									liActions.Add(new { type = "keyboard", virtualKey = (int)bk.ucVirtualKey, scanCode = (int)bk.ucScanCode, extended = bk.bExtended });
+									break;
+								case MagicRemoteService.BindAction ba:
+									liActions.Add(new { type = "action", value = ba.bavValue == BindActionValue.Shutdown ? "shutdown" : "keyboard" });
+									break;
+								case MagicRemoteService.BindCommand bc:
+									liActions.Add(new { type = "command", command = bc.strCommand });
+									break;
+							}
+						}
+						if(liActions.Count > 0) dJsonBindings[strKey] = liActions;
+					}
+				}
+				string strJsonExport = System.Text.Json.JsonSerializer.Serialize(new { bindings = dJsonBindings });
+				string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+				System.IO.File.WriteAllText(strBindingsPath, strJsonExport);
+			} catch {}
 		}
 		public static void AppExtract(
 			string strVersion,
