@@ -146,6 +146,45 @@ namespace MagicRemoteService {
 		}
 	}
 	internal static class WebOSCLI {
+		private static readonly string strPolyfillPath;
+		private static readonly System.Collections.Generic.Dictionary<string, string> dAresCommandCache = new System.Collections.Generic.Dictionary<string, string>();
+		static WebOSCLI() {
+			string strCandidate = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "Resources", "node-polyfill.js");
+			strPolyfillPath = System.IO.File.Exists(strCandidate) ? strCandidate : null;
+		}
+		private static string strNodePath = null;
+		private static string ResolveNodePath(string strPath) {
+			if(strNodePath != null) return strNodePath;
+			foreach(string strDir in strPath.Split(';')) {
+				if(string.IsNullOrEmpty(strDir)) continue;
+				string strCandidate = System.IO.Path.Combine(strDir, "node.exe");
+				if(System.IO.File.Exists(strCandidate)) {
+					strNodePath = strCandidate;
+					return strNodePath;
+				}
+			}
+			strNodePath = "";
+			return strNodePath;
+		}
+		private static string ResolveAresCommand(string strCommand, string strPath) {
+			if(dAresCommandCache.TryGetValue(strCommand, out string strCached)) return strCached;
+			string strResult = null;
+			try {
+				foreach(string strDir in strPath.Split(';')) {
+					if(string.IsNullOrEmpty(strDir)) continue;
+					string strCmd = System.IO.Path.Combine(strDir, strCommand + ".cmd");
+					if(System.IO.File.Exists(strCmd)) {
+						string strJsPath = System.IO.Path.Combine(strDir, "node_modules", "@webos-tools", "cli", "bin", strCommand + ".js");
+						if(System.IO.File.Exists(strJsPath)) {
+							strResult = strJsPath;
+							break;
+						}
+					}
+				}
+			} catch {}
+			dAresCommandCache[strCommand] = strResult;
+			return strResult;
+		}
 		private static string ExecWebOSCLICommand(string strCommand, string strArgument, System.Collections.Generic.Dictionary<ushort, string> dInput = null, string strWorkingDirectory = null) {
 			using(System.Diagnostics.Process pProcess = new System.Diagnostics.Process()) {
 			pProcess.StartInfo.FileName = "cmd";
@@ -179,9 +218,18 @@ namespace MagicRemoteService {
 					}
 				}
 			} catch {}
-			pProcess.StartInfo.Arguments = "/c " + strCommand + " " + strArgument;
 			pProcess.StartInfo.UseShellExecute = false;
 			pProcess.StartInfo.EnvironmentVariables["PATH"] = strPath;
+			// Try to run via node with polyfill for Node.js v22+ compatibility
+			string strNodeExe = ResolveNodePath(strPath);
+			string strCommandPath = ResolveAresCommand(strCommand, strPath);
+			if(!string.IsNullOrEmpty(strNodeExe) && strPolyfillPath != null && strCommandPath != null) {
+				pProcess.StartInfo.FileName = strNodeExe;
+				pProcess.StartInfo.Arguments = "--require \"" + strPolyfillPath + "\" \"" + strCommandPath + "\" " + strArgument;
+			} else {
+				pProcess.StartInfo.FileName = "cmd";
+				pProcess.StartInfo.Arguments = "/c " + strCommand + " " + strArgument;
+			}
 			pProcess.StartInfo.CreateNoWindow = true;
 			pProcess.StartInfo.RedirectStandardInput = true;
 			pProcess.StartInfo.RedirectStandardError = true;
