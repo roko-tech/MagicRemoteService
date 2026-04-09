@@ -124,28 +124,26 @@ function Toast(strTitle, strMessage) {
 	deScreenToast.className = "screen flex justify-center align-flex-end";
 	var deToast = document.createElement("div");
 	deToast.className = "window toast";
+	deToast.style.padding = "0.6rem 1.8rem";
+	deToast.style.marginBottom = "1rem";
+	deToast.style.minWidth = "auto";
+	deToast.style.borderRadius = "1.5rem";
+	deToast.style.opacity = "0.85";
 	deToast.addEventListener("click", function() {
 		ScreenCancel(deScreenToast, false);
 	});
-	if(strTitle.length) {
-		var dePopupTitle = document.createElement("div");
-		dePopupTitle.className = "title";
-		dePopupTitle.innerText = strTitle;
-		deToast.appendChild(dePopupTitle);
-	}
-	if(strMessage.length) {
-		var dePopupMessage = document.createElement("div");
-		dePopupMessage.className = "message";
-		dePopupMessage.innerText = strMessage;
-		deToast.appendChild(dePopupMessage);
-	}
+	var dePopupMessage = document.createElement("div");
+	dePopupMessage.style.fontSize = "1.2rem";
+	dePopupMessage.style.margin = "0.3rem";
+	dePopupMessage.innerText = strMessage || strTitle;
+	deToast.appendChild(dePopupMessage);
 	deScreenToast.appendChild(deToast);
 	document.body.appendChild(deScreenToast);
 	setTimeout(function() {
 		if(ScreenExist(deScreenToast)) {
 			ScreenCancel(deScreenToast, false);
 		}
-	}, 3000);
+	}, 2500);
 }
 
 function Dialog(strTitle, strMessage, arrButton) {
