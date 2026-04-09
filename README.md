@@ -11,14 +11,44 @@ MagicRemoteService turns your LG Magic Remote into a wireless mouse and keyboard
 
 ## Quick Start
 
-### Option 1: Download Release (Recommended)
+### Prerequisites
+
+- **PC**: Windows 10/11
+- **TV**: LG TV with webOS and Developer Mode enabled ([guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app))
+- **Connection**: PC connected to TV via HDMI, both on the same local network
+
+### Option 1: Automated Install (Recommended)
+
+```
+git clone https://github.com/roko-tech/MagicRemoteService.git
+cd MagicRemoteService
+install.bat
+```
+
+The installer handles everything:
+- Installs prerequisites (Node.js, webOS CLI, Visual Studio Build Tools, .NET 4.7.2) via winget
+- Builds the PC service and registers it as a Windows service
+- Configures and deploys the TV app to your LG TV
+- Adds firewall rules
+- Creates a startup shortcut
+
+### Option 2: Manual Install
 
 1. Download the latest release from the [Releases page](https://github.com/roko-tech/MagicRemoteService/releases)
 2. Extract to a folder (e.g. `C:\MagicRemoteService`)
-3. Run `MagicRemoteService.exe`
-4. Follow the setup wizard to add your TV and install the TV app
+3. Install [Node.js](https://nodejs.org/) and run `npm install -g @webos-tools/cli`
+4. Register the service: open an **admin** command prompt and run:
+   ```
+   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe MagicRemoteService.exe
+   net start MagicRemoteService
+   ```
+5. Add a firewall rule: `netsh advfirewall firewall add rule name="MagicRemoteService" dir=in action=allow protocol=TCP localport=41230`
+6. Run `MagicRemoteService.exe` — the Settings UI opens
+7. In the **TVs** tab: click "Refresh TVs" or "Add TV", select HDMI input, configure settings
+8. Click **Install on TV**
+9. In the **PC** tab: check "Automatically launch at startup", click Save
 
-### Option 2: Build from Source
+### Option 3: Build from Source
 
 ```
 git clone https://github.com/roko-tech/MagicRemoteService.git
@@ -26,27 +56,7 @@ cd MagicRemoteService
 build.bat
 ```
 
-Requires Visual Studio 2022 (or Build Tools) and .NET Framework 4.7.2.
-
-## Setup
-
-### Prerequisites
-
-- **PC**: Windows 10/11
-- **TV**: LG TV with webOS and Developer Mode enabled ([guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app))
-- **Connection**: PC connected to TV via HDMI, both on the same local network
-- **Tools**: Node.js + webOS CLI (`npm install -g @webos-tools/cli`)
-
-### Installation Steps
-
-1. Enable **Developer Mode** on your TV (install "Developer Mode" app from LG Content Store)
-2. Run `MagicRemoteService.exe` on your PC
-3. In the **TVs** tab: click "Add TV", enter your TV details
-4. Select HDMI input, configure IP/MAC settings
-5. Click **Install on TV**
-6. In the **PC** tab: check "Automatically launch at startup", click Save
-
-The service runs in the background and starts automatically on boot.
+Then follow Option 2 steps 3-9 using the exe from `MagicRemoteService\bin\Release\`.
 
 ## Features
 
