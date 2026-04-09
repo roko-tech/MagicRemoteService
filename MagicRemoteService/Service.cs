@@ -544,11 +544,15 @@ namespace MagicRemoteService {
 				hlSettings.Prefixes.Add("http://localhost:" + iHttpPort + "/");
 				hlSettings.Prefixes.Add("http://127.0.0.1:" + iHttpPort + "/");
 				hlSettings.Start();
-				while(!Service.mreStop.WaitOne(System.TimeSpan.Zero)) {
-					System.IAsyncResult arContext = hlSettings.BeginGetContext(null, null);
-					int iWait = System.Threading.WaitHandle.WaitAny(new System.Threading.WaitHandle[] { Service.mreStop, arContext.AsyncWaitHandle }, 1000);
-					if(iWait == 1) {
-						System.Net.HttpListenerContext ctx = hlSettings.EndGetContext(arContext);
+				Service.Log("HTTP listener started on port " + iHttpPort);
+				while(hlSettings.IsListening) {
+					System.Net.HttpListenerContext ctx = null;
+					try {
+						ctx = hlSettings.GetContext();
+					} catch(System.Net.HttpListenerException) {
+						break;
+					}
+					if(ctx != null) {
 						try {
 							string strReqPath = ctx.Request.Url.AbsolutePath;
 							if(strReqPath == "/api/settings" && ctx.Request.HttpMethod == "GET") {
@@ -582,8 +586,6 @@ namespace MagicRemoteService {
 						} finally {
 							ctx.Response.Close();
 						}
-					} else if(iWait == 0) {
-						break;
 					}
 				}
 			} catch(System.Exception ex) {
