@@ -152,6 +152,29 @@ namespace MagicRemoteService {
 			if(!string.IsNullOrEmpty(strWorkingDirectory)) {
 				pProcess.StartInfo.WorkingDirectory = strWorkingDirectory;
 			}
+			// Add common Node.js/npm paths so ares-cli tools can be found
+			string strPath = System.Environment.GetEnvironmentVariable("PATH") ?? "";
+			System.Collections.Generic.List<string> liExtraPaths = new System.Collections.Generic.List<string> {
+				@"C:\Program Files\Volta",
+				@"C:\Program Files\nodejs",
+				@"C:\Program Files (x86)\nodejs"
+			};
+			// Scan all user profiles for npm and volta
+			string strUsersDir = System.IO.Path.GetDirectoryName(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
+			if(string.IsNullOrEmpty(strUsersDir) || !System.IO.Directory.Exists(strUsersDir)) strUsersDir = @"C:\Users";
+			try {
+				foreach(string strUserDir in System.IO.Directory.GetDirectories(strUsersDir)) {
+					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, "AppData", "Roaming", "npm"));
+					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, ".volta", "bin"));
+					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, "AppData", "Local", "Volta", "bin"));
+				}
+			} catch {}
+			foreach(string strExtraPath in liExtraPaths) {
+				if(System.IO.Directory.Exists(strExtraPath) && !strPath.Contains(strExtraPath)) {
+					strPath = strExtraPath + ";" + strPath;
+				}
+			}
+			pProcess.StartInfo.EnvironmentVariables["PATH"] = strPath;
 			pProcess.StartInfo.Arguments = "/c " + strCommand + " " + strArgument;
 			pProcess.StartInfo.UseShellExecute = false;
 			pProcess.StartInfo.CreateNoWindow = true;
