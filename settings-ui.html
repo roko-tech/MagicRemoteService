@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>MagicRemoteService Settings</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e0e0e0;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
+h1{color:#fff;margin-bottom:4px;font-size:22px}
+.subtitle{color:#555;font-size:12px;margin-bottom:16px}
+.main{display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+
+/* Remote */
+.remote{background:linear-gradient(180deg,#1a1a1a 0%,#111 50%,#1a1a1a 100%);border-radius:50px;padding:28px 20px 40px;width:220px;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 12px 40px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.03);border:1px solid #333}
+
+/* Buttons */
+.btn{cursor:pointer;border:2px solid transparent;transition:all .15s;display:flex;align-items:center;justify-content:center;font-weight:600;color:#888;user-select:none;position:relative}
+.btn:hover{border-color:#4ecca3;transform:scale(1.08);z-index:2}
+.btn.selected{border-color:#4ecca3;box-shadow:0 0 15px rgba(78,204,163,.4)}
+.btn.custom::after{content:"";position:absolute;top:2px;right:2px;width:5px;height:5px;background:#4ecca3;border-radius:50%}
+
+/* Power */
+.power{width:38px;height:38px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1a1a1a);color:#c0392b;font-size:16px;border-color:#333;margin-bottom:4px}
+
+/* Number pad */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:170px}
+.num-btn{height:36px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1e1e1e);font-size:14px;color:#aaa;border-color:#333}
+
+/* Midsection */
+.mid-row{display:flex;gap:6px;width:170px;justify-content:center}
+.mid-btn{height:30px;width:50px;border-radius:15px;background:#1e1e1e;font-size:8px;color:#666;border-color:#333}
+
+/* Home/Mic/Gear row */
+.hmg-row{display:flex;gap:20px;margin:2px 0}
+.hmg-btn{width:32px;height:32px;border-radius:50%;background:#1e1e1e;font-size:14px;color:#666;border-color:#333;cursor:default;opacity:.4}
+
+/* Nav ring */
+.nav-container{position:relative;width:170px;height:170px;margin:4px 0}
+.nav-ring{position:absolute;top:0;left:0;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle at center,#111 35%,#222 36%,#1a1a1a 100%);border:1px solid #333}
+.nav-up{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
+.nav-down{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
+.nav-left{position:absolute;left:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
+.nav-right{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
+.nav-ok{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1a1a1a);font-size:13px;font-weight:700;color:#aaa;border-color:#444}
+.scroll-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) translateY(-38px);color:#444;font-size:7px;pointer-events:none;text-transform:uppercase;letter-spacing:1px}
+
+/* Back/Gear row */
+.bg-row{display:flex;gap:60px}
+.bg-btn{width:34px;height:34px;border-radius:50%;background:#1e1e1e;font-size:14px;color:#777;border-color:#333}
+
+/* Color row */
+.color-row{display:flex;gap:5px;margin:4px 0}
+.color-btn{width:34px;height:18px;border-radius:9px;font-size:0}
+.c-red{background:#c0392b}.c-green{background:#27ae60}.c-yellow{background:#e6a817}.c-blue{background:#2471a3}
+
+/* App shortcut labels (not configurable) */
+.app-row{display:flex;gap:4px;margin:2px 0}
+.app-btn{width:80px;height:22px;border-radius:4px;background:#1a1a1a;font-size:7px;color:#444;display:flex;align-items:center;justify-content:center;cursor:default;opacity:.3;border:1px solid #222}
+
+/* Click labels */
+.click-row{display:flex;gap:6px;margin-top:4px}
+.click-btn{width:70px;height:26px;border-radius:13px;background:#1e1e1e;font-size:9px;color:#888;border-color:#333}
+
+/* Panel */
+.panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;width:380px;min-height:500px}
+.panel h2{color:#fff;font-size:18px;margin-bottom:16px}
+.panel-empty{color:#444;text-align:center;padding:80px 20px;font-size:14px;line-height:1.6}
+.panel-empty .icon{font-size:48px;margin-bottom:16px;display:block;opacity:.3}
+.field{margin-bottom:14px}
+.field label{display:block;color:#7d8590;font-size:11px;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px;font-weight:500}
+.field select,.field input{width:100%;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit}
+.field select:focus,.field input:focus{outline:none;border-color:#4ecca3}
+.mods{display:flex;gap:12px;margin-top:6px;margin-bottom:10px}
+.mod-label{display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;color:#aaa}
+.mod-label input{width:auto;accent-color:#4ecca3}
+.btn-apply{background:#4ecca3;color:#0d1117;border:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-top:8px}
+.btn-apply:hover{background:#3dbb91}
+.btn-reset{background:transparent;color:#f87171;border:1px solid #f8717144;padding:8px 16px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px;width:100%}
+.btn-reset:hover{background:#f8717118}
+.current-binding{background:#1c2333;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#8b949e;border-left:3px solid #4ecca3}
+.current-binding strong{color:#4ecca3}
+.toast{position:fixed;bottom:20px;right:20px;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:500;z-index:100;animation:slideIn .3s}
+.toast-ok{background:#1b4332;color:#95d5b2;border:1px solid #2d6a4f}
+.toast-err{background:#442222;color:#f88;border:1px solid #663333}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+.status-bar{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;justify-content:center}
+.chip{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:5px 14px;font-size:11px;display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.dot-g{background:#4ecca3}.dot-r{background:#f87171}.dot-y{background:#f59e0b}
+.note{color:#444;font-size:10px;margin-top:8px;font-style:italic}
+</style></head><body>
+<h1>MagicRemoteService</h1>
+<div class="subtitle">Click any button to configure its action</div>
+<div class="status-bar" id="sb"></div>
+<div class="main">
+<div class="remote">
+  <div class="btn power" data-id="0x0193" title="Power / Red">&#9211;</div>
+  <div class="numpad">
+    <div class="btn num-btn" data-id="0x0031">1</div>
+    <div class="btn num-btn" data-id="0x0032">2</div>
+    <div class="btn num-btn" data-id="0x0033">3</div>
+    <div class="btn num-btn" data-id="0x0034">4</div>
+    <div class="btn num-btn" data-id="0x0035">5</div>
+    <div class="btn num-btn" data-id="0x0036">6</div>
+    <div class="btn num-btn" data-id="0x0037">7</div>
+    <div class="btn num-btn" data-id="0x0038">8</div>
+    <div class="btn num-btn" data-id="0x0039">9</div>
+  </div>
+  <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
+    <div class="btn num-btn" data-id="0x019F" title="LIST" style="font-size:8px">LIST</div>
+    <div class="btn num-btn" data-id="0x0030">0</div>
+    <div class="btn num-btn" data-id="0x01A1" title="MORE ..." style="font-size:10px">...</div>
+  </div>
+  <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
+    <div class="btn num-btn" data-id="0x019C" title="GUIDE" style="font-size:7px">GUIDE</div>
+    <div class="btn num-btn" data-id="0x019D" title="QUICK ACCESS" style="font-size:6px">QUICK</div>
+    <div class="btn num-btn" data-id="0x01A2" title="AD/SAP" style="font-size:7px">AD/SAP</div>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
+    <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
+      <div class="btn vc-btn" data-id="0x0021" title="Volume +">+</div>
+      <div style="color:#444;font-size:8px">VOL</div>
+      <div class="btn vc-btn" data-id="0x0022" title="Volume -">&minus;</div>
+    </div>
+    <div class="btn" data-id="0x01A3" title="Mute" style="width:34px;height:34px;border-radius:50%;background:#1e1e1e;border-color:#333;font-size:14px;color:#777">&#128263;</div>
+    <div style="width:20px"></div>
+    <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
+      <div class="btn vc-btn" data-id="0x0070" title="Channel +">&#8743;</div>
+      <div style="color:#444;font-size:8px">CH</div>
+      <div class="btn vc-btn" data-id="0x0071" title="Channel -">&#8744;</div>
+    </div>
+  </div>
+  <div class="hmg-row">
+    <div class="hmg-btn" title="Home (TV only)">&#8962;</div>
+    <div class="hmg-btn" title="Mic (TV only)">&#127908;</div>
+  </div>
+  <div class="nav-container">
+    <div class="nav-ring"></div>
+    <span class="scroll-label">Scroll</span>
+    <div class="btn nav-up" data-id="0x0026" title="Up">&#9650;</div>
+    <div class="btn nav-down" data-id="0x0028" title="Down">&#9660;</div>
+    <div class="btn nav-left" data-id="0x0025" title="Left">&#9664;</div>
+    <div class="btn nav-right" data-id="0x0027" title="Right">&#9654;</div>
+    <div class="btn nav-ok" data-id="0x000D" title="OK / Enter">OK</div>
+  </div>
+  <div class="bg-row">
+    <div class="btn bg-btn" data-id="0x01CD" title="Back">&#8617;</div>
+    <div class="hmg-btn" title="Settings (TV only)" style="cursor:default;opacity:.4">&#9881;</div>
+  </div>
+  <div class="color-row">
+    <div class="btn color-btn c-red" data-id="0x0193" title="Red">&nbsp;</div>
+    <div class="btn color-btn c-green" data-id="0x0194" title="Green">&nbsp;</div>
+    <div class="btn color-btn c-yellow" data-id="0x01A4" title="Yellow">&nbsp;</div>
+    <div class="btn color-btn c-blue" data-id="0x0196" title="Blue">&nbsp;</div>
+  </div>
+  <div class="app-row">
+    <div class="app-btn">NETFLIX</div><div class="app-btn">Prime</div>
+  </div>
+  <div class="app-row">
+    <div class="app-btn">Disney+</div><div class="app-btn">LG Ch</div>
+  </div>
+  <div class="click-row">
+    <div class="btn click-btn" data-id="0x0001" title="Short press = Left Click">L-Click</div>
+    <div class="btn click-btn" data-id="0x0195" title="Long press = Right Click">R-Click</div>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="panel-empty" id="pe">
+    <span class="icon">&#128433;</span>
+    Select a button on the remote<br>to configure what it does<br><br>
+    <span style="font-size:11px;color:#333">Greyed-out buttons are TV-only<br>and can't be remapped</span>
+  </div>
+  <div id="pc" style="display:none">
+    <h2 id="bn"></h2>
+    <div class="current-binding">Current: <strong id="bd"></strong></div>
+    <div class="field">
+      <label>Action Type</label>
+      <select id="at" onchange="tc()">
+        <option value="mouse">Mouse Click</option>
+        <option value="keyboard">Keyboard Key</option>
+        <option value="shortcut">Keyboard Shortcut</option>
+        <option value="command">Shell Command</option>
+        <option value="special">Special Action</option>
+      </select>
+    </div>
+    <div class="field" id="fm">
+      <label>Button</label>
+      <select id="mb"><option value="left">Left Click</option><option value="right">Right Click</option><option value="middle">Middle Click</option></select>
+    </div>
+    <div class="field" id="fk" style="display:none">
+      <label>Key</label>
+      <select id="ks">
+        <option value="13">Enter</option><option value="27">Escape</option><option value="8">Backspace</option><option value="9">Tab</option><option value="32">Space</option><option value="46">Delete</option>
+        <option value="38">Arrow Up</option><option value="40">Arrow Down</option><option value="37">Arrow Left</option><option value="39">Arrow Right</option>
+        <option value="36">Home</option><option value="35">End</option><option value="33">Page Up</option><option value="34">Page Down</option>
+        <option value="112">F1</option><option value="113">F2</option><option value="114">F3</option><option value="115">F4</option><option value="116">F5</option><option value="117">F6</option><option value="118">F7</option><option value="119">F8</option><option value="120">F9</option><option value="121">F10</option><option value="122">F11</option><option value="123">F12</option>
+        <option value="65">A</option><option value="66">B</option><option value="67">C</option><option value="68">D</option><option value="69">E</option><option value="70">F</option><option value="71">G</option><option value="72">H</option><option value="73">I</option><option value="74">J</option><option value="75">K</option><option value="76">L</option><option value="77">M</option><option value="78">N</option><option value="79">O</option><option value="80">P</option><option value="81">Q</option><option value="82">R</option><option value="83">S</option><option value="84">T</option><option value="85">U</option><option value="86">V</option><option value="87">W</option><option value="88">X</option><option value="89">Y</option><option value="90">Z</option>
+        <option value="48">0</option><option value="49">1</option><option value="50">2</option><option value="51">3</option><option value="52">4</option><option value="53">5</option><option value="54">6</option><option value="55">7</option><option value="56">8</option><option value="57">9</option>
+        <option value="91">Windows Key</option><option value="173">Mute</option><option value="174">Volume Down</option><option value="175">Volume Up</option>
+        <option value="176">Next Track</option><option value="177">Prev Track</option><option value="178">Stop Media</option><option value="179">Play/Pause</option>
+        <option value="44">Print Screen</option>
+      </select>
+    </div>
+    <div class="field" id="fs" style="display:none">
+      <label>Modifiers</label>
+      <div class="mods">
+        <label class="mod-label"><input type="checkbox" id="mc"> Ctrl</label>
+        <label class="mod-label"><input type="checkbox" id="ma"> Alt</label>
+        <label class="mod-label"><input type="checkbox" id="ms"> Shift</label>
+        <label class="mod-label"><input type="checkbox" id="mw"> Win</label>
+      </div>
+      <label>Key</label>
+      <select id="sk">
+        <option value="67">C</option><option value="86">V</option><option value="88">X</option><option value="90">Z</option><option value="65">A</option><option value="83">S</option><option value="68">D</option><option value="70">F</option><option value="78">N</option><option value="80">P</option><option value="87">W</option><option value="84">T</option><option value="82">R</option><option value="76">L</option>
+        <option value="112">F1</option><option value="113">F2</option><option value="114">F3</option><option value="115">F4</option><option value="116">F5</option>
+        <option value="9">Tab</option><option value="27">Escape</option><option value="46">Delete</option>
+      </select>
+    </div>
+    <div class="field" id="fc" style="display:none">
+      <label>Shell Command</label>
+      <input type="text" id="ci" placeholder="e.g. notepad.exe">
+    </div>
+    <div class="field" id="fp" style="display:none">
+      <label>Action</label>
+      <select id="ss"><option value="shutdown">Shutdown PC</option><option value="keyboard">Toggle TV Keyboard</option></select>
+    </div>
+    <button class="btn-apply" onclick="apply()">Save Binding</button>
+    <button class="btn-reset" onclick="reset()">Reset to Default</button>
+    <button class="btn-apply" onclick="restart()" style="background:#e6a817;color:#000;margin-top:14px">Save &amp; Restart Service</button>
+    <div class="note">Save applies the binding. Restart reloads all bindings.</div>
+  </div>
+</div>
+</div>
+
+<script>
+var B={
+"0x0193":{n:"Power / Red",d:{type:"action",value:"shutdown"}},
+"0x0194":{n:"Green",d:{type:"keyboard",virtualKey:91,scanCode:91,extended:true}},
+"0x0196":{n:"Blue",d:{type:"action",value:"keyboard"}},
+"0x0026":{n:"Up",d:{type:"keyboard",virtualKey:38,scanCode:72,extended:true}},
+"0x0028":{n:"Down",d:{type:"keyboard",virtualKey:40,scanCode:80,extended:true}},
+"0x0025":{n:"Left",d:{type:"keyboard",virtualKey:37,scanCode:75,extended:true}},
+"0x0027":{n:"Right",d:{type:"keyboard",virtualKey:39,scanCode:77,extended:true}},
+"0x000D":{n:"OK / Enter",d:{type:"keyboard",virtualKey:13,scanCode:28,extended:false}},
+"0x01CD":{n:"Back",d:{type:"keyboard",virtualKey:27,scanCode:1,extended:false}},
+"0x0021":{n:"Vol+ (Copy)",d:{type:"keyboard",virtualKey:67,scanCode:46,extended:false,mods:{ctrl:true}}},
+"0x0022":{n:"Yellow / Vol- (Paste)",d:{type:"keyboard",virtualKey:86,scanCode:47,extended:false,mods:{ctrl:true}}},
+"0x0030":{n:"0",d:{type:"keyboard",virtualKey:96,scanCode:82,extended:false}},
+"0x0031":{n:"1",d:{type:"keyboard",virtualKey:97,scanCode:79,extended:false}},
+"0x0032":{n:"2",d:{type:"keyboard",virtualKey:98,scanCode:80,extended:false}},
+"0x0033":{n:"3",d:{type:"keyboard",virtualKey:99,scanCode:81,extended:false}},
+"0x0034":{n:"4",d:{type:"keyboard",virtualKey:100,scanCode:75,extended:false}},
+"0x0035":{n:"5",d:{type:"keyboard",virtualKey:101,scanCode:76,extended:false}},
+"0x0036":{n:"6",d:{type:"keyboard",virtualKey:102,scanCode:77,extended:false}},
+"0x0037":{n:"7",d:{type:"keyboard",virtualKey:103,scanCode:71,extended:false}},
+"0x0038":{n:"8",d:{type:"keyboard",virtualKey:104,scanCode:72,extended:false}},
+"0x0039":{n:"9",d:{type:"keyboard",virtualKey:105,scanCode:73,extended:false}},
+"0x019F":{n:"LIST",d:{type:"keyboard",virtualKey:179,scanCode:34,extended:true}},
+"0x01A1":{n:"MORE (...)",d:{type:"keyboard",virtualKey:176,scanCode:25,extended:true}},
+"0x019C":{n:"GUIDE",d:{type:"keyboard",virtualKey:177,scanCode:16,extended:true}},
+"0x019D":{n:"QUICK ACCESS",d:{type:"keyboard",virtualKey:178,scanCode:36,extended:true}},
+"0x01A2":{n:"AD/SAP",d:{type:"keyboard",virtualKey:173,scanCode:32,extended:false}},
+"0x01A3":{n:"Mute",d:{type:"keyboard",virtualKey:173,scanCode:32,extended:false}},
+"0x01A4":{n:"Yellow",d:{type:"keyboard",virtualKey:86,scanCode:47,extended:false,mods:{ctrl:true}}},
+"0x0001":{n:"Click (Short Press)",d:{type:"mouse",value:"left"}},
+"0x0195":{n:"Click (Long Press)",d:{type:"mouse",value:"right"}}
+};
+var binds={},sel=null;
+function desc(b){if(!b||!b.length)return"Default";var d=b[0];if(d.type==="mouse")return d.value[0].toUpperCase()+d.value.slice(1)+" Click";if(d.type==="action")return d.value==="shutdown"?"Shutdown PC":"Toggle Keyboard";if(d.type==="command")return"Run: "+d.command;if(d.type==="keyboard"){var k=kn(d.virtualKey),m=[];if(d.mods){if(d.mods.ctrl)m.push("Ctrl");if(d.mods.alt)m.push("Alt");if(d.mods.shift)m.push("Shift");if(d.mods.win)m.push("Win")}return m.length?m.join("+")+"+"+k:k}return JSON.stringify(d)}
+function kn(v){var m={8:"Backspace",9:"Tab",13:"Enter",19:"Pause",27:"Escape",32:"Space",33:"PageUp",34:"PageDown",35:"End",36:"Home",37:"Left",38:"Up",39:"Right",40:"Down",44:"PrtSc",46:"Delete",91:"Win",96:"Num0",97:"Num1",98:"Num2",99:"Num3",100:"Num4",101:"Num5",102:"Num6",103:"Num7",104:"Num8",105:"Num9",112:"F1",113:"F2",114:"F3",115:"F4",116:"F5",117:"F6",118:"F7",119:"F8",120:"F9",121:"F10",122:"F11",123:"F12",173:"Mute",174:"VolDown",175:"VolUp",176:"Next",177:"Prev",178:"Stop",179:"Play/Pause"};if(m[v])return m[v];if(v>=65&&v<=90)return String.fromCharCode(v);if(v>=48&&v<=57)return""+String(v-48);return"VK"+v}
+function pick(id){document.querySelectorAll(".btn").forEach(function(b){b.classList.remove("selected")});document.querySelectorAll('[data-id="'+id+'"]').forEach(function(b){b.classList.add("selected")});sel=id;var i=B[id];if(!i)return;document.getElementById("pe").style.display="none";document.getElementById("pc").style.display="block";document.getElementById("bn").textContent=i.n;var b=binds[id]||[i.d];document.getElementById("bd").textContent=desc(b);var d=b[0];if(d.type==="mouse"){document.getElementById("at").value="mouse";document.getElementById("mb").value=d.value}else if(d.type==="action"){document.getElementById("at").value="special";document.getElementById("ss").value=d.value}else if(d.type==="command"){document.getElementById("at").value="command";document.getElementById("ci").value=d.command||""}else if(d.type==="keyboard"&&d.mods&&(d.mods.ctrl||d.mods.alt||d.mods.shift||d.mods.win)){document.getElementById("at").value="shortcut";document.getElementById("mc").checked=!!d.mods.ctrl;document.getElementById("ma").checked=!!d.mods.alt;document.getElementById("ms").checked=!!d.mods.shift;document.getElementById("mw").checked=!!d.mods.win;document.getElementById("sk").value=d.virtualKey}else if(d.type==="keyboard"){document.getElementById("at").value="keyboard";document.getElementById("ks").value=d.virtualKey}tc()}
+function tc(){var t=document.getElementById("at").value;document.getElementById("fm").style.display=t==="mouse"?"block":"none";document.getElementById("fk").style.display=t==="keyboard"?"block":"none";document.getElementById("fs").style.display=t==="shortcut"?"block":"none";document.getElementById("fc").style.display=t==="command"?"block":"none";document.getElementById("fp").style.display=t==="special"?"block":"none"}
+function apply(){if(!sel)return;var t=document.getElementById("at").value,b;if(t==="mouse")b={type:"mouse",value:document.getElementById("mb").value};else if(t==="special")b={type:"action",value:document.getElementById("ss").value};else if(t==="command")b={type:"command",command:document.getElementById("ci").value};else if(t==="shortcut"){var vk=parseInt(document.getElementById("sk").value);b={type:"keyboard",virtualKey:vk,scanCode:0,extended:false,mods:{ctrl:document.getElementById("mc").checked,alt:document.getElementById("ma").checked,shift:document.getElementById("ms").checked,win:document.getElementById("mw").checked}}}else{var vk=parseInt(document.getElementById("ks").value);b={type:"keyboard",virtualKey:vk,scanCode:0,extended:false}}binds[sel]=[b];save();mark();document.getElementById("bd").textContent=desc([b])}
+function reset(){if(!sel)return;delete binds[sel];save();pick(sel);mark()}
+function save(){var p={bindings:{}};for(var k in binds)p.bindings[k]=binds[k];fetch("/api/bindings",{method:"POST",body:JSON.stringify(p)}).then(function(r){return r.json()}).then(function(){toast("Saved! Reconnect TV to apply.","ok")}).catch(function(e){toast("Error: "+e,"err")})}
+function restart(){apply();setTimeout(function(){fetch("/api/restart",{method:"POST"}).then(function(){toast("Restarting service...","ok");setTimeout(function(){location.reload()},3000)}).catch(function(e){toast("Error: "+e,"err")})},500)}
+function toast(m,t){var d=document.createElement("div");d.className="toast toast-"+t;d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},3000)}
+function mark(){document.querySelectorAll(".btn[data-id]").forEach(function(e){e.classList.toggle("custom",!!binds[e.dataset.id])})}
+document.querySelectorAll(".btn[data-id]").forEach(function(e){e.addEventListener("click",function(){pick(e.dataset.id)})});
+fetch("/api/settings").then(function(r){return r.json()}).then(function(d){var s=document.getElementById("sb");s.innerHTML='<div class="chip"><span class="dot dot-g"></span> Port '+d.port+'</div>'+'<div class="chip"><span class="dot '+(d.connectedClients>0?"dot-g":"dot-r")+'"></span> '+(d.connectedClients>0?d.clientIp+" connected":"No TV")+'</div>'+'<div class="chip"><span class="dot '+(d.inactivity?"dot-y":"dot-g")+'"></span> Shutdown '+(d.inactivity?"On":"Off")+'</div>';if(d.bindings&&d.bindings.bindings){for(var k in d.bindings.bindings)binds[k]=d.bindings.bindings[k]}else if(d.bindings){for(var k in d.bindings){if(Array.isArray(d.bindings[k]))binds[k]=d.bindings[k]}}mark()});
+</script>
+</body></html>
