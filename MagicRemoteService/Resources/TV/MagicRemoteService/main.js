@@ -141,6 +141,11 @@ function Toast(strTitle, strMessage) {
 	}
 	deScreenToast.appendChild(deToast);
 	document.body.appendChild(deScreenToast);
+	setTimeout(function() {
+		if(ScreenExist(deScreenToast)) {
+			ScreenCancel(deScreenToast, false);
+		}
+	}, 3000);
 }
 
 function Dialog(strTitle, strMessage, arrButton) {
@@ -492,10 +497,10 @@ function SubscriptionGetSensorData() {
 	webOS.service.request("luna://com.webos.service.mrcu", {
 		method: "sensor/getSensorData",
 		parameters: arrVersion[0] > 1 ? {
-			callbackInterval: 16,
+			callbackInterval: 1,
 			subscribe: true
 		} : {
-			callbackInterval: 16,
+			callbackInterval: 1,
 			subscribe: true,
 			sleep: true,
 			autoAlign: false
