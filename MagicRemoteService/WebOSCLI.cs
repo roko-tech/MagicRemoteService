@@ -152,31 +152,36 @@ namespace MagicRemoteService {
 			if(!string.IsNullOrEmpty(strWorkingDirectory)) {
 				pProcess.StartInfo.WorkingDirectory = strWorkingDirectory;
 			}
-			// Add common Node.js/npm paths so ares-cli tools can be found
-			string strPath = System.Environment.GetEnvironmentVariable("PATH") ?? "";
-			System.Collections.Generic.List<string> liExtraPaths = new System.Collections.Generic.List<string> {
+			// Build PATH with Node.js/npm/ares locations
+			string strPath = System.Environment.GetEnvironmentVariable("PATH", System.EnvironmentVariableTarget.Machine) ?? "";
+			strPath += ";" + (System.Environment.GetEnvironmentVariable("PATH", System.EnvironmentVariableTarget.User) ?? "");
+			string[] arrSearchDirs = new string[] {
 				@"C:\Program Files\Volta",
 				@"C:\Program Files\nodejs",
 				@"C:\Program Files (x86)\nodejs"
 			};
-			// Scan all user profiles for npm and volta
-			string strUsersDir = System.IO.Path.GetDirectoryName(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile));
-			if(string.IsNullOrEmpty(strUsersDir) || !System.IO.Directory.Exists(strUsersDir)) strUsersDir = @"C:\Users";
+			foreach(string d in arrSearchDirs) {
+				if(System.IO.Directory.Exists(d)) strPath = d + ";" + strPath;
+			}
 			try {
-				foreach(string strUserDir in System.IO.Directory.GetDirectories(strUsersDir)) {
-					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, "AppData", "Roaming", "npm"));
-					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, ".volta", "bin"));
-					liExtraPaths.Add(System.IO.Path.Combine(strUserDir, "AppData", "Local", "Volta", "bin"));
+				foreach(string strUserDir in System.IO.Directory.GetDirectories(@"C:\Users")) {
+					string strNpm = System.IO.Path.Combine(strUserDir, "AppData", "Roaming", "npm");
+					string strNvm = System.IO.Path.Combine(strUserDir, "AppData", "Roaming", "nvm");
+					string strVolta = System.IO.Path.Combine(strUserDir, ".volta", "bin");
+					if(System.IO.Directory.Exists(strNpm)) strPath = strNpm + ";" + strPath;
+					if(System.IO.Directory.Exists(strVolta)) strPath = strVolta + ";" + strPath;
+					if(System.IO.Directory.Exists(strNvm)) {
+						try {
+							foreach(string strNvmVer in System.IO.Directory.GetDirectories(strNvm, "v*")) {
+								strPath = strNvmVer + ";" + strPath;
+							}
+						} catch {}
+					}
 				}
 			} catch {}
-			foreach(string strExtraPath in liExtraPaths) {
-				if(System.IO.Directory.Exists(strExtraPath) && !strPath.Contains(strExtraPath)) {
-					strPath = strExtraPath + ";" + strPath;
-				}
-			}
-			pProcess.StartInfo.EnvironmentVariables["PATH"] = strPath;
 			pProcess.StartInfo.Arguments = "/c " + strCommand + " " + strArgument;
 			pProcess.StartInfo.UseShellExecute = false;
+			pProcess.StartInfo.EnvironmentVariables["PATH"] = strPath;
 			pProcess.StartInfo.CreateNoWindow = true;
 			pProcess.StartInfo.RedirectStandardInput = true;
 			pProcess.StartInfo.RedirectStandardError = true;
