@@ -699,6 +699,10 @@ namespace MagicRemoteService.WinApi {
 		public static extern int DisplayConfigGetDeviceInfo(ref DisplayConfigSourceDeviceName requestPacket);
 		[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
 		public static extern int DisplayConfigGetDeviceInfo(ref DisplayConfigTargetDeviceName requestPacket);
+		[System.Runtime.InteropServices.DllImport("user32.dll")]
+		public static extern System.IntPtr GetForegroundWindow();
+		[System.Runtime.InteropServices.DllImport("user32.dll")]
+		public static extern uint GetWindowThreadProcessId(System.IntPtr hWnd, out uint lpdwProcessId);
 	}
 }
 #pragma warning restore IDE1006

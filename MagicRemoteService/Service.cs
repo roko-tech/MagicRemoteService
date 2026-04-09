@@ -74,6 +74,33 @@ namespace MagicRemoteService {
 		private static readonly System.Threading.ManualResetEvent mreStop = new System.Threading.ManualResetEvent(true);
 		private static int iConnectedClients = 0;
 		private static string strConnectedClientIp = "";
+		private static System.Collections.Generic.HashSet<string> hsScrollExclude = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase) { "PotPlayerMini64", "PotPlayerMini", "PotPlayer", "PotPlayer64" };
+		private static void LoadScrollExclude() {
+			try {
+				string strPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+				if(System.IO.File.Exists(strPath)) {
+					var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(strPath));
+					if(doc.RootElement.TryGetProperty("scrollExclude", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array) {
+						var hs = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+						foreach(var item in arr.EnumerateArray()) {
+							string v = item.GetString();
+							if(!string.IsNullOrEmpty(v)) hs.Add(v);
+						}
+						if(hs.Count > 0) hsScrollExclude = hs;
+					}
+					doc.Dispose();
+				}
+			} catch {}
+		}
+		private static bool IsScrollExcludedApp() {
+			try {
+				System.IntPtr hWnd = WinApi.User32.GetForegroundWindow();
+				if(hWnd == System.IntPtr.Zero) return false;
+				WinApi.User32.GetWindowThreadProcessId(hWnd, out uint pid);
+				string strName = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
+				return hsScrollExclude.Contains(strName);
+			} catch { return false; }
+		}
 		private static readonly System.Threading.AutoResetEvent areSessionChanged = new System.Threading.AutoResetEvent(false);
 		private static System.Threading.EventWaitHandle ewhServerStarted;
 		private static System.Threading.EventWaitHandle ewhClientStarted;
@@ -164,6 +191,7 @@ namespace MagicRemoteService {
 					}
 					// Try loading from bindings.json first (next to exe)
 					string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+					LoadScrollExclude();
 					if(System.IO.File.Exists(strBindingsPath)) {
 						this.LoadBindingsFromJson(strBindingsPath);
 					} else {
@@ -560,7 +588,8 @@ namespace MagicRemoteService {
 							if(strReqPath == "/api/settings" && ctx.Request.HttpMethod == "GET") {
 								string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 								string strBindings = System.IO.File.Exists(strBindingsFile) ? System.IO.File.ReadAllText(strBindingsFile) : "{}";
-								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"connectedClients\":" + Service.iConnectedClients + ",\"clientIp\":\"" + Service.strConnectedClientIp + "\",\"bindings\":" + strBindings + "}";
+								string strExclude = "[" + string.Join(",", System.Linq.Enumerable.Select(hsScrollExclude, s => "\"" + s + "\"")) + "]";
+								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"connectedClients\":" + Service.iConnectedClients + ",\"clientIp\":\"" + Service.strConnectedClientIp + "\",\"scrollExclude\":" + strExclude + ",\"bindings\":" + strBindings + "}";
 								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strJson);
 								ctx.Response.ContentType = "application/json";
 								ctx.Response.ContentLength64 = buf.Length;
@@ -571,6 +600,7 @@ namespace MagicRemoteService {
 									System.Text.Json.JsonDocument.Parse(strBody).Dispose();
 									string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 									System.IO.File.WriteAllText(strBindingsFile, strBody);
+									LoadScrollExclude();
 									byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"saved\":true}");
 									ctx.Response.ContentType = "application/json";
 									ctx.Response.ContentLength64 = buf.Length;
@@ -1190,6 +1220,8 @@ namespace MagicRemoteService {
 						}
 					}
 				};
+				long lLastExcludedScroll = 0;
+				int iLastExcludedScrollDir = 0;
 				WinApi.Input[] piWheel = new WinApi.Input[] {
 					new WinApi.Input {
 						type = WinApi.InputType.INPUT_MOUSE,
@@ -1385,8 +1417,21 @@ namespace MagicRemoteService {
 														break;
 													case (byte)MagicRemoteService.MessageType.Wheel:
 											if(ulLenData < 3) break;
-														piWheel[0].u.mi.mouseData = (uint)(-System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1) * 3);
-														Service.SendInputAdmin(piWheel);
+														if(IsScrollExcludedApp()) {
+															// Single step: send minimal scroll delta, throttled
+															short sWheelDelta = System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1);
+															int iDir = System.Math.Sign(sWheelDelta);
+															long lNow = System.Environment.TickCount;
+															if(iDir != 0 && (lNow - lLastExcludedScroll > 300 || iDir != iLastExcludedScrollDir)) {
+																piWheel[0].u.mi.mouseData = (uint)(-iDir * 10);
+																Service.SendInputAdmin(piWheel);
+																lLastExcludedScroll = lNow;
+																iLastExcludedScrollDir = iDir;
+															}
+														} else {
+															piWheel[0].u.mi.mouseData = (uint)(-System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1) * 3);
+															Service.SendInputAdmin(piWheel);
+														}
 														Service.LogIfDebug("Processed binary message send/wheel [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], sY: " + (-System.BitConverter.ToInt16(tabData, (int)ulOffsetData + 1)).ToString());
 														break;
 
