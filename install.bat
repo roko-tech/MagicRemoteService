@@ -146,17 +146,26 @@ if not exist packages (
     set "HAS_NUGET=0"
     where nuget >nul 2>&1 && set "HAS_NUGET=1"
     if "!HAS_NUGET!"=="1" (
-        nuget restore MagicRemoteService.sln >nul 2>&1
+        nuget restore MagicRemoteService.sln
     ) else (
         echo Downloading NuGet...
-        powershell -Command "Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile 'nuget.exe'" >nul 2>&1
-        nuget.exe restore MagicRemoteService.sln >nul 2>&1
-        del nuget.exe 2>nul
+        powershell -Command "Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile 'nuget.exe'" 2>&1
+        if exist nuget.exe (
+            nuget.exe restore MagicRemoteService.sln
+            del nuget.exe 2>nul
+        ) else (
+            echo   NuGet download failed. Trying MSBuild restore...
+        )
+    )
+    :: Fallback: MSBuild -restore flag
+    if not exist packages (
+        echo   Trying MSBuild package restore...
+        "!MSBUILD!" MagicRemoteService.sln /t:Restore /v:minimal 2>nul
     )
 )
 
 echo Building...
-"!MSBUILD!" MagicRemoteService.sln /p:Configuration=Release /t:Rebuild /v:minimal
+"!MSBUILD!" MagicRemoteService.sln /p:Configuration=Release /t:Rebuild /v:minimal /restore
 if !errorlevel! neq 0 (
     echo Build failed!
     pause
