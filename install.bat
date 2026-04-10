@@ -16,6 +16,26 @@ if %errorlevel% neq 0 (
 )
 
 :: ========================================
+:: SETUP PATH — find Node.js, npm, ares across all user profiles
+:: ========================================
+for /d %%u in (C:\Users\*) do (
+    if exist "%%u\AppData\Roaming\npm" set "PATH=%%u\AppData\Roaming\npm;!PATH!"
+    if exist "%%u\.volta\bin" set "PATH=%%u\.volta\bin;!PATH!"
+    if exist "%%u\AppData\Roaming\nvm" (
+        for /d %%v in ("%%u\AppData\Roaming\nvm\v*") do set "PATH=%%v;!PATH!"
+    )
+)
+if exist "C:\Program Files\nodejs" set "PATH=C:\Program Files\nodejs;!PATH!"
+if exist "C:\Program Files\Volta" set "PATH=C:\Program Files\Volta;!PATH!"
+if exist "C:\Program Files (x86)\nodejs" set "PATH=C:\Program Files (x86)\nodejs;!PATH!"
+
+:: Winget path
+if exist "%LOCALAPPDATA%\Microsoft\WindowsApps" set "PATH=%LOCALAPPDATA%\Microsoft\WindowsApps;!PATH!"
+for /d %%u in (C:\Users\*) do (
+    if exist "%%u\AppData\Local\Microsoft\WindowsApps\winget.exe" set "PATH=%%u\AppData\Local\Microsoft\WindowsApps;!PATH!"
+)
+
+:: ========================================
 :: PREREQUISITES
 :: ========================================
 echo Checking prerequisites...
