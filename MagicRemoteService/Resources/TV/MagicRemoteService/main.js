@@ -360,11 +360,33 @@ function SubscriptionInputStatus() {
 					LogIfDebug(oString.strGetAllInputStatusSuccess);
 				case undefined:
 					var pbLastInputSourceStatus = pbInputSourceStatus;
+					// Auto-detect: if configured HDMI not found, use the active one
+					var bFoundConfigured = false;
+					var strActiveHdmi = null;
 					inResponse.devices.forEach(function(dDevice) {
 						if(strInputId === dDevice.id) {
 							pbInputSourceStatus = dDevice.activate;
+							bFoundConfigured = true;
+						}
+						if(dDevice.activate && dDevice.id && dDevice.id.indexOf("HDMI") === 0) {
+							strActiveHdmi = dDevice.id;
 						}
 					});
+					if(!bFoundConfigured && strActiveHdmi) {
+						// Auto-switch to the active HDMI port
+						strInputId = strActiveHdmi;
+						var hdmiNum = strActiveHdmi.replace("HDMI_", "");
+						strInputAppId = "com.webos.app.hdmi" + hdmiNum;
+						strInputName = "HDMI " + hdmiNum;
+						strInputSource = "ext://hdmi:hdmi" + hdmiNum;
+						Log("Auto-detected HDMI port: " + strInputId);
+						// Re-check with the new ID
+						inResponse.devices.forEach(function(dDevice) {
+							if(strInputId === dDevice.id) {
+								pbInputSourceStatus = dDevice.activate;
+							}
+						});
+					}
 					if(pbLastInputSourceStatus === null || pbLastInputSourceStatus !== pbInputSourceStatus) {
 						if(pbInputSourceStatus) {
 							LogIfDebug(oString.strInputConnected);
