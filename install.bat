@@ -300,38 +300,28 @@ mkdir "!BUILD!\Service"
 xcopy /s /q "MagicRemoteService\Resources\TV\MagicRemoteService\*" "!BUILD!\MagicRemoteService\" >nul
 xcopy /s /q "MagicRemoteService\Resources\TV\Service\*" "!BUILD!\Service\" >nul
 
-:: Apply config using PowerShell for reliable string replacement
-echo Applying configuration...
-set "MJS=!BUILD!\MagicRemoteService\main.js"
-set "SJS=!BUILD!\Service\service.js"
+:: Generate config.json (no more editing main.js or service.js!)
+echo Generating config.json...
+set "CFG_IP=!PC_IP!"
+if "!CFG_IP!"=="" set "CFG_IP=127.0.0.1"
+
+powershell -Command "$cfg = @{inputId='!HDMI_ID!';inputAppId='com.webos.app.!HDMI_SHORT!';inputName='!HDMI_NAME!';inputSource='!HDMI_SRC!';ip='!CFG_IP!';port=!PORT!;mask='!SUBNET!';mac='!PC_MAC!';appId='!APP_ID!';overlay=$true;inputDirect=$true;longClick=1500;cursorSpeed=1.0;extend=$true}; $cfg | ConvertTo-Json | Set-Content '!BUILD!\MagicRemoteService\config.json' -Encoding UTF8; $cfg | ConvertTo-Json | Set-Content '!BUILD!\Service\config.json' -Encoding UTF8"
+
+:: Only replace IDs in webOS packaging files (required by webOS)
 set "AJ=!BUILD!\MagicRemoteService\appinfo.json"
 set "SVJ=!BUILD!\Service\services.json"
 set "PJ=!BUILD!\Service\package.json"
-
-:: main.js replacements (handles both const and var declarations)
-powershell -Command "$c = Get-Content '!MJS!' -Raw; $c = $c -replace 'const strInputId = \"HDMI\"', 'const strInputId = \"!HDMI_ID!\"'; $c = $c -replace 'const strInputAppId = \"com.webos.app.hdmi\"', 'const strInputAppId = \"com.webos.app.!HDMI_SHORT!\"'; $c = $c -replace 'const strInputName = \"HDMI\"', 'const strInputName = \"!HDMI_NAME!\"'; $c = $c -replace 'const strInputSource = \"ext://hdmi\"', 'const strInputSource = \"!HDMI_SRC!\"'; $c = $c -replace 'const strMac = \"AA:AA:AA:AA:AA:AA\"', 'const strMac = \"!PC_MAC!\"'; $c = $c -replace 'const strAppId = \"com.cathwyler.magicremoteservice\"', 'const strAppId = \"!APP_ID!\"'; $c = $c -replace 'const strMask = \"255.255.255.0\"', 'const strMask = \"!SUBNET!\"'; Set-Content '!MJS!' $c -NoNewline"
-
-if not "!PC_IP!"=="" (
-    powershell -Command "$c = Get-Content '!MJS!' -Raw; $c = $c -replace 'var strIP = \"127.0.0.1\"', 'var strIP = \"!PC_IP!\"'; $c = $c -replace 'var strIP = \"localhost\"', 'var strIP = \"!PC_IP!\"'; Set-Content '!MJS!' $c -NoNewline"
-)
-
-:: service.js replacements
-powershell -Command "$c = Get-Content '!SJS!' -Raw; $c = $c -replace 'var strAppId = \"com.cathwyler.magicremoteservice\"', 'var strAppId = \"!APP_ID!\"'; $c = $c -replace 'var strInputAppId = \"com.webos.app.hdmi\"', 'var strInputAppId = \"com.webos.app.!HDMI_SHORT!\"'; Set-Content '!SJS!' $c -NoNewline"
-
-:: appinfo.json replacements
 powershell -Command "$c = Get-Content '!AJ!' -Raw; $c = $c -replace '\"id\": \"com.cathwyler.magicremoteservice\"', '\"id\": \"!APP_ID!\"'; $c = $c -replace '\"version\": \"1.0.0\"', '\"version\": \"2.0.0\"'; $c = $c -replace '\"appDescription\": \"HDMI\"', '\"appDescription\": \"!HDMI_NAME!\"'; Set-Content '!AJ!' $c -NoNewline"
-
-:: services.json + package.json
 powershell -Command "(Get-Content '!SVJ!' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!SVJ!' -NoNewline"
 powershell -Command "(Get-Content '!PJ!' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!PJ!' -NoNewline"
 
-:: Verify critical replacements
-findstr /c:"!APP_ID!" "!MJS!" >nul 2>&1
-if !errorlevel! neq 0 (
-    echo [ERROR] Config replacement failed for main.js!
+:: Verify config.json was generated
+if not exist "!BUILD!\MagicRemoteService\config.json" (
+    echo [ERROR] Failed to generate config.json!
     pause
     exit /b 1
 )
+echo   config.json generated successfully
 
 :: Package
 echo Packaging...

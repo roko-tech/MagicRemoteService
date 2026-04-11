@@ -82,33 +82,65 @@ const MessageType = {
 	Shutdown: 0x06
 }
 
-const bInputDirect = true;
-const bOverlay = true;
-const uiRemoteEvent = 200;
-const uiLongClick = 1500;
-const strInputId = "HDMI";
-const strInputAppId = "com.webos.app.hdmi";
-const strInputName = "HDMI";
-const strInputSource = "ext://hdmi";
+// Config defaults — overridden by config.json at startup
+var bInputDirect = true;
+var bOverlay = true;
+var uiRemoteEvent = 200;
+var uiLongClick = 1500;
+var strInputId = "HDMI_1";
+var strInputAppId = "com.webos.app.hdmi1";
+var strInputName = "HDMI 1";
+var strInputSource = "ext://hdmi:hdmi1";
 var strIP = "127.0.0.1";
 var uiPort = 41230;
-const strMask = "255.255.255.0";
-const strMac = "AA:AA:AA:AA:AA:AA";
-var strBroadcast = strIP.split(".").map(function(x, i) {
-	return(x | (parseInt(strMask.split(".")[i], 10) ^ 0xFF)).toString(10);
-}).join(".");
-const arrMac = strMac.split(":").map(function(x) {
-	return parseInt(x, 16);
-});
+var strMask = "255.255.255.0";
+var strMac = "00:00:00:00:00:00";
+var strBroadcast = "";
+var arrMac = [];
 var bAutoDiscovered = false;
-const aSensor = {
+var aSensor = {
 	dFactor: 50,
 	dSpeed: 9,
-}
-const dCursorSpeed = 1.0;
-const strAppId = "com.cathwyler.magicremoteservice";
+};
+var dCursorSpeed = 1.0;
+var strAppId = "com.cathwyler.magicremoteservice";
 
-const strPath = webOS.fetchAppRootPath();
+var strPath = webOS.fetchAppRootPath();
+
+// Load config.json synchronously before initialization
+function LoadConfig() {
+	try {
+		var xhr = new XMLHttpRequest();
+		xhr.open("GET", strPath + "/config.json", false); // synchronous
+		xhr.send(null);
+		if(xhr.status === 200 || xhr.status === 0) {
+			var cfg = JSON.parse(xhr.responseText);
+			if(cfg.inputId) strInputId = cfg.inputId;
+			if(cfg.inputAppId) strInputAppId = cfg.inputAppId;
+			if(cfg.inputName) strInputName = cfg.inputName;
+			if(cfg.inputSource) strInputSource = cfg.inputSource;
+			if(cfg.ip) strIP = cfg.ip;
+			if(cfg.port) uiPort = cfg.port;
+			if(cfg.mask) strMask = cfg.mask;
+			if(cfg.mac) strMac = cfg.mac;
+			if(cfg.appId) strAppId = cfg.appId;
+			if(cfg.overlay !== undefined) bOverlay = cfg.overlay;
+			if(cfg.inputDirect !== undefined) bInputDirect = cfg.inputDirect;
+			if(cfg.longClick) uiLongClick = cfg.longClick;
+			if(cfg.cursorSpeed) dCursorSpeed = cfg.cursorSpeed;
+		}
+	} catch(e) {
+		// config.json not found or invalid — use defaults
+	}
+	// Recompute derived values
+	strBroadcast = strIP.split(".").map(function(x, i) {
+		return(x | (parseInt(strMask.split(".")[i], 10) ^ 0xFF)).toString(10);
+	}).join(".");
+	arrMac = strMac.split(":").map(function(x) {
+		return parseInt(x, 16);
+	});
+}
+LoadConfig();
 var arrVersion = null;
 var oString = null;
 

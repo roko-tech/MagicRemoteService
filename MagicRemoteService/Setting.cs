@@ -501,26 +501,36 @@ namespace MagicRemoteService {
 			System.IO.Directory.CreateDirectory(@".\TV\MagicRemoteService\resources\es");
 			System.IO.Directory.CreateDirectory(@".\TV\Service");
 			System.IO.Directory.CreateDirectory(@".\TV\Service\WebSocket");
-			System.IO.File.WriteAllText(@".\TV\MagicRemoteService\main.js", MagicRemoteService.Properties.Resources.main
+			// Write main.js unmodified — config comes from config.json
+			string strMainJs = MagicRemoteService.Properties.Resources.main;
 #if DEBUG
-				.Replace(@"const bDebug = false;", @"const bDebug = true;")
+			strMainJs = strMainJs.Replace(@"const bDebug = false;", @"const bDebug = true;");
 #endif
-				.Replace(@"const bInputDirect = true", @"const bInputDirect = " + (bInputDirect ? "true" : "false"))
-				.Replace(@"const bOverlay = true", @"const bOverlay = " + (bOverlay ? "true" : "false"))
-				.Replace(@"const uiLongClick = 1500", @"const uiLongClick = " + dLongClick.ToString())
-				.Replace(@"const strInputId = ""HDMI""", @"const strInputId = """ + wocdiInput.Id + @"""")
-				.Replace(@"const strInputAppId = ""com.webos.app.hdmi""", @"const strInputAppId = ""com.webos.app." + wocdiInput.AppIdShort + @"""")
-				.Replace(@"const strInputName = ""HDMI""", @"const strInputName = """ + wocdiInput.Name + @"""")
-				.Replace(@"const strInputSource = ""ext://hdmi""", @"const strInputSource = """ + wocdiInput.Source + @"""")
-				.Replace(@"const strIP = ""127.0.0.1""", @"const strIP = """ + ipaSendIP.ToString() + @"""")
-				.Replace(@"const uiPort = 41230", @"const uiPort = " + dSendPort.ToString())
-				.Replace(@"const strMask = ""255.255.255.0""", @"const strMask = """ + ipaMask.ToString() + @"""")
-				.Replace(@"const strMac = ""AA:AA:AA:AA:AA:AA""", @"const strMac = """ + paPCMac.ToString() + @"""")
-				.Replace(@"const strAppId = ""com.cathwyler.magicremoteservice""", @"const strAppId = ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @"""")
-			);
+			System.IO.File.WriteAllText(@".\TV\MagicRemoteService\main.js", strMainJs);
+			// Generate config.json for both TV app and service
+			string strAppIdFull = "com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort;
+			var config = new {
+				inputId = wocdiInput.Id,
+				inputAppId = "com.webos.app." + wocdiInput.AppIdShort,
+				inputName = wocdiInput.Name,
+				inputSource = wocdiInput.Source,
+				ip = ipaSendIP.ToString(),
+				port = (int)dSendPort,
+				mask = ipaMask.ToString(),
+				mac = paPCMac.ToString(),
+				appId = strAppIdFull,
+				overlay = bOverlay,
+				inputDirect = bInputDirect,
+				longClick = (int)dLongClick,
+				cursorSpeed = 1.0,
+				extend = bExtend
+			};
+			string strConfigJson = System.Text.Json.JsonSerializer.Serialize(config, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+			System.IO.File.WriteAllText(@".\TV\MagicRemoteService\config.json", strConfigJson);
+			System.IO.File.WriteAllText(@".\TV\Service\config.json", strConfigJson);
 			System.IO.File.WriteAllText(@".\TV\MagicRemoteService\index.html", MagicRemoteService.Properties.Resources.index);
 			System.IO.File.WriteAllText(@".\TV\MagicRemoteService\appinfo.json", MagicRemoteService.Properties.Resources.appinfo
-				.Replace(@"""id"": ""com.cathwyler.magicremoteservice""", @"""id"": ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @"""")
+				.Replace(@"""id"": ""com.cathwyler.magicremoteservice""", @"""id"": """ + strAppIdFull + @"""")
 				.Replace(@"""version"": ""1.0.0""", @"""version"": """ + strVersion + @"""")
 				.Replace(@"""appDescription"": ""HDMI""", @"""appDescription"": """ + wocdiInput.Name + @"""")
 				.Replace(@"""defaultWindowType"": ""floating""", @"""defaultWindowType"": """ + (bOverlay ? "floating" : "card") + @"""")
@@ -543,15 +553,12 @@ namespace MagicRemoteService {
 			System.IO.File.WriteAllText(@".\TV\Service\package.json", MagicRemoteService.Properties.Resources.package
 				.Replace(@"""name"": ""com.cathwyler.magicremoteservice.service""", @"""name"": ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @".service""")
 			);
-			System.IO.File.WriteAllText(@".\TV\Service\service.js", MagicRemoteService.Properties.Resources.service
+			// Write service.js unmodified — config comes from config.json
+			string strServiceJs = MagicRemoteService.Properties.Resources.service;
 #if DEBUG
-				.Replace(@"var bDebug = false;", @"var bDebug = true;")
+			strServiceJs = strServiceJs.Replace(@"var bDebug = false;", @"var bDebug = true;");
 #endif
-				.Replace(@"var bExtend = true", "var bExtend = " + (bExtend ? "true" : "false"))
-				.Replace(@"var bOverlay = true", "var bOverlay = " + (bOverlay ? "true" : "false"))
-				.Replace(@"var strInputAppId = ""com.webos.app.hdmi""", @"var strInputAppId = ""com.webos.app." + wocdiInput.AppIdShort + @"""")
-				.Replace(@"var strAppId = ""com.cathwyler.magicremoteservice""", @"var strAppId = ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @"""")
-			);
+			System.IO.File.WriteAllText(@".\TV\Service\service.js", strServiceJs);
 			System.IO.File.WriteAllText(@".\TV\Service\services.json", MagicRemoteService.Properties.Resources.services
 				.Replace(@"""id"": ""com.cathwyler.magicremoteservice.service""", @"""id"": ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @".service""")
 				.Replace(@"""name"": ""com.cathwyler.magicremoteservice.service""", @"""name"": ""com.cathwyler.magicremoteservice." + wocdiInput.AppIdShort + @".service""")

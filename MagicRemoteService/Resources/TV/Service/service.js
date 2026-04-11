@@ -7,13 +7,28 @@ Date.prototype.toISOSecondString = function() {
 
 var Service = require("webos-service");
 var Dgram = require("dgram");
+var Fs = require("fs");
 
+// Config defaults — overridden by config.json
 var bDebug = false;
 var bOverlay = true;
 var bExtend = true;
 var strAppId = "com.cathwyler.magicremoteservice";
+var strInputAppId = "com.webos.app.hdmi1";
 
-var serService = new Service(strAppId + ".service"); 
+// Load config.json
+try {
+	var cfgData = Fs.readFileSync("./config.json", "utf8");
+	var cfg = JSON.parse(cfgData);
+	if(cfg.appId) strAppId = cfg.appId;
+	if(cfg.inputAppId) strInputAppId = cfg.inputAppId;
+	if(cfg.overlay !== undefined) bOverlay = cfg.overlay;
+	if(cfg.extend !== undefined) bExtend = cfg.extend;
+} catch(e) {
+	// config.json not found — use defaults
+}
+
+var serService = new Service(strAppId + ".service");
 
 var arrLog = [];
 var dLog = {};
@@ -297,7 +312,7 @@ metWol.on("request", function(mMessage) {
 });
 
 if(bOverlay){
-	var strInputAppId = "com.webos.app.hdmi";
+	// strInputAppId loaded from config.json at top of file
 
 	serService.activityManager.create("MagicRemoteServiceKeepAlive");
 
@@ -441,7 +456,6 @@ if(bOverlay){
 	
 	var Http = require("http");
 	var Crypto = require("crypto");
-	var Fs = require("fs");
 
 	var bApp = false;
 	var strSsapClientKey = null;

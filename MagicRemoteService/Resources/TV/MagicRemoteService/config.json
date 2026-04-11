@@ -1,0 +1,16 @@
+{
+	"inputId": "HDMI_1",
+	"inputAppId": "com.webos.app.hdmi1",
+	"inputName": "HDMI 1",
+	"inputSource": "ext://hdmi:hdmi1",
+	"ip": "127.0.0.1",
+	"port": 41230,
+	"mask": "255.255.255.0",
+	"mac": "00:00:00:00:00:00",
+	"appId": "com.cathwyler.magicremoteservice",
+	"overlay": true,
+	"inputDirect": true,
+	"longClick": 1500,
+	"cursorSpeed": 1.0,
+	"extend": true
+}
