@@ -348,3 +348,14 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+
+# MagicRemoteService specific
+packages/
+bindings.json
+tv-config.json
+cpu-log.csv
+*.ipk
+service_stdout.log
+service_stderr.log
+magic_remote.log
+nuget.exe
