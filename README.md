@@ -2,22 +2,20 @@
 
 [![Build](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml/badge.svg)](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml)
 
-Control your PC with the LG Magic Remote. Point, click, scroll, and type from your couch.
+Control your Windows PC with the LG Magic Remote. Point, click, scroll, and type from your couch.
 
-MagicRemoteService turns your LG Magic Remote into a wireless mouse and keyboard for your Windows PC. Works over your local network with no rooting required.
-
-- Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRemoteService)
-- Tested on LG C2 (webOS 25), LG C1 (webOS 6.0), Windows 10/11
+Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRemoteService) — tested on LG C2 (webOS 25), LG C1 (webOS 6.0), Windows 10/11.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **PC**: Windows 10/11
-- **TV**: LG TV with webOS and Developer Mode enabled ([guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app))
-- **Connection**: PC connected to TV via HDMI, both on the same local network
+- LG TV with **Developer Mode** enabled ([guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app))
+- PC connected to TV via HDMI, both on the same network
+- [Node.js](https://nodejs.org/) installed on PC
+- webOS CLI: `npm install -g @webos-tools/cli`
 
-### Option 1: Automated Install (Recommended)
+### Install
 
 ```
 git clone https://github.com/roko-tech/MagicRemoteService.git
@@ -25,88 +23,67 @@ cd MagicRemoteService
 install.bat
 ```
 
-The installer handles everything:
-- Installs prerequisites (Node.js, webOS CLI, Visual Studio Build Tools, .NET 4.7.2) via winget
+Run as Administrator. The installer:
+- Auto-installs missing prerequisites (Build Tools, .NET 4.7.2) via winget
 - Builds the PC service and registers it as a Windows service
-- Configures and deploys the TV app to your LG TV
-- Adds firewall rules
-- Creates a startup shortcut
+- Auto-detects your PC's IP, MAC, and subnet
+- Deploys the TV app to your LG TV
+- Adds firewall rules and startup shortcut
 
-### Option 2: Manual Install
+### Manual Install
 
-1. Download the latest release from the [Releases page](https://github.com/roko-tech/MagicRemoteService/releases)
-2. Extract to a folder (e.g. `C:\MagicRemoteService`)
-3. Install [Node.js](https://nodejs.org/) and run `npm install -g @webos-tools/cli`
-4. Register the service: open an **admin** command prompt and run:
-   ```
-   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe MagicRemoteService.exe
-   net start MagicRemoteService
-   ```
-5. Add a firewall rule: `netsh advfirewall firewall add rule name="MagicRemoteService" dir=in action=allow protocol=TCP localport=41230`
-6. Run `MagicRemoteService.exe` — the Settings UI opens
-7. In the **TVs** tab: click "Refresh TVs" or "Add TV", select HDMI input, configure settings
-8. Click **Install on TV**
-9. In the **PC** tab: check "Automatically launch at startup", click Save
-
-### Option 3: Build from Source
-
-```
-git clone https://github.com/roko-tech/MagicRemoteService.git
-cd MagicRemoteService
-build.bat
-```
-
-Then follow Option 2 steps 3-9 using the exe from `MagicRemoteService\bin\Release\`.
-
-## Features
-
-### Core
-- **Pointer control** — Move the Magic Remote to control the PC mouse cursor
-- **Click** — Short press OK = left click, long press = right click
-- **Scroll** — Smooth momentum-based scrolling with Mac-like feel
-- **Keyboard** — Arrow keys, Enter, Escape, number pad, and more
-- **Wake-on-LAN** — Turn on your PC from the TV
-
-### New in This Fork
-- **Auto-discovery (SSDP)** — TV finds your PC automatically, no manual IP needed
-- **Web Settings UI** — Configure everything at http://localhost:41231
-- **Visual remote configurator** — Click buttons on a visual remote to remap them
-- **Smooth scrolling** — Momentum-based with configurable per-app exclusions
-- **Per-app scroll exclusions** — Disable smooth scroll for specific apps (e.g. PotPlayer volume)
-- **Connection toasts** — Small non-blocking notifications instead of blocking dialogs
-- **JSON key bindings** — Human-readable `bindings.json` config file
-- **Service keepalive** — Prevents webOS 25 from killing the TV service
-- **GitHub Actions CI** — Automated builds on every push
-
-### Bug Fixes
-- **Screensaver suppression** ([#66](https://github.com/Cathwyler/MagicRemoteService/issues/66)) — Fixed inverted parameter that let screensaver activate during use
-- **webOS 25 sensor retry** — Added error code 1003 handling with auto-retry
-- **CPU usage** — Fixed from 20%+ down to ~0% (timer polling + WebSocket spin fixes)
-- **WebSocket security** — Frame validation, handshake checks, safe serialization
-- **Resource leaks** — Timer, Process, Registry, GCHandle cleanup
-- **ares-cli PATH** — Auto-discovers Node.js/npm across user profiles and version managers
+Download from [Releases](https://github.com/roko-tech/MagicRemoteService/releases), extract, and follow the [manual setup steps](#manual-setup).
 
 ## Web Settings UI
 
-Open **http://localhost:41231** in any browser while the service is running.
+Once running, open **http://localhost:41231** in any browser.
 
-- **Visual remote** — Click any button to see and change its binding
-- **Action types** — Mouse click, keyboard key, keyboard shortcut, shell command, or special action
-- **Scroll exclusions** — Add/remove apps where smooth scroll is disabled
-- **Service status** — Port, connected TV, auto-shutdown status
-- **Save & Restart** — Apply changes immediately
+### Visual Remote Configurator
+Click any button on the visual remote to change what it does:
+- **Mouse click** — left, right, middle
+- **Keyboard key** — any key from A-Z, F1-F12, arrows, etc.
+- **Keyboard shortcut** — Ctrl+C, Alt+Tab, Win+D, etc.
+- **Shell command** — launch any program
+- **Special action** — shutdown PC, toggle TV keyboard
 
-Changes are saved to `bindings.json` next to the exe and synced with the Windows Settings UI.
+### TV App Configuration
+Auto-detects your PC's network info:
+- **HDMI port** — select which input your PC is on
+- **PC IP / MAC / Subnet** — auto-populated, select from dropdown
+- **Cursor speed** — adjustable (0.1 slow to 5.0 fast)
+- **Save Config** — saves without reinstalling
+- **Reinstall TV App** — one-click deploy to TV
+
+### Per-App Scroll Exclusions
+Disable smooth scrolling for specific apps (e.g. PotPlayer volume control). Add process names in the web UI — scroll sends single steps instead of momentum.
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Pointer control | Gyroscope-based cursor movement |
+| Click | Short press = left click, long press = right click |
+| Smooth scroll | Mac-style momentum with friction decay |
+| Keyboard | Arrow keys, Enter, Escape, numbers, and more |
+| Wake-on-LAN | Turn on PC from TV |
+| Auto-discovery | TV finds PC via SSDP — no manual IP needed |
+| Config injection | `config.json` loaded at runtime — no JS file editing |
+| Web UI | Full settings at http://localhost:41231 |
+| Connection toasts | Small non-blocking notifications on TV |
+| Service keepalive | Prevents webOS 25 from killing the TV service |
+| Node.js v22+ | Polyfill for ares-cli compatibility |
+| Low CPU | Near 0% idle (fixed timer + WebSocket spin bugs) |
 
 ## Default Key Mappings
 
 | Remote Button | PC Action |
 |---------------|-----------|
 | Pointer | Mouse cursor |
-| Short click (OK) | Left click |
+| Short click | Left click |
 | Long click | Right click |
-| Scroll wheel | Mouse scroll (smooth) |
+| Scroll wheel | Smooth scroll |
 | Arrow keys | Arrow keys |
+| OK | Enter |
 | Back | Escape |
 | Red | Shutdown / Wake PC |
 | Green | Windows menu |
@@ -116,66 +93,64 @@ Changes are saved to `bindings.json` next to the exe and synced with the Windows
 | Volume - | Ctrl+V (Paste) |
 | 0-9 | NumPad 0-9 |
 
-All mappings are customizable via the web UI or `bindings.json`.
-
-## Configuration
-
-### bindings.json
-
-Place next to `MagicRemoteService.exe`. Loaded on each TV connection.
-
-```json
-{
-  "bindings": {
-    "0x0193": [{ "type": "action", "value": "shutdown" }],
-    "0x0194": [{ "type": "keyboard", "virtualKey": 91, "scanCode": 91, "extended": true }],
-    "0x0001": [{ "type": "mouse", "value": "left" }]
-  },
-  "scrollExclude": ["PotPlayerMini64", "PotPlayer"]
-}
-```
-
-| Type | Fields | Example |
-|------|--------|---------|
-| `mouse` | `value`: left, right, middle | `{"type":"mouse","value":"left"}` |
-| `keyboard` | `virtualKey`, `scanCode`, `extended` | `{"type":"keyboard","virtualKey":27,"scanCode":1}` |
-| `action` | `value`: shutdown, keyboard | `{"type":"action","value":"shutdown"}` |
-| `command` | `command`: shell command | `{"type":"command","command":"notepad.exe"}` |
-
-### Auto-Discovery
-
-The PC service broadcasts via SSDP on your local network. The TV app discovers it automatically. To use a fixed IP instead, configure it in the Settings UI TVs tab.
+All mappings customizable via the [web UI](#visual-remote-configurator).
 
 ## How It Works
 
 ```
-LG Magic Remote  -->  TV App (webOS)  --WebSocket-->  PC Service (Windows)  --SendInput-->  Mouse/Keyboard
-   gyroscope          main.js                          Service.cs                           Windows desktop
-   buttons            sensor data                      port 41230
-   scroll wheel       binary frames                    
+Magic Remote  →  TV App (main.js)  →  WebSocket  →  PC Service (Service.cs)  →  SendInput  →  Windows
+  gyroscope       loads config.json     port 41230    two-process architecture    mouse/keyboard
+  buttons          from TV storage                     Service (SYSTEM) + Client (User session)
 ```
 
-The system has two processes on the PC:
-- **Service** (SYSTEM) — Listens for WebSocket connections, manages lifecycle
-- **Client** (User session) — Receives input via named pipe, calls SendInput
+The PC runs two processes:
+- **Service** (SYSTEM) — accepts WebSocket connections at boot
+- **Client** (user session) — injects input via SendInput
 
-This split is required because SendInput needs the user's desktop session, while the service needs to run at boot.
+Config is stored in `config.json` next to the TV app files. No JavaScript files are modified during installation.
+
+## Manual Setup
+
+1. Download the [latest release](https://github.com/roko-tech/MagicRemoteService/releases)
+2. Extract to a folder (e.g. `C:\MagicRemoteService`)
+3. Open an **admin** command prompt:
+   ```
+   C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe MagicRemoteService.exe
+   net start MagicRemoteService
+   netsh advfirewall firewall add rule name="MagicRemoteService" dir=in action=allow protocol=TCP localport=41230
+   netsh advfirewall firewall add rule name="MagicRemoteService Web" dir=in action=allow protocol=TCP localport=41231
+   ```
+4. Run `MagicRemoteService.exe` — Settings UI opens
+5. **TVs tab**: Refresh TVs or Add TV, select HDMI input, click **Install on TV**
+6. **PC tab**: Check "Automatically launch at startup", click Save
+7. Open http://localhost:41231 to configure key bindings
+
+## Building from Source
+
+```
+git clone https://github.com/roko-tech/MagicRemoteService.git
+cd MagicRemoteService
+build.bat
+```
+
+Requires Visual Studio 2022 (or Build Tools) and .NET Framework 4.7.2.
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
 | "Service is busy" / "not running" | Reboot TV, relaunch app |
-| Pointer doesn't work, scroll does | Wave the remote at the TV to activate gyroscope. Auto-retries every 3 seconds |
-| "Failed to get sensor data [1003]" | Normal on webOS 25, auto-retries |
-| TV can't find PC | Check same subnet, ensure UDP multicast not blocked. Use manual IP as fallback |
+| Pointer doesn't work, scroll does | Wave the remote at TV to activate gyroscope (auto-retries every 3s) |
+| Sensor error 1003 | Normal on webOS 25, auto-retries |
+| TV can't find PC | Check same subnet, UDP multicast not blocked. Use manual IP |
 | Web UI not loading | Open http://localhost:41231 (not 41230). Service must be running |
-| High CPU usage | Update to latest version (fixes timer + WebSocket spin) |
+| High CPU | Update to latest version |
 | Settings UI "ares not found" | Install Node.js and `npm install -g @webos-tools/cli` |
+| Install fails on second run | No longer an issue — config.json replaces sed/PowerShell injection |
 
 ## Security
 
-There is no encryption between the TV and PC. Use on trusted local networks only. Don't enter passwords or sensitive information via the remote.
+No encryption between TV and PC. Local network only. Don't enter passwords or sensitive data via the remote.
 
 ## License
 
