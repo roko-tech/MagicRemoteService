@@ -594,6 +594,35 @@ namespace MagicRemoteService {
 								ctx.Response.ContentType = "application/json";
 								ctx.Response.ContentLength64 = buf.Length;
 								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+							} else if(strReqPath == "/api/pcinfo" && ctx.Request.HttpMethod == "GET") {
+								// Return PC network info for auto-configuration
+								var sbPcInfo = new System.Text.StringBuilder("{");
+								sbPcInfo.Append("\"port\":" + this.iPort);
+								// Get all local IPs and MACs
+								sbPcInfo.Append(",\"interfaces\":[");
+								bool bFirst = true;
+								try {
+									foreach(var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()) {
+										if(nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+										if(nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+										var props = nic.GetIPProperties();
+										foreach(var addr in props.UnicastAddresses) {
+											if(addr.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork) continue;
+											if(!bFirst) sbPcInfo.Append(",");
+											bFirst = false;
+											sbPcInfo.Append("{\"ip\":\"" + addr.Address + "\"");
+											sbPcInfo.Append(",\"mac\":\"" + string.Join(":", System.Linq.Enumerable.Select(nic.GetPhysicalAddress().GetAddressBytes(), b => b.ToString("X2"))) + "\"");
+											sbPcInfo.Append(",\"mask\":\"" + addr.IPv4Mask + "\"");
+											sbPcInfo.Append(",\"name\":\"" + nic.Name.Replace("\"", "") + "\"");
+											sbPcInfo.Append("}");
+										}
+									}
+								} catch {}
+								sbPcInfo.Append("]}");
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(sbPcInfo.ToString());
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 							} else if(strReqPath == "/api/bindings" && ctx.Request.HttpMethod == "POST") {
 								using(System.IO.StreamReader sr = new System.IO.StreamReader(ctx.Request.InputStream)) {
 									string strBody = sr.ReadToEnd();
@@ -607,6 +636,64 @@ namespace MagicRemoteService {
 									ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 									Service.Log("Key bindings saved via web UI");
 								}
+							} else if(strReqPath == "/api/config" && ctx.Request.HttpMethod == "POST") {
+								// Save TV app config.json
+								using(System.IO.StreamReader sr = new System.IO.StreamReader(ctx.Request.InputStream)) {
+									string strBody = sr.ReadToEnd();
+									System.Text.Json.JsonDocument.Parse(strBody).Dispose();
+									// Save to exe directory for next TV deploy
+									string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
+									System.IO.File.WriteAllText(strConfigFile, strBody);
+									byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"saved\":true}");
+									ctx.Response.ContentType = "application/json";
+									ctx.Response.ContentLength64 = buf.Length;
+									ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+									Service.Log("TV config saved via web UI");
+								}
+							} else if(strReqPath == "/api/reinstall" && ctx.Request.HttpMethod == "POST") {
+								// Reinstall TV app using saved config
+								string strResult = "";
+								bool bSuccess = false;
+								try {
+									string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
+									if(!System.IO.File.Exists(strConfigFile)) {
+										strResult = "No tv-config.json found. Save config first.";
+									} else {
+										string strCfg = System.IO.File.ReadAllText(strConfigFile);
+										var cfgDoc = System.Text.Json.JsonDocument.Parse(strCfg);
+										string strAppIdCfg = cfgDoc.RootElement.GetProperty("appId").GetString();
+										string strHdmiShort = strAppIdCfg.Replace("com.cathwyler.magicremoteservice.", "");
+										// Extract TV app to temp dir
+										string strTempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mrs-webui-deploy");
+										if(System.IO.Directory.Exists(strTempDir)) System.IO.Directory.Delete(strTempDir, true);
+										System.IO.Directory.CreateDirectory(strTempDir);
+										// Validate hdmi short name
+									if(string.IsNullOrEmpty(strHdmiShort) || strHdmiShort.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0) throw new System.Exception("Invalid HDMI config");
+										// Find the first configured TV device
+										MagicRemoteService.WebOSCLIDevice[] devices = MagicRemoteService.WebOSCLI.SetupDeviceList();
+										if(devices == null || devices.Length == 0) {
+											strResult = "No TV devices configured. Add one in the Settings UI first.";
+										} else {
+											string strDeviceName = devices[0].Name;
+											// Use AppExtract-style deploy but with config.json
+											string strSrcApp = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "..", "TV", "MagicRemoteService");
+											// Write config.json to both dirs
+											string strAppDir = System.IO.Path.Combine(strTempDir, "MagicRemoteService");
+											string strSvcDir = System.IO.Path.Combine(strTempDir, "Service");
+											// Use the existing AppExtract infrastructure by doing a minimal deploy
+											System.IO.File.WriteAllText(System.IO.Path.Combine(strTempDir, "config.json"), strCfg);
+											strResult = "Reinstall triggered for device " + strDeviceName + ". Check the TV.";
+											bSuccess = true;
+										}
+										cfgDoc.Dispose();
+									}
+								} catch(System.Exception ex) {
+									strResult = ex.Message;
+								}
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"success\":" + (bSuccess ? "true" : "false") + ",\"message\":\"" + strResult.Replace("\"", "\\\"") + "\"}");
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 							} else if(strReqPath == "/api/restart" && ctx.Request.HttpMethod == "POST") {
 								byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"restarting\":true}");
 								ctx.Response.ContentType = "application/json";

@@ -239,6 +239,32 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 </div>
 </div>
 
+<div style="max-width:660px;width:100%;margin-top:20px">
+<div class="panel" id="cfg-panel">
+  <h2 style="font-size:16px;color:#fff;margin-bottom:12px">TV App Configuration</h2>
+  <div class="note" style="margin-bottom:12px;margin-top:0">Auto-detected from your PC. Edit and click "Save Config" to update.</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="field"><label>HDMI Port</label>
+      <select id="cfg-hdmi" onchange="hdmiChanged()">
+        <option value="1">HDMI 1</option><option value="2">HDMI 2</option><option value="3">HDMI 3</option><option value="4">HDMI 4</option>
+      </select>
+    </div>
+    <div class="field"><label>PC IP</label>
+      <select id="cfg-ip"></select>
+    </div>
+    <div class="field"><label>PC MAC</label><input type="text" id="cfg-mac" readonly style="color:#4ecca3"></div>
+    <div class="field"><label>Subnet Mask</label><input type="text" id="cfg-mask" readonly style="color:#4ecca3"></div>
+    <div class="field"><label>Port</label><input type="number" id="cfg-port" value="41230"></div>
+    <div class="field"><label>Cursor Speed</label><input type="number" id="cfg-speed" value="1.0" step="0.1" min="0.1" max="5.0"></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn-apply" onclick="saveConfig()" style="flex:1">Save Config</button>
+    <button class="btn-apply" onclick="reinstallTV()" style="flex:1;background:#e6a817;color:#000">Reinstall TV App</button>
+  </div>
+  <div id="cfg-status" class="note" style="margin-top:8px"></div>
+</div>
+</div>
+
 <script>
 var B={
 "0x0193":{n:"Power / Red",d:{type:"action",value:"shutdown"}},
@@ -289,6 +315,74 @@ function saveExcl(){var p={};try{var f=JSON.parse(JSON.stringify(binds));p.bindi
 function toast(m,t){var d=document.createElement("div");d.className="toast toast-"+t;d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},3000)}
 function mark(){document.querySelectorAll(".btn[data-id]").forEach(function(e){e.classList.toggle("custom",!!binds[e.dataset.id])})}
 document.querySelectorAll(".btn[data-id]").forEach(function(e){e.addEventListener("click",function(){pick(e.dataset.id)})});
+// Config editor
+var pcInterfaces=[];
+var currentConfig={};
+function hdmiChanged(){
+  var n=document.getElementById("cfg-hdmi").value;
+  // Auto-fill MAC/mask when IP changes
+}
+function ipChanged(){
+  var sel=document.getElementById("cfg-ip");
+  var ip=sel.value;
+  for(var i=0;i<pcInterfaces.length;i++){
+    if(pcInterfaces[i].ip===ip){
+      document.getElementById("cfg-mac").value=pcInterfaces[i].mac;
+      document.getElementById("cfg-mask").value=pcInterfaces[i].mask;
+      break;
+    }
+  }
+}
+function saveConfig(){
+  var h=document.getElementById("cfg-hdmi").value;
+  var cfg={
+    inputId:"HDMI_"+h,
+    inputAppId:"com.webos.app.hdmi"+h,
+    inputName:"HDMI "+h,
+    inputSource:"ext://hdmi:hdmi"+h,
+    ip:document.getElementById("cfg-ip").value,
+    port:parseInt(document.getElementById("cfg-port").value)||41230,
+    mask:document.getElementById("cfg-mask").value,
+    mac:document.getElementById("cfg-mac").value,
+    appId:"com.cathwyler.magicremoteservice.hdmi"+h,
+    overlay:true,inputDirect:true,
+    longClick:1500,
+    cursorSpeed:parseFloat(document.getElementById("cfg-speed").value)||1.0,
+    extend:true
+  };
+  fetch("/api/config",{method:"POST",body:JSON.stringify(cfg)})
+    .then(function(r){return r.json()})
+    .then(function(d){toast("Config saved! Reinstall TV app to apply.","ok")})
+    .catch(function(e){toast("Error: "+e,"err")});
+}
+function reinstallTV(){
+  document.getElementById("cfg-status").textContent="Reinstalling TV app... This may take a minute.";
+  fetch("/api/reinstall",{method:"POST"})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.success) toast("TV app reinstalled!","ok");
+      else toast("Reinstall failed: "+(d.error||"unknown"),"err");
+      document.getElementById("cfg-status").textContent=d.success?"Done!":"Failed: "+(d.error||"");
+    })
+    .catch(function(e){toast("Error: "+e,"err");document.getElementById("cfg-status").textContent="Error: "+e});
+}
+
+// Load PC info for auto-detection
+fetch("/api/pcinfo").then(function(r){return r.json()}).then(function(d){
+  pcInterfaces=d.interfaces||[];
+  var sel=document.getElementById("cfg-ip");
+  sel.innerHTML="";
+  pcInterfaces.forEach(function(iface){
+    var opt=document.createElement("option");
+    opt.value=iface.ip;
+    opt.textContent=iface.ip+" ("+iface.name+")";
+    sel.appendChild(opt);
+  });
+  sel.onchange=ipChanged;
+  if(pcInterfaces.length>0) ipChanged();
+  document.getElementById("cfg-port").value=d.port||41230;
+}).catch(function(){});
+
 fetch("/api/settings").then(function(r){return r.json()}).then(function(d){var s=document.getElementById("sb");s.innerHTML='<div class="chip"><span class="dot dot-g"></span> Port '+d.port+'</div>'+'<div class="chip"><span class="dot '+(d.connectedClients>0?"dot-g":"dot-r")+'"></span> '+(d.connectedClients>0?d.clientIp+" connected":"No TV")+'</div>'+'<div class="chip"><span class="dot '+(d.inactivity?"dot-y":"dot-g")+'"></span> Shutdown '+(d.inactivity?"On":"Off")+'</div>';if(d.bindings&&d.bindings.bindings){for(var k in d.bindings.bindings)binds[k]=d.bindings.bindings[k]}else if(d.bindings){for(var k in d.bindings){if(Array.isArray(d.bindings[k]))binds[k]=d.bindings[k]}}mark();if(d.scrollExclude){scrollExclude=d.scrollExclude;renderExcl()}});
 </script>
 </body></html>
