@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo   MagicRemoteService Installer v2.0.0
+echo   MagicRemoteService Installer v2.1.0
 echo ========================================
 echo.
 
@@ -16,7 +16,7 @@ if %errorlevel% neq 0 (
 )
 
 :: ========================================
-:: SETUP PATH — find Node.js, npm, ares across all user profiles
+:: SETUP PATH
 :: ========================================
 for /d %%u in (C:\Users\*) do (
     if exist "%%u\AppData\Roaming\npm" set "PATH=%%u\AppData\Roaming\npm;!PATH!"
@@ -28,9 +28,6 @@ for /d %%u in (C:\Users\*) do (
 if exist "C:\Program Files\nodejs" set "PATH=C:\Program Files\nodejs;!PATH!"
 if exist "C:\Program Files\Volta" set "PATH=C:\Program Files\Volta;!PATH!"
 if exist "C:\Program Files (x86)\nodejs" set "PATH=C:\Program Files (x86)\nodejs;!PATH!"
-
-:: Winget path
-if exist "%LOCALAPPDATA%\Microsoft\WindowsApps" set "PATH=%LOCALAPPDATA%\Microsoft\WindowsApps;!PATH!"
 for /d %%u in (C:\Users\*) do (
     if exist "%%u\AppData\Local\Microsoft\WindowsApps\winget.exe" set "PATH=%%u\AppData\Local\Microsoft\WindowsApps;!PATH!"
 )
@@ -41,15 +38,14 @@ for /d %%u in (C:\Users\*) do (
 echo Checking prerequisites...
 echo.
 
-:: Check Node.js
 set "HAS_NODE=0"
 where node >nul 2>&1 && set "HAS_NODE=1"
 if "!HAS_NODE!"=="0" (
     echo [MISSING] Node.js
-    echo Installing Node.js via winget...
+    echo Installing via winget...
     winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements >nul 2>&1
     if !errorlevel! neq 0 (
-        echo Failed to install Node.js. Download from https://nodejs.org/
+        echo Failed. Download from https://nodejs.org/
         pause
         exit /b 1
     )
@@ -59,19 +55,17 @@ if "!HAS_NODE!"=="0" (
     for /f "tokens=*" %%v in ('node --version 2^>nul') do echo [OK] Node.js %%v
 )
 
-:: Check ares-cli
 set "HAS_ARES=0"
 where ares-package >nul 2>&1 && set "HAS_ARES=1"
 if "!HAS_ARES!"=="0" (
     echo [MISSING] @webos-tools/cli
-    echo Installing webOS CLI tools...
+    echo Installing...
     call npm install -g @webos-tools/cli >nul 2>&1
     echo [INSTALLED] @webos-tools/cli
 ) else (
     echo [OK] @webos-tools/cli
 )
 
-:: Check MSBuild
 set "MSBUILD="
 for %%p in (
     "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
@@ -82,17 +76,14 @@ for %%p in (
     if exist %%p set "MSBUILD=%%~p"
 )
 if not defined MSBUILD (
-    echo [MISSING] Visual Studio 2022 / Build Tools
-    echo Installing VS Build Tools via winget ^(this may take several minutes^)...
+    echo [MISSING] Visual Studio Build Tools
+    echo Installing via winget ^(may take several minutes^)...
     winget install --id Microsoft.VisualStudio.2022.BuildTools -e --accept-source-agreements --accept-package-agreements --override "--add Microsoft.VisualStudio.Workload.ManagedDesktopBuildTools --includeRecommended --quiet --wait" >nul 2>&1
-    for %%p in (
-        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
-    ) do (
+    for %%p in ("C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe") do (
         if exist %%p set "MSBUILD=%%~p"
     )
     if not defined MSBUILD (
-        echo Failed to install Build Tools.
-        echo Download from: https://visualstudio.microsoft.com/downloads/
+        echo Failed. Download from https://visualstudio.microsoft.com/downloads/
         pause
         exit /b 1
     )
@@ -101,15 +92,14 @@ if not defined MSBUILD (
     echo [OK] MSBuild
 )
 
-:: Check .NET 4.7.2
 if exist "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.7.2" (
     echo [OK] .NET Framework 4.7.2
 ) else (
-    echo [MISSING] .NET Framework 4.7.2 Developer Pack
+    echo [MISSING] .NET Framework 4.7.2
     echo Installing via winget...
     winget install --id Microsoft.DotNet.Framework.DeveloperPack_4 -e --accept-source-agreements --accept-package-agreements >nul 2>&1
     if not exist "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.7.2" (
-        echo Failed. Download from: https://dotnet.microsoft.com/download/dotnet-framework/net472
+        echo Failed. Download from https://dotnet.microsoft.com/download/dotnet-framework/net472
         pause
         exit /b 1
     )
@@ -118,21 +108,15 @@ if exist "C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFr
 
 echo.
 echo ========================================
-echo   What do you want to install?
-echo ========================================
 echo   1^) PC Service + TV App ^(full install^)
 echo   2^) PC Service only
 echo   3^) TV App only
-echo.
+echo ========================================
 set /p CHOICE="Enter choice [1-3]: "
 
 if "!CHOICE!"=="3" goto :tv_only
 if "!CHOICE!"=="2" goto :pc_service
 
-:: Choice 1: fall through to pc_service, then tv_only
-
-:: ========================================
-:: PC SERVICE
 :: ========================================
 :pc_service
 echo.
@@ -140,7 +124,6 @@ echo ========================================
 echo   Building PC Service
 echo ========================================
 
-:: NuGet restore
 if not exist packages (
     echo Restoring NuGet packages...
     set "HAS_NUGET=0"
@@ -148,18 +131,13 @@ if not exist packages (
     if "!HAS_NUGET!"=="1" (
         nuget restore MagicRemoteService.sln -Source https://api.nuget.org/v3/index.json
     ) else (
-        echo Downloading NuGet...
         powershell -Command "Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile 'nuget.exe'" 2>&1
         if exist nuget.exe (
             nuget.exe restore MagicRemoteService.sln -Source https://api.nuget.org/v3/index.json
             del nuget.exe 2>nul
-        ) else (
-            echo   NuGet download failed. Trying MSBuild restore...
         )
     )
-    :: Fallback: MSBuild -restore flag
     if not exist packages (
-        echo   Trying MSBuild package restore...
         "!MSBUILD!" MagicRemoteService.sln /t:Restore /p:RestoreSources=https://api.nuget.org/v3/index.json /v:minimal 2>nul
     )
 )
@@ -178,50 +156,37 @@ if "!INSTALL_DIR!"=="" set "INSTALL_DIR=C:\MagicRemoteService"
 echo Installing to !INSTALL_DIR!...
 if not exist "!INSTALL_DIR!" mkdir "!INSTALL_DIR!"
 
-:: Stop existing service
 net stop MagicRemoteService >nul 2>&1
 timeout /t 3 /nobreak >nul
 taskkill /F /IM MagicRemoteService.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 
-:: Copy files
 copy /y "MagicRemoteService\bin\Release\MagicRemoteService.exe" "!INSTALL_DIR!\" >nul
 copy /y "MagicRemoteService\bin\Release\MagicRemoteService.exe.config" "!INSTALL_DIR!\" >nul
 copy /y "MagicRemoteService\bin\Release\*.dll" "!INSTALL_DIR!\" >nul
 copy /y "settings-ui.html" "!INSTALL_DIR!\" >nul 2>nul
 if not exist "!INSTALL_DIR!\Resources" mkdir "!INSTALL_DIR!\Resources"
 copy /y "MagicRemoteService\bin\Release\Resources\node-polyfill.js" "!INSTALL_DIR!\Resources\" >nul 2>nul
-if exist "MagicRemoteService\bin\Release\es" (
-    if not exist "!INSTALL_DIR!\es" mkdir "!INSTALL_DIR!\es"
-    copy /y "MagicRemoteService\bin\Release\es\*" "!INSTALL_DIR!\es\" >nul
-)
-if exist "MagicRemoteService\bin\Release\fr" (
-    if not exist "!INSTALL_DIR!\fr" mkdir "!INSTALL_DIR!\fr"
-    copy /y "MagicRemoteService\bin\Release\fr\*" "!INSTALL_DIR!\fr\" >nul
+for %%l in (es fr) do (
+    if exist "MagicRemoteService\bin\Release\%%l" (
+        if not exist "!INSTALL_DIR!\%%l" mkdir "!INSTALL_DIR!\%%l"
+        copy /y "MagicRemoteService\bin\Release\%%l\*" "!INSTALL_DIR!\%%l\" >nul
+    )
 )
 
-:: Register service
-echo Registering Windows service...
+echo Registering service...
 sc query MagicRemoteService >nul 2>&1
 if !errorlevel! neq 0 (
-    echo   Registering new service...
     C:\Windows\Microsoft.NET\Framework64\v4.0.30319\InstallUtil.exe "!INSTALL_DIR!\MagicRemoteService.exe" >nul 2>&1
     if !errorlevel! neq 0 (
-        echo   InstallUtil failed. Trying sc create...
         sc create MagicRemoteService binPath= "!INSTALL_DIR!\MagicRemoteService.exe" start= auto >nul 2>&1
     )
-) else (
-    echo   Service already registered.
 )
 
-:: Firewall
-echo Adding firewall rules...
 netsh advfirewall firewall delete rule name="MagicRemoteService" >nul 2>&1
 netsh advfirewall firewall add rule name="MagicRemoteService" dir=in action=allow protocol=TCP localport=41230 >nul 2>&1
 netsh advfirewall firewall add rule name="MagicRemoteService Web UI" dir=in action=allow protocol=TCP localport=41231 >nul 2>&1
 
-:: Start service
-echo Starting service...
 net start MagicRemoteService >nul 2>&1
 timeout /t 3 /nobreak >nul
 
@@ -235,11 +200,8 @@ if !errorlevel! equ 0 (
     echo [WARNING] Service may not have started. Check Services.msc
 )
 
-:: If choice was 2 (PC only), skip TV
 if "!CHOICE!"=="2" goto :done
 
-:: ========================================
-:: TV APP
 :: ========================================
 :tv_only
 echo.
@@ -248,21 +210,55 @@ echo   Installing TV App
 echo ========================================
 echo.
 
-:: List devices
+:: Try auto-detect from running service
+set "AUTO_IP="
+set "AUTO_MAC="
+set "AUTO_MASK="
+powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:41231/api/pcinfo' -UseBasicParsing -TimeoutSec 3; $j = $r.Content | ConvertFrom-Json; $i = $j.interfaces[0]; Write-Host \"IP=$($i.ip)|MAC=$($i.mac)|MASK=$($i.mask)\" } catch {}" 2>nul > "%TEMP%\mrs-pcinfo.txt"
+for /f "tokens=1,2,3 delims=|" %%a in ('type "%TEMP%\mrs-pcinfo.txt" 2^>nul') do (
+    set "%%a"
+    set "%%b"
+    set "%%c"
+)
+del "%TEMP%\mrs-pcinfo.txt" 2>nul
+if defined IP set "AUTO_IP=!IP!"
+if defined MAC set "AUTO_MAC=!MAC!"
+if defined MASK set "AUTO_MASK=!MASK!"
+
 echo Available TV devices:
 call ares-setup-device --list 2>nul
 echo.
 
-set /p TV_DEVICE="TV device name (from list above, or type new name): "
-set /p PC_IP="PC IP address [leave empty for auto-discover]: "
-set /p PC_MAC="PC MAC address (XX:XX:XX:XX:XX:XX): "
-set /p SUBNET="Subnet mask [255.255.255.0]: "
+set /p TV_DEVICE="TV device name: "
+
+if defined AUTO_IP (
+    echo.
+    echo   Auto-detected PC info:
+    echo     IP:   !AUTO_IP!
+    echo     MAC:  !AUTO_MAC!
+    echo     Mask: !AUTO_MASK!
+    echo.
+    set /p USE_AUTO="Use auto-detected values? [Y/n]: "
+    if /i not "!USE_AUTO!"=="n" (
+        set "PC_IP=!AUTO_IP!"
+        set "PC_MAC=!AUTO_MAC!"
+        set "SUBNET=!AUTO_MASK!"
+    ) else (
+        set /p PC_IP="PC IP address [auto-discover]: "
+        set /p PC_MAC="PC MAC address (XX:XX:XX:XX:XX:XX): "
+        set /p SUBNET="Subnet mask [255.255.255.0]: "
+    )
+) else (
+    set /p PC_IP="PC IP address [auto-discover]: "
+    set /p PC_MAC="PC MAC address (XX:XX:XX:XX:XX:XX): "
+    set /p SUBNET="Subnet mask [255.255.255.0]: "
+)
 if "!SUBNET!"=="" set "SUBNET=255.255.255.0"
 set /p PORT="PC listen port [41230]: "
 if "!PORT!"=="" set "PORT=41230"
 
 echo.
-echo HDMI port your PC is connected to:
+echo HDMI port ^(auto-detected at runtime if wrong^):
 echo   1^) HDMI 1    2^) HDMI 2    3^) HDMI 3    4^) HDMI 4
 set /p HDMI_NUM="Enter [1-4]: "
 
@@ -281,18 +277,14 @@ set "APP_ID=com.cathwyler.magicremoteservice.!HDMI_SHORT!"
 set "SVC_ID=!APP_ID!.service"
 
 echo.
-echo   TV: !TV_DEVICE!
-echo   PC: !PC_IP! ^(empty = auto-discover^)
-echo   MAC: !PC_MAC!
-echo   HDMI: !HDMI_NAME!
-echo   App ID: !APP_ID!
+echo   TV:   !TV_DEVICE!
+echo   PC:   !PC_IP! ^(empty = auto-discover^)
+echo   MAC:  !PC_MAC!
+echo   HDMI: !HDMI_NAME! ^(auto-corrected at runtime^)
 echo.
 set /p CONFIRM="Proceed? [Y/n]: "
 if /i "!CONFIRM!"=="n" goto :done
 
-:: Build TV app
-echo.
-echo Preparing TV app...
 set "BUILD=%TEMP%\mrs-tv-build"
 if exist "!BUILD!" rmdir /s /q "!BUILD!"
 mkdir "!BUILD!\MagicRemoteService"
@@ -300,30 +292,25 @@ mkdir "!BUILD!\Service"
 xcopy /s /q "MagicRemoteService\Resources\TV\MagicRemoteService\*" "!BUILD!\MagicRemoteService\" >nul
 xcopy /s /q "MagicRemoteService\Resources\TV\Service\*" "!BUILD!\Service\" >nul
 
-:: Generate config.json (no more editing main.js or service.js!)
+:: Generate config.json
 echo Generating config.json...
 set "CFG_IP=!PC_IP!"
 if "!CFG_IP!"=="" set "CFG_IP=127.0.0.1"
 
-powershell -Command "$cfg = @{inputId='!HDMI_ID!';inputAppId='com.webos.app.!HDMI_SHORT!';inputName='!HDMI_NAME!';inputSource='!HDMI_SRC!';ip='!CFG_IP!';port=!PORT!;mask='!SUBNET!';mac='!PC_MAC!';appId='!APP_ID!';overlay=$true;inputDirect=$true;longClick=1500;cursorSpeed=1.0;extend=$true}; $cfg | ConvertTo-Json | Set-Content '!BUILD!\MagicRemoteService\config.json' -Encoding UTF8; $cfg | ConvertTo-Json | Set-Content '!BUILD!\Service\config.json' -Encoding UTF8"
+powershell -Command "$cfg = [ordered]@{inputId='!HDMI_ID!';inputAppId='com.webos.app.!HDMI_SHORT!';inputName='!HDMI_NAME!';inputSource='!HDMI_SRC!';ip='!CFG_IP!';port=[int]!PORT!;mask='!SUBNET!';mac='!PC_MAC!';appId='!APP_ID!';overlay=$true;inputDirect=$true;longClick=[int]1500;cursorSpeed=[double]1.0;extend=$true}; $json = $cfg | ConvertTo-Json; [System.IO.File]::WriteAllText('!BUILD!\MagicRemoteService\config.json', $json); [System.IO.File]::WriteAllText('!BUILD!\Service\config.json', $json)"
 
-:: Only replace IDs in webOS packaging files (required by webOS)
-set "AJ=!BUILD!\MagicRemoteService\appinfo.json"
-set "SVJ=!BUILD!\Service\services.json"
-set "PJ=!BUILD!\Service\package.json"
-powershell -Command "$c = Get-Content '!AJ!' -Raw; $c = $c -replace '\"id\": \"com.cathwyler.magicremoteservice\"', '\"id\": \"!APP_ID!\"'; $c = $c -replace '\"version\": \"1.0.0\"', '\"version\": \"2.0.0\"'; $c = $c -replace '\"appDescription\": \"HDMI\"', '\"appDescription\": \"!HDMI_NAME!\"'; Set-Content '!AJ!' $c -NoNewline"
-powershell -Command "(Get-Content '!SVJ!' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!SVJ!' -NoNewline"
-powershell -Command "(Get-Content '!PJ!' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!PJ!' -NoNewline"
+:: Replace IDs in webOS packaging files only
+powershell -Command "$c = Get-Content '!BUILD!\MagicRemoteService\appinfo.json' -Raw; $c = $c -replace '\"id\": \"com.cathwyler.magicremoteservice\"', '\"id\": \"!APP_ID!\"'; $c = $c -replace '\"version\": \"1.0.0\"', '\"version\": \"2.1.0\"'; $c = $c -replace '\"appDescription\": \"HDMI\"', '\"appDescription\": \"!HDMI_NAME!\"'; Set-Content '!BUILD!\MagicRemoteService\appinfo.json' $c -NoNewline"
+powershell -Command "(Get-Content '!BUILD!\Service\services.json' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!BUILD!\Service\services.json' -NoNewline"
+powershell -Command "(Get-Content '!BUILD!\Service\package.json' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!BUILD!\Service\package.json' -NoNewline"
 
-:: Verify config.json was generated
 if not exist "!BUILD!\MagicRemoteService\config.json" (
     echo [ERROR] Failed to generate config.json!
     pause
     exit /b 1
 )
-echo   config.json generated successfully
+echo   config.json generated
 
-:: Package
 echo Packaging...
 pushd "!BUILD!"
 call ares-package MagicRemoteService Service -o .
@@ -334,15 +321,13 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 
-:: Install
 echo Installing on TV...
 for %%f in (*.ipk) do call ares-install "%%f" -d "!TV_DEVICE!"
 if !errorlevel! neq 0 (
-    echo Installation failed!
-    echo Make sure:
-    echo   - Developer Mode is enabled on the TV
-    echo   - Key Server is turned on
-    echo   - TV device is configured: ares-setup-device --list
+    echo Installation failed! Check:
+    echo   - Developer Mode enabled on TV
+    echo   - Key Server turned on
+    echo   - Device configured: ares-setup-device --list
     popd
     pause
     exit /b 1
@@ -361,7 +346,6 @@ if /i not "!LAUNCH!"=="n" (
 
 echo.
 echo NOTE: Reboot TV if you see "service is busy" errors.
-
 rmdir /s /q "!BUILD!" 2>nul
 
 :: ========================================
@@ -371,13 +355,13 @@ echo ========================================
 echo   All Done!
 echo ========================================
 echo.
-echo   Web Settings:    http://localhost:41231
+echo   Web Settings:  http://localhost:41231
 if defined TV_DEVICE (
-    echo   Uninstall TV:    ares-install -r !APP_ID! -d !TV_DEVICE!
-    echo   Launch TV app:   ares-launch !APP_ID! -d !TV_DEVICE!
+    echo   Uninstall TV:  ares-install -r !APP_ID! -d !TV_DEVICE!
+    echo   Launch TV:     ares-launch !APP_ID! -d !TV_DEVICE!
 )
-echo   Stop service:    net stop MagicRemoteService
-echo   Start service:   net start MagicRemoteService
+echo   Stop service:  net stop MagicRemoteService
+echo   Start service: net start MagicRemoteService
 echo.
 pause
 exit /b 0
