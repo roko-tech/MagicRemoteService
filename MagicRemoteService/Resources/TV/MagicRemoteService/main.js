@@ -326,26 +326,23 @@ if(bInputDirect){
 function InputDisconnected() {};
 if(bInputDirect){
 	InputDisconnected = function() {
-		deScreenInput = Dialog(oString.strAppTittle, oString.strInputDirectDisconnect, [
-			{
-				strName: oString.strInputDirectDisconnectStart,
-				fAction: function() {
-					iIntervalWakeOnLan = startInterval(function() {
-						SendWol({
-							arrMac: arrMac
-						}, strBroadcast);
-					}, 5000);
-					iTimeoutSourceStatus = setTimeout(function() {
-						iTimeoutSourceStatus = 0;
-						deScreenInput = Dialog(oString.strAppTittle, oString.strInputDirectDisconnectWakeOnLanFailure, []);
-					}, 5000);
-				}
-			}
-		]);
+		Toast("", "PC not reachable — retrying...");
+		// Auto-retry WoL silently
+		if(!iIntervalWakeOnLan) {
+			iIntervalWakeOnLan = startInterval(function() {
+				SendWol({
+					arrMac: arrMac
+				}, strBroadcast);
+			}, 5000);
+			iTimeoutSourceStatus = setTimeout(function() {
+				iTimeoutSourceStatus = 0;
+				Toast("", "Wake-on-LAN failed — check PC");
+			}, 15000);
+		}
 	};
 } else {
 	InputDisconnected = function() {
-		deScreenInput = Dialog(oString.strAppTittle, oString.strInputIndirectDisconnect, []);
+		Toast("", "PC not reachable — retrying...");
 	};
 }
 function SubscriptionInputStatus() {
@@ -970,30 +967,25 @@ if(bInputDirect){
 function SocketClosed() {};
 if(bInputDirect){
 	SocketClosed = function() {
-		Toast(oString.strAppTittle || "MagicRemoteService", "Connecting to " + strIP + "...");
+		Toast("", "Connecting to " + strIP + "...");
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
-			deScreenOpen = Dialog(oString.strAppTittle, oString.strSocketOpenTimeout, []);
+			Toast("", "Connection timeout — retrying...");
 		}, 30000);
 	};
 } else {
 	SocketClosed = function() {
-		deScreenOpen = Dialog(oString.strAppTittle, oString.strSocketOpen, [
-			{
-				strName: oString.strSocketOpenStart,
-				fAction: function() {
-					iIntervalWakeOnLan = startInterval(function() {
-						SendWol({
-							arrMac: arrMac
-						}, strBroadcast);
-					}, 5000);
-					iTimeoutOpen = setTimeout(function() {
-						iTimeoutOpen = 0;
-						deScreenOpen = Dialog(oString.strAppTittle, oString.strSocketOpenTimeoutWakeOnLanFailure, []);
-					}, 30000);
-				}
-			}
-		]);
+		Toast("", "Connecting to " + strIP + "...");
+		// Auto-start WoL silently
+		iIntervalWakeOnLan = startInterval(function() {
+			SendWol({
+				arrMac: arrMac
+			}, strBroadcast);
+		}, 5000);
+		iTimeoutOpen = setTimeout(function() {
+			iTimeoutOpen = 0;
+			Toast("", "PC not responding — check if it's on");
+		}, 30000);
 	};
 }
 function DiscoverService(fCallback) {
