@@ -864,7 +864,25 @@ function SubscriptionDomEvent() {
 		});
 	}
 
+	var iLastBackPress = 0;
 	document.addEventListener("keydown", function(inEvent) {
+		// Double-press Back (461) within 500ms to exit the app
+		if(inEvent.keyCode === 461) {
+			var iNow = Date.now();
+			if(iNow - iLastBackPress < 500) {
+				Toast("", "Closing app...");
+				setTimeout(function() {
+					try {
+						if(typeof webOSSystem !== "undefined") webOSSystem.close();
+						else if(typeof PalmSystem !== "undefined") PalmSystem.stagePreparing(), window.close();
+						else window.close();
+					} catch(e) { window.close(); }
+				}, 500);
+				return;
+			}
+			iLastBackPress = iNow;
+			Toast("", "Press Back again to exit");
+		}
 		SendKey({
 			usC: inEvent.keyCode,
 			bS: true
@@ -1060,8 +1078,9 @@ function SocketOpen() {
 	socClient.onclose = function(e) {
 		iConnectionState = CONNECTION_STATE.DISCONNECTED;
 		LogIfDebug(oString.strSocketClosed);
-		Toast(oString.strAppTittle || "MagicRemoteService", "Disconnected — reconnecting...");
 		if(socClient !== null && !iIntervalRetryOpen) {
+			// Only show toast on first disconnect, not on every retry
+			Toast("", "Disconnected — reconnecting...");
 			CursorShowCountIf0();
 			SocketClosed();
 			SocketOpen();
