@@ -82,6 +82,23 @@ const MessageType = {
 	Shutdown: 0x06
 }
 
+var BUFFER_RECONNECT_INTERVAL = 5000;
+var SENSOR_DEAD_ZONE = 0.04;
+var SCROLL_VELOCITY_MULTIPLIER = 0.07;
+var SCROLL_FRICTION = 0.85;
+var SCROLL_STOP_THRESHOLD = 0.3;
+var SCROLL_FRAME_INTERVAL = 16;
+var TOAST_DURATION = 2500;
+var SOCKET_TIMEOUT = 30000;
+var WOL_INTERVAL = 5000;
+var WOL_TIMEOUT = 15000;
+
+var CONNECTION_STATE = { DISCONNECTED: 0, CONNECTING: 1, CONNECTED: 2, CLOSING: 3 };
+var iConnectionState = CONNECTION_STATE.DISCONNECTED;
+
+var iLongClickThreshold = 3;
+var iToastTimer = 0;
+
 // Config defaults — overridden by config.json at startup
 var bInputDirect = true;
 var bOverlay = true;
@@ -111,7 +128,7 @@ var strPath = webOS.fetchAppRootPath();
 function LoadConfig() {
 	try {
 		var xhr = new XMLHttpRequest();
-		xhr.open("GET", strPath + "/config.json", false); // synchronous
+		xhr.open("GET", strPath + "/config.json", false); // synchronous: must load before init
 		xhr.send(null);
 		if(xhr.status === 200 || xhr.status === 0) {
 			var cfg = JSON.parse(xhr.responseText);
@@ -149,6 +166,7 @@ var deVideo = document.getElementById("video");
 
 var deScreenToast = null;
 function Toast(strTitle, strMessage) {
+	if(iToastTimer) { clearTimeout(iToastTimer); iToastTimer = 0; }
 	if(ScreenExist(deScreenToast)) {
 		ScreenCancel(deScreenToast, false);
 	}
@@ -171,11 +189,12 @@ function Toast(strTitle, strMessage) {
 	deToast.appendChild(dePopupMessage);
 	deScreenToast.appendChild(deToast);
 	document.body.appendChild(deScreenToast);
-	setTimeout(function() {
+	iToastTimer = setTimeout(function() {
+		iToastTimer = 0;
 		if(ScreenExist(deScreenToast)) {
 			ScreenCancel(deScreenToast, false);
 		}
-	}, 2500);
+	}, TOAST_DURATION);
 }
 
 function Dialog(strTitle, strMessage, arrButton) {
@@ -282,8 +301,8 @@ function CursorHide() {};
 function CursorShow() {};
 var iCursor = 1;
 function CursorHideCountIf0() {
-	iCursor--;
-	if (iCursor == 0) {
+	iCursor = Math.max(0, iCursor - 1);
+	if(iCursor === 0) {
 		CursorHide();
 	}
 };
@@ -333,11 +352,11 @@ if(bInputDirect){
 				SendWol({
 					arrMac: arrMac
 				}, strBroadcast);
-			}, 5000);
+			}, WOL_INTERVAL);
 			iTimeoutSourceStatus = setTimeout(function() {
 				iTimeoutSourceStatus = 0;
 				Toast("", "Wake-on-LAN failed — check PC");
-			}, 15000);
+			}, WOL_TIMEOUT);
 		}
 	};
 } else {
@@ -564,7 +583,7 @@ function SubscriptionGetSensorData() {
 							// var pitchY = -Math.asin(2 * (inResponse.quaternion.q3 * inResponse.quaternion.q1 - inResponse.quaternion.q0 * inResponse.quaternion.q2));
 							
 							var dRho = Math.sqrt(Math.pow(inResponse.gyroscope.z, 2) + Math.pow(inResponse.gyroscope.x, 2));
-							if(dRho > 0.04) {
+							if(dRho > SENSOR_DEAD_ZONE) {
 								var dTheta = Math.atan2(inResponse.gyroscope.z, inResponse.gyroscope.x) - Math.atan2(2 * (inResponse.quaternion.q3 * inResponse.quaternion.q1 - inResponse.quaternion.q0 * inResponse.quaternion.q2), 1 - 2 * (inResponse.quaternion.q1 * inResponse.quaternion.q1 - inResponse.quaternion.q0 * inResponse.quaternion.q0));
 								var dRhoAcceleration = Smooth2(dRho, 75, 1, 0.5);
 								pCurrent.dRhoAccelerationTotal += dRhoAcceleration;
@@ -746,7 +765,7 @@ function SetLongClick() {
 function TestLongClick() {
 	if(!iTimeoutLongClick) {
 		return false;
-	} else if (Math.sqrt(Math.pow(pCurrent.dX - pLongClick.dX, 2) + Math.pow(pCurrent.dY - pLongClick.dY, 2)) > 3) {
+	} else if (Math.sqrt(Math.pow(pCurrent.dX - pLongClick.dX, 2) + Math.pow(pCurrent.dY - pLongClick.dY, 2)) > iLongClickThreshold) {
 		ResetLongClick();
 		return false;
 	} else {
@@ -817,7 +836,7 @@ function SubscriptionDomEvent() {
 	var dScrollVelocity = 0;
 	var iScrollInterval = 0;
 	function SmoothScroll() {
-		if(Math.abs(dScrollVelocity) < 0.3) {
+		if(Math.abs(dScrollVelocity) < SCROLL_STOP_THRESHOLD) {
 			dScrollVelocity = 0;
 			clearInterval(iScrollInterval);
 			iScrollInterval = 0;
@@ -825,21 +844,21 @@ function SubscriptionDomEvent() {
 		}
 		var sStep = Math.sign(dScrollVelocity) * Math.max(1, Math.round(Math.abs(dScrollVelocity)));
 		SendWheel({ sY: sStep });
-		dScrollVelocity *= 0.85;
+		dScrollVelocity *= SCROLL_FRICTION;
 	}
 	if(arrVersion[0] > 1) {
 		deVideo.addEventListener("wheel", function(inEvent) {
-			dScrollVelocity += inEvent.deltaY * 0.07;
+			dScrollVelocity += inEvent.deltaY * SCROLL_VELOCITY_MULTIPLIER;
 			if(!iScrollInterval) {
-				iScrollInterval = setInterval(SmoothScroll, 16);
+				iScrollInterval = setInterval(SmoothScroll, SCROLL_FRAME_INTERVAL);
 			}
 			SetRemoteEvent();
 		});
 	} else {
 		deVideo.addEventListener("mousewheel", function(inEvent) {
-			dScrollVelocity += inEvent.wheelDeltaY * 0.07;
+			dScrollVelocity += inEvent.wheelDeltaY * SCROLL_VELOCITY_MULTIPLIER;
 			if(!iScrollInterval) {
-				iScrollInterval = setInterval(SmoothScroll, 16);
+				iScrollInterval = setInterval(SmoothScroll, SCROLL_FRAME_INTERVAL);
 			}
 			SetRemoteEvent();
 		});
@@ -971,21 +990,23 @@ if(bInputDirect){
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
 			Toast("", "Connection timeout — retrying...");
-		}, 30000);
+		}, SOCKET_TIMEOUT);
 	};
 } else {
 	SocketClosed = function() {
 		Toast("", "Connecting to " + strIP + "...");
 		// Auto-start WoL silently
-		iIntervalWakeOnLan = startInterval(function() {
-			SendWol({
-				arrMac: arrMac
-			}, strBroadcast);
-		}, 5000);
+		if(!iIntervalWakeOnLan) {
+			iIntervalWakeOnLan = startInterval(function() {
+				SendWol({
+					arrMac: arrMac
+				}, strBroadcast);
+			}, WOL_INTERVAL);
+		}
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
 			Toast("", "PC not responding — check if it's on");
-		}, 30000);
+		}, SOCKET_TIMEOUT);
 	};
 }
 function DiscoverService(fCallback) {
@@ -1020,6 +1041,7 @@ function SocketOpen() {
 	socClient = new WebSocket("ws://" + strIP + ":" + uiPort);
 	socClient.binaryType = "arraybuffer";
 	socClient.onopen = function(e) {
+		iConnectionState = CONNECTION_STATE.CONNECTED;
 		LogIfDebug(oString.strSocketOpened);
 		Toast(oString.strAppTittle || "MagicRemoteService", "Connected to " + strIP);
 		SocketOpened();
@@ -1036,6 +1058,7 @@ function SocketOpen() {
 		}
 	};
 	socClient.onclose = function(e) {
+		iConnectionState = CONNECTION_STATE.DISCONNECTED;
 		LogIfDebug(oString.strSocketClosed);
 		Toast(oString.strAppTittle || "MagicRemoteService", "Disconnected — reconnecting...");
 		if(socClient !== null && !iIntervalRetryOpen) {
@@ -1047,7 +1070,7 @@ function SocketOpen() {
 					socClient.close();
 				}
 				SocketOpen();
-			}, 5000);
+			}, BUFFER_RECONNECT_INTERVAL);
 		}
 	};
 	socClient.onmessage = function(e) {
@@ -1095,9 +1118,11 @@ function SocketClose() {
 	}
 }
 function Open() {
-	if(socClient !== null) {
+	if(iConnectionState !== CONNECTION_STATE.DISCONNECTED) return;
+	if(socClient !== null && socClient.readyState === WebSocket.OPEN) {
 		Error(oString.strSocketErrorOpen);
 	} else {
+		iConnectionState = CONNECTION_STATE.CONNECTING;
 		SocketClosed();
 		DiscoverService(function() {
 			SocketOpen();
@@ -1107,13 +1132,15 @@ function Open() {
 				socClient.close();
 			}
 			SocketOpen();
-		}, 5000);
+		}, BUFFER_RECONNECT_INTERVAL);
 	}
 }
 function Close() {
+	if(iConnectionState === CONNECTION_STATE.DISCONNECTED) return;
 	if(socClient === null) {
 		Error(oString.strSocketErrorClose);
 	} else {
+		iConnectionState = CONNECTION_STATE.CLOSING;
 		SocketOpened();
 		if(iIntervalRetryOpen) {
 			clearInterval(iIntervalRetryOpen);

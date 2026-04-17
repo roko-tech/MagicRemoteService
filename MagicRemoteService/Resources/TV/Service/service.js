@@ -228,6 +228,7 @@ metDiscover.on("request", function(mMessage) {
 	var timeout = mMessage.payload.timeout || 3000;
 	var socSsdp = Dgram.createSocket({type: "udp4", reuseAddr: true});
 	var discovered = null;
+	var bResponded = false;
 
 	var searchMsg = "M-SEARCH * HTTP/1.1\r\n" +
 		"HOST: " + SSDP_MULTICAST + ":" + SSDP_PORT + "\r\n" +
@@ -248,6 +249,8 @@ metDiscover.on("request", function(mMessage) {
 					};
 					ConsoleLog("SSDP: Discovered MagicRemoteService at " + discovered.ip + ":" + discovered.port);
 					socSsdp.close();
+					if(bResponded) return;
+					bResponded = true;
 					mMessage.respond({
 						returnValue: true,
 						found: true,
@@ -280,6 +283,8 @@ metDiscover.on("request", function(mMessage) {
 		if(!discovered) {
 			try { socSsdp.close(); } catch(e) {}
 			ConsoleLog("SSDP: Discovery timeout after " + timeout + "ms");
+			if(bResponded) return;
+			bResponded = true;
 			mMessage.respond({
 				returnValue: true,
 				found: false
@@ -460,6 +465,7 @@ if(bOverlay){
 	var bApp = false;
 	var strSsapClientKey = null;
 	var uiSsapId = 1;
+	var iSsapReconnectTimeout = 0;
 	Fs.readFile("./SsapClientKey", { encoding: "utf8" }, function(eError, strData){
 		if(eError) {
 			ConsoleError("readFile error [", eError, "]");
@@ -494,7 +500,9 @@ if(bOverlay){
 				socSsap.setNoDelay(true);
 				socSsap.on("close", function() {
 					LogIfDebug("Ssap close");
-					setTimeout(function() {
+					if(iSsapReconnectTimeout) clearTimeout(iSsapReconnectTimeout);
+					iSsapReconnectTimeout = setTimeout(function() {
+						iSsapReconnectTimeout = 0;
 						SsapLaunch();
 					}, 5000);
 				});
@@ -633,7 +641,13 @@ if(bOverlay){
 			var ulLenData;
 			var ulOffsetMask;
 			if((bufStream[ulOffsetFrame + 1] & 0x7F) == 0x7F) {
-				ulLenData = bufStream.readUInt32BE(ulOffsetFrame + 2); //Truncated no 64bit
+				// For 64-bit length, read upper 32 bits and check they're 0 (we don't support >4GB frames)
+				var ulLenHigh = bufStream.readUInt32BE(ulOffsetFrame + 2);
+				if(ulLenHigh > 0) {
+					// Frame too large
+					return;
+				}
+				ulLenData = bufStream.readUInt32BE(ulOffsetFrame + 6);
 				ulOffsetMask = ulOffsetFrame + 10;
 			} else if((bufStream[ulOffsetFrame + 1] & 0x7F) == 0x7E) {
 				ulLenData = bufStream.readUInt16BE(ulOffsetFrame + 2);
@@ -650,6 +664,9 @@ if(bOverlay){
 			} else {
 				bufMask = undefined;
 				ulOffsetData = ulOffsetMask;
+			}
+			if(ulOffsetData + ulLenData > bufStream.length) {
+				return; // frame extends past buffer
 			}
 			var bufData = bufStream.slice(ulOffsetData, ulOffsetData + ulLenData);
 			var bufFrame = bufStream.slice(ulOffsetFrame, ulOffsetData + ulLenData);

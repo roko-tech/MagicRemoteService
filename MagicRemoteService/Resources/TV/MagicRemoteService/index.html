@@ -9,7 +9,7 @@
 			src: url("MuseoSans-Medium.ttf");
 		}
 		* {
-			font-family: Sandstone;
+			font-family: Sandstone, -apple-system, system-ui, sans-serif;
 			text-overflow: ellipsis;
 		}
 
@@ -129,7 +129,9 @@
 
 	<script type="text/javascript">
 		window.addEventListener("error", function(oEvent) {
-			document.getElementById("uncaught").innerText += "\n" + oEvent.message + "\nSource : " + oEvent.filename + "\nLine : " + oEvent.lineno + "\nColumn : " + oEvent.colno + "\nError  : " + oEvent.error;
+			var el = document.getElementById("uncaught");
+			el.innerText += "\n" + oEvent.message + "\nSource : " + oEvent.filename + "\nLine : " + oEvent.lineno + "\nColumn : " + oEvent.colno + "\nError  : " + oEvent.error;
+			if(el.innerText.length > 10000) el.innerText = el.innerText.substring(el.innerText.length - 5000);
 		});
 	</script>
 	<script type="text/javascript" src="webOSTVjs-1.2.12/webOSTV.js" charset="utf-8"></script>

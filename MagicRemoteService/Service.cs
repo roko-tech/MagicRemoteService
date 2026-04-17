@@ -86,7 +86,7 @@ namespace MagicRemoteService {
 							string v = item.GetString();
 							if(!string.IsNullOrEmpty(v)) hs.Add(v);
 						}
-						if(hs.Count > 0) hsScrollExclude = hs;
+						if(hs.Count > 0) System.Threading.Interlocked.Exchange(ref hsScrollExclude, hs);
 					}
 					doc.Dispose();
 				}
@@ -98,7 +98,8 @@ namespace MagicRemoteService {
 				if(hWnd == System.IntPtr.Zero) return false;
 				WinApi.User32.GetWindowThreadProcessId(hWnd, out uint pid);
 				string strName = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName;
-				return hsScrollExclude.Contains(strName);
+				var hs = hsScrollExclude; // capture reference
+				return hs.Contains(strName);
 			} catch { return false; }
 		}
 		private static readonly System.Threading.AutoResetEvent areSessionChanged = new System.Threading.AutoResetEvent(false);
@@ -796,7 +797,11 @@ namespace MagicRemoteService {
 						}
 						System.Net.Sockets.Socket socClientToSend = null;
 
-						System.IO.Pipes.NamedPipeServerStream psServer = new System.IO.Pipes.NamedPipeServerStream("{2DCF2389-4969-483D-AA13-58FD8DDDD2D5}", System.IO.Pipes.PipeDirection.Out, 1, System.IO.Pipes.PipeTransmissionMode.Message, System.IO.Pipes.PipeOptions.Asynchronous, 4096, 4096);
+						var ps = new System.IO.Pipes.PipeSecurity();
+						ps.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+							new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.AuthenticatedUserSid, null),
+							System.IO.Pipes.PipeAccessRights.ReadWrite, System.Security.AccessControl.AccessControlType.Allow));
+						System.IO.Pipes.NamedPipeServerStream psServer = new System.IO.Pipes.NamedPipeServerStream("{2DCF2389-4969-483D-AA13-58FD8DDDD2D5}", System.IO.Pipes.PipeDirection.Out, 1, System.IO.Pipes.PipeTransmissionMode.Message, System.IO.Pipes.PipeOptions.Asynchronous, 4096, 4096, ps);
 
 						System.Diagnostics.Process pClient = null;
 						System.Threading.AutoResetEvent areWaitForExitExited = new System.Threading.AutoResetEvent(false);
@@ -1341,7 +1346,7 @@ namespace MagicRemoteService {
 				};
 
 				MagicRemoteService.Screen scrDisplay = MagicRemoteService.Screen.PrimaryScreen;
-				System.Threading.Tasks.Task.Run(delegate () {
+				try {
 					System.Net.IPAddress iaClient = ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address;
 					MagicRemoteService.WebOSCLIDevice wocdClient = System.Array.Find<MagicRemoteService.WebOSCLIDevice>(MagicRemoteService.WebOSCLI.SetupDeviceList(), delegate (MagicRemoteService.WebOSCLIDevice wocd) {
 						return wocd.DeviceInfo.IP.Equals(iaClient);
@@ -1352,7 +1357,7 @@ namespace MagicRemoteService {
 							scrDisplay = scr;
 						}
 					}
-				});
+				} catch {}
 
 				System.Threading.WaitHandle[] tabEvent = new System.Threading.WaitHandle[] {
 					Service.mreStop,
@@ -1384,7 +1389,7 @@ namespace MagicRemoteService {
 								//TODO Something to ask TV if cursor visible
 								Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
 							System.Threading.Interlocked.Increment(ref Service.iConnectedClients);
-							try { Service.strConnectedClientIp = ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString(); } catch {}
+							try { System.Threading.Interlocked.Exchange(ref Service.strConnectedClientIp, ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString()); } catch {}
 								tPing.Start();
 								if(this.bInactivity) {
 									tInactivity.Start();
@@ -1465,6 +1470,10 @@ namespace MagicRemoteService {
 										Service.Warn("WebSocket mask exceeds buffer on socket [" + socClient.GetHashCode() + "]");
 										break;
 									}
+									if(ulOffsetData + ulLenData > (ulong)tabData.Length) {
+										Service.Warn("Frame overflow");
+										break;
+									}
 									for(ulong ul = 0; ul < ulLenData; ul++) {
 										tabData[ulOffsetData + ul] ^= tabData[ulOffsetMask + (ul % 4)];
 									}
@@ -1498,9 +1507,11 @@ namespace MagicRemoteService {
 														break;
 													case (byte)MagicRemoteService.MessageType.PositionAbsolute:
 											if(ulLenData < 5) break;
-														piPositionAbsolute[0].u.mi.dx = ((scrDisplay.Bounds.X + ((scrDisplay.Bounds.Width * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1)) / 1920)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Width;
-														piPositionAbsolute[0].u.mi.dy = ((scrDisplay.Bounds.Y + ((scrDisplay.Bounds.Height * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 3)) / 1080)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Height;
-														Service.SendInputAdmin(piPositionAbsolute);
+														if(MagicRemoteService.Screen.DesktopBounds.Width > 0 && MagicRemoteService.Screen.DesktopBounds.Height > 0) {
+															piPositionAbsolute[0].u.mi.dx = ((scrDisplay.Bounds.X + ((scrDisplay.Bounds.Width * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1)) / 1920)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Width;
+															piPositionAbsolute[0].u.mi.dy = ((scrDisplay.Bounds.Y + ((scrDisplay.Bounds.Height * System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 3)) / 1080)) * 65535) / MagicRemoteService.Screen.DesktopBounds.Height;
+															Service.SendInputAdmin(piPositionAbsolute);
+														}
 														break;
 													case (byte)MagicRemoteService.MessageType.Wheel:
 											if(ulLenData < 3) break;
@@ -1547,6 +1558,10 @@ namespace MagicRemoteService {
 																Service.LogIfDebug("Processed binary message send/key action [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
 															} else if(dBindCommandDown.TryGetValue(usCode, out string[] arrString)) {
 																foreach(string strCommand in arrString) {
+																	if(strCommand.IndexOfAny(new char[] { '&', '|', ';', '>', '<' }) >= 0) {
+																		Service.Warn("Blocked unsafe command: " + strCommand);
+																		break;
+																	}
 																	using(System.Diagnostics.Process pCommand = new System.Diagnostics.Process()) {
 																		pCommand.StartInfo.FileName = "cmd";
 																		pCommand.StartInfo.Arguments = "/c " + strCommand;
@@ -1657,46 +1672,18 @@ namespace MagicRemoteService {
 							throw new System.Exception("Unmanaged handle error");
 					}
 				}
-				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
-				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
-				MagicRemoteService.Application.naehPowerSettingNotificationArrived -= PowerSettingNotificationArrived;
-				tPing.Stop();
-				tPing.Dispose();
-				tPong.Stop();
-				tPong.Dispose();
-				tUserInput.Stop();
-				tUserInput.Dispose();
-				tInactivity.Stop();
-				tInactivity.Dispose();
-				tVideoInput.Stop();
-				tVideoInput.Dispose();
-				tPongUserInput.Stop();
-				tPongUserInput.Dispose();
-				mreClientStop.Dispose();
-				eaClientReceiveAsync.Completed -= ClientReceiveAsyncCompleted;
-				eaClientReceiveAsync.Dispose();
-				areClientReceiveAsyncCompleted.Close();
-				areClientReceiveAsyncCompleted.Dispose();
-				socClient.Close();
-				socClient.Dispose();
-				System.Threading.Interlocked.Decrement(ref Service.iConnectedClients);
-				Service.Log("Socket closed [" + socClient.GetHashCode() + "]");
 			} catch(System.IO.IOException eException) {
-				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
-				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
 				Service.Error("IO error in client thread: " + eException.ToString());
 			} catch(System.ObjectDisposedException eException) {
-				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
-				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
 				Service.Error("Object disposed in client thread: " + eException.ToString());
 			} catch(System.Net.Sockets.SocketException eException) {
-				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
-				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
 				Service.Error("Socket error in client thread: " + eException.ToString());
 			} catch(System.InvalidOperationException eException) {
+				Service.Error("Invalid operation in client thread: " + eException.ToString());
+			} catch(System.Exception eException) {
 				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
 				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
-				Service.Error("Invalid operation in client thread: " + eException.ToString());
+				Service.Error(eException.ToString());
 			}
 		}
 	}
