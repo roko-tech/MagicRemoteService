@@ -208,9 +208,11 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
       </div>
       <label>Key</label>
       <select id="sk">
-        <option value="67">C</option><option value="86">V</option><option value="88">X</option><option value="90">Z</option><option value="65">A</option><option value="83">S</option><option value="68">D</option><option value="70">F</option><option value="78">N</option><option value="80">P</option><option value="87">W</option><option value="84">T</option><option value="82">R</option><option value="76">L</option>
-        <option value="112">F1</option><option value="113">F2</option><option value="114">F3</option><option value="115">F4</option><option value="116">F5</option>
-        <option value="9">Tab</option><option value="27">Escape</option><option value="46">Delete</option>
+        <option value="65">A</option><option value="66">B</option><option value="67">C</option><option value="68">D</option><option value="69">E</option><option value="70">F</option><option value="71">G</option><option value="72">H</option><option value="73">I</option><option value="74">J</option><option value="75">K</option><option value="76">L</option><option value="77">M</option><option value="78">N</option><option value="79">O</option><option value="80">P</option><option value="81">Q</option><option value="82">R</option><option value="83">S</option><option value="84">T</option><option value="85">U</option><option value="86">V</option><option value="87">W</option><option value="88">X</option><option value="89">Y</option><option value="90">Z</option>
+        <option value="48">0</option><option value="49">1</option><option value="50">2</option><option value="51">3</option><option value="52">4</option><option value="53">5</option><option value="54">6</option><option value="55">7</option><option value="56">8</option><option value="57">9</option>
+        <option value="112">F1</option><option value="113">F2</option><option value="114">F3</option><option value="115">F4</option><option value="116">F5</option><option value="117">F6</option><option value="118">F7</option><option value="119">F8</option><option value="120">F9</option><option value="121">F10</option><option value="122">F11</option><option value="123">F12</option>
+        <option value="9">Tab</option><option value="13">Enter</option><option value="27">Escape</option><option value="32">Space</option><option value="46">Delete</option><option value="8">Backspace</option>
+        <option value="38">Arrow Up</option><option value="40">Arrow Down</option><option value="37">Arrow Left</option><option value="39">Arrow Right</option>
       </select>
     </div>
     <div class="field" id="fc" style="display:none">
@@ -226,12 +228,14 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <button class="btn-apply" id="btn-restart" onclick="saveAndRestart()" style="background:#e6a817;color:#000;margin-top:14px">Save &amp; Restart Service</button>
     <div class="note">Save applies the binding. Restart reloads all bindings.</div>
 
+    <button class="btn-reset" onclick="resetAll()" style="margin-top:14px;border-color:#f5920044;color:#f59e0b">Reset All Bindings</button>
+
     <div class="excl-section">
       <h3>Smooth Scroll Exclusions</h3>
       <div class="note" style="margin-top:0;margin-bottom:8px">Apps where scroll sends single steps instead of smooth momentum</div>
       <div id="excl-list"></div>
       <div class="excl-add">
-        <input type="text" id="excl-input" placeholder="Process name (e.g. PotPlayerMini64)">
+        <input type="text" id="excl-input" placeholder="Process name (e.g. PotPlayerMini64)" onkeydown="if(event.key==='Enter')addExclusion()">
         <button onclick="addExclusion()">Add</button>
       </div>
     </div>
@@ -455,6 +459,19 @@ function resetBinding() {
   });
 }
 
+function resetAll() {
+  if (!confirm("Reset all button bindings to defaults?")) return;
+  bindings = {};
+  saveBindings(function() {
+    markCustomButtons();
+    if (selectedButton) selectButton(selectedButton);
+    setTimeout(function() {
+      fetch("/api/restart", { method: "POST", headers: fetchHeaders })
+        .then(function() { showToast("Restarting...", "ok"); setTimeout(function() { location.reload(); }, 3000); });
+    }, 500);
+  });
+}
+
 function saveAndRestart() {
   applyBinding();
   setLoading("btn-restart", true);
@@ -584,7 +601,14 @@ function setLoading(btnId, loading) {
 
 function markCustomButtons() {
   document.querySelectorAll(".btn[data-id]").forEach(function(e) {
-    e.classList.toggle("custom", !!bindings[e.dataset.id]);
+    var id = e.dataset.id;
+    var hasCustom = !!bindings[id];
+    e.classList.toggle("custom", hasCustom);
+    var info = BUTTONS[id];
+    if (info) {
+      var b = bindings[id] || [info.def];
+      e.title = info.name + " → " + describeBinding(b);
+    }
   });
 }
 
@@ -595,20 +619,22 @@ function sanitize(str) {
 /* ========================================
    Status polling (every 10s)
    ======================================== */
+function renderStatus(d) {
+  var sb = document.getElementById("sb");
+  var safeIp = sanitize(d.clientIp);
+  var connected = d.connectedClients > 0;
+  sb.innerHTML =
+    '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
+    '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
+    (connected ? safeIp + " connected" : "No TV") + '</div>' +
+    '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
+    (d.inactivity ? "On" : "Off") + '</div>';
+}
+
 function updateStatus() {
   fetch("/api/settings")
     .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var sb = document.getElementById("sb");
-      var safeIp = sanitize(d.clientIp);
-      var connected = d.connectedClients > 0;
-      sb.innerHTML =
-        '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
-        '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
-        (connected ? safeIp + " connected" : "No TV") + '</div>' +
-        '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
-        (d.inactivity ? "On" : "Off") + '</div>';
-    })
+    .then(function(d) { renderStatus(d); })
     .catch(function() {});
 }
 
@@ -647,16 +673,7 @@ fetch("/api/pcinfo")
 fetch("/api/settings")
   .then(function(r) { return r.json(); })
   .then(function(d) {
-    // Status bar
-    var sb = document.getElementById("sb");
-    var safeIp = sanitize(d.clientIp);
-    var connected = d.connectedClients > 0;
-    sb.innerHTML =
-      '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
-      '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
-      (connected ? safeIp + " connected" : "No TV") + '</div>' +
-      '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
-      (d.inactivity ? "On" : "Off") + '</div>';
+    renderStatus(d);
 
     // Load bindings
     if (d.bindings && d.bindings.bindings) {

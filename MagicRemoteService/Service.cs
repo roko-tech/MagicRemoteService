@@ -644,6 +644,13 @@ namespace MagicRemoteService {
 								ctx.Response.ContentType = "application/json";
 								ctx.Response.ContentLength64 = buf.Length;
 								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+							} else if(strReqPath == "/api/config" && ctx.Request.HttpMethod == "GET") {
+								string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
+								string strCfgContent = System.IO.File.Exists(strConfigFile) ? System.IO.File.ReadAllText(strConfigFile) : "{}";
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strCfgContent);
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 							} else if(strReqPath == "/api/config" && ctx.Request.HttpMethod == "POST") {
 								// Save TV app config.json
 								using(System.IO.StreamReader sr = new System.IO.StreamReader(ctx.Request.InputStream)) {
