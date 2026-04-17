@@ -6,32 +6,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e0
 h1{color:#fff;margin-bottom:4px;font-size:22px}
 .subtitle{color:#555;font-size:12px;margin-bottom:16px}
 .main{display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
-
-/* Remote */
 .remote{background:linear-gradient(180deg,#1a1a1a 0%,#111 50%,#1a1a1a 100%);border-radius:50px;padding:28px 20px 40px;width:220px;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 12px 40px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.03);border:1px solid #333}
-
-/* Buttons */
 .btn{cursor:pointer;border:2px solid transparent;transition:all .15s;display:flex;align-items:center;justify-content:center;font-weight:600;color:#888;user-select:none;position:relative}
 .btn:hover{border-color:#4ecca3;transform:scale(1.08);z-index:2}
+.btn:focus{outline:2px solid #4ecca3;outline-offset:2px}
 .btn.selected{border-color:#4ecca3;box-shadow:0 0 15px rgba(78,204,163,.4)}
 .btn.custom::after{content:"";position:absolute;top:2px;right:2px;width:5px;height:5px;background:#4ecca3;border-radius:50%}
-
-/* Power */
 .power{width:38px;height:38px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1a1a1a);color:#c0392b;font-size:16px;border-color:#333;margin-bottom:4px}
-
-/* Number pad */
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:170px}
 .num-btn{height:36px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1e1e1e);font-size:14px;color:#aaa;border-color:#333}
-
-/* Midsection */
-.mid-row{display:flex;gap:6px;width:170px;justify-content:center}
 .mid-btn{height:30px;width:50px;border-radius:15px;background:#1e1e1e;font-size:8px;color:#666;border-color:#333}
-
-/* Home/Mic/Gear row */
 .hmg-row{display:flex;gap:20px;margin:2px 0}
 .hmg-btn{width:32px;height:32px;border-radius:50%;background:#1e1e1e;font-size:14px;color:#666;border-color:#333;cursor:default;opacity:.4}
-
-/* Nav ring */
 .nav-container{position:relative;width:170px;height:170px;margin:4px 0}
 .nav-ring{position:absolute;top:0;left:0;width:170px;height:170px;border-radius:50%;background:radial-gradient(circle at center,#111 35%,#222 36%,#1a1a1a 100%);border:1px solid #333}
 .nav-up{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
@@ -40,25 +26,15 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .nav-right{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;font-size:12px}
 .nav-ok{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:50%;background:radial-gradient(circle,#2a2a2a,#1a1a1a);font-size:13px;font-weight:700;color:#aaa;border-color:#444}
 .scroll-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) translateY(-38px);color:#444;font-size:7px;pointer-events:none;text-transform:uppercase;letter-spacing:1px}
-
-/* Back/Gear row */
 .bg-row{display:flex;gap:60px}
 .bg-btn{width:34px;height:34px;border-radius:50%;background:#1e1e1e;font-size:14px;color:#777;border-color:#333}
-
-/* Color row */
 .color-row{display:flex;gap:5px;margin:4px 0}
 .color-btn{width:34px;height:18px;border-radius:9px;font-size:0}
 .c-red{background:#c0392b}.c-green{background:#27ae60}.c-yellow{background:#e6a817}.c-blue{background:#2471a3}
-
-/* App shortcut labels (not configurable) */
 .app-row{display:flex;gap:4px;margin:2px 0}
 .app-btn{width:80px;height:22px;border-radius:4px;background:#1a1a1a;font-size:7px;color:#444;display:flex;align-items:center;justify-content:center;cursor:default;opacity:.3;border:1px solid #222}
-
-/* Click labels */
 .click-row{display:flex;gap:6px;margin-top:4px}
 .click-btn{width:70px;height:26px;border-radius:13px;background:#1e1e1e;font-size:9px;color:#888;border-color:#333}
-
-/* Panel */
 .panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;width:380px;min-height:500px}
 .panel h2{color:#fff;font-size:18px;margin-bottom:16px}
 .panel-empty{color:#444;text-align:center;padding:80px 20px;font-size:14px;line-height:1.6}
@@ -72,6 +48,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .mod-label input{width:auto;accent-color:#4ecca3}
 .btn-apply{background:#4ecca3;color:#0d1117;border:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;width:100%;margin-top:8px}
 .btn-apply:hover{background:#3dbb91}
+.btn-apply:disabled{opacity:.5;cursor:not-allowed}
 .btn-reset{background:transparent;color:#f87171;border:1px solid #f8717144;padding:8px 16px;border-radius:6px;font-size:12px;cursor:pointer;margin-top:8px;width:100%}
 .btn-reset:hover{background:#f8717118}
 .current-binding{background:#1c2333;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#8b949e;border-left:3px solid #4ecca3}
@@ -84,47 +61,68 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .chip{background:#161b22;border:1px solid #30363d;border-radius:20px;padding:5px 14px;font-size:11px;display:flex;align-items:center;gap:6px}
 .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
 .dot-g{background:#4ecca3}.dot-r{background:#f87171}.dot-y{background:#f59e0b}
+.dot-pulse{animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .note{color:#444;font-size:10px;margin-top:8px;font-style:italic}
+.cfg-section{max-width:660px;width:100%;margin-top:20px}
+.cfg-panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px}
+.cfg-panel h2{font-size:16px;color:#fff;margin-bottom:12px}
+.cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cfg-actions{display:flex;gap:8px;margin-top:12px}
+.cfg-actions .btn-apply{flex:1}
+.excl-section{margin-top:20px;border-top:1px solid #30363d;padding-top:16px}
+.excl-section h3{font-size:15px;color:#fff;margin-bottom:8px}
+.excl-add{display:flex;gap:6px;margin-top:8px}
+.excl-add input{flex:1;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:13px}
+.excl-add button{background:#4ecca3;color:#0d1117;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600}
+.excl-item{display:flex;align-items:center;gap:8px;padding:4px 0}
+.excl-name{color:#e0e0e0;font-size:13px;font-family:monospace;flex:1}
+.excl-rm{background:none;border:1px solid #f8717144;color:#f87171;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px}
+@media(max-width:700px){
+  .main{flex-direction:column;align-items:center}
+  .panel{width:100%;min-height:auto}
+  .cfg-grid{grid-template-columns:1fr}
+}
 </style></head><body>
 <h1>MagicRemoteService</h1>
 <div class="subtitle">Click any button to configure its action</div>
 <div class="status-bar" id="sb"></div>
 <div class="main">
 <div class="remote">
-  <div class="btn power" data-id="0x0193" title="Power / Red">&#9211;</div>
+  <div class="btn power" data-id="0x0193" tabindex="0" title="Power / Red">&#9211;</div>
   <div class="numpad">
-    <div class="btn num-btn" data-id="0x0031">1</div>
-    <div class="btn num-btn" data-id="0x0032">2</div>
-    <div class="btn num-btn" data-id="0x0033">3</div>
-    <div class="btn num-btn" data-id="0x0034">4</div>
-    <div class="btn num-btn" data-id="0x0035">5</div>
-    <div class="btn num-btn" data-id="0x0036">6</div>
-    <div class="btn num-btn" data-id="0x0037">7</div>
-    <div class="btn num-btn" data-id="0x0038">8</div>
-    <div class="btn num-btn" data-id="0x0039">9</div>
+    <div class="btn num-btn" data-id="0x0031" tabindex="0">1</div>
+    <div class="btn num-btn" data-id="0x0032" tabindex="0">2</div>
+    <div class="btn num-btn" data-id="0x0033" tabindex="0">3</div>
+    <div class="btn num-btn" data-id="0x0034" tabindex="0">4</div>
+    <div class="btn num-btn" data-id="0x0035" tabindex="0">5</div>
+    <div class="btn num-btn" data-id="0x0036" tabindex="0">6</div>
+    <div class="btn num-btn" data-id="0x0037" tabindex="0">7</div>
+    <div class="btn num-btn" data-id="0x0038" tabindex="0">8</div>
+    <div class="btn num-btn" data-id="0x0039" tabindex="0">9</div>
   </div>
   <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
-    <div class="btn num-btn" data-id="0x019F" title="LIST" style="font-size:8px">LIST</div>
-    <div class="btn num-btn" data-id="0x0030">0</div>
-    <div class="btn num-btn" data-id="0x01A1" title="MORE ..." style="font-size:10px">...</div>
+    <div class="btn num-btn" data-id="0x019F" tabindex="0" title="LIST" style="font-size:8px">LIST</div>
+    <div class="btn num-btn" data-id="0x0030" tabindex="0">0</div>
+    <div class="btn num-btn" data-id="0x01A1" tabindex="0" title="MORE ..." style="font-size:10px">...</div>
   </div>
   <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
-    <div class="btn num-btn" data-id="0x019C" title="GUIDE" style="font-size:7px">GUIDE</div>
-    <div class="btn num-btn" data-id="0x019D" title="QUICK ACCESS" style="font-size:6px">QUICK</div>
-    <div class="btn num-btn" data-id="0x01A2" title="AD/SAP" style="font-size:7px">AD/SAP</div>
+    <div class="btn num-btn" data-id="0x019C" tabindex="0" title="GUIDE" style="font-size:7px">GUIDE</div>
+    <div class="btn num-btn" data-id="0x019D" tabindex="0" title="QUICK ACCESS" style="font-size:6px">QUICK</div>
+    <div class="btn num-btn" data-id="0x01A2" tabindex="0" title="AD/SAP" style="font-size:7px">AD/SAP</div>
   </div>
   <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
     <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-      <div class="btn vc-btn" data-id="0x0021" title="Volume +">+</div>
+      <div class="btn vc-btn" data-id="0x0021" tabindex="0" title="Volume +" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">+</div>
       <div style="color:#444;font-size:8px">VOL</div>
-      <div class="btn vc-btn" data-id="0x0022" title="Volume -">&minus;</div>
+      <div class="btn vc-btn" data-id="0x0022" tabindex="0" title="Volume -" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&minus;</div>
     </div>
-    <div class="btn" data-id="0x01A3" title="Mute" style="width:34px;height:34px;border-radius:50%;background:#1e1e1e;border-color:#333;font-size:14px;color:#777">&#128263;</div>
+    <div class="btn" data-id="0x01A3" tabindex="0" title="Mute" style="width:34px;height:34px;border-radius:50%;background:#1e1e1e;border-color:#333;font-size:14px;color:#777">&#128263;</div>
     <div style="width:20px"></div>
     <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-      <div class="btn vc-btn" data-id="0x0070" title="Channel +">&#8743;</div>
+      <div class="btn vc-btn" data-id="0x0070" tabindex="0" title="Channel +" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8743;</div>
       <div style="color:#444;font-size:8px">CH</div>
-      <div class="btn vc-btn" data-id="0x0071" title="Channel -">&#8744;</div>
+      <div class="btn vc-btn" data-id="0x0071" tabindex="0" title="Channel -" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8744;</div>
     </div>
   </div>
   <div class="hmg-row">
@@ -134,21 +132,21 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
   <div class="nav-container">
     <div class="nav-ring"></div>
     <span class="scroll-label">Scroll</span>
-    <div class="btn nav-up" data-id="0x0026" title="Up">&#9650;</div>
-    <div class="btn nav-down" data-id="0x0028" title="Down">&#9660;</div>
-    <div class="btn nav-left" data-id="0x0025" title="Left">&#9664;</div>
-    <div class="btn nav-right" data-id="0x0027" title="Right">&#9654;</div>
-    <div class="btn nav-ok" data-id="0x000D" title="OK / Enter">OK</div>
+    <div class="btn nav-up" data-id="0x0026" tabindex="0" title="Up">&#9650;</div>
+    <div class="btn nav-down" data-id="0x0028" tabindex="0" title="Down">&#9660;</div>
+    <div class="btn nav-left" data-id="0x0025" tabindex="0" title="Left">&#9664;</div>
+    <div class="btn nav-right" data-id="0x0027" tabindex="0" title="Right">&#9654;</div>
+    <div class="btn nav-ok" data-id="0x000D" tabindex="0" title="OK / Enter">OK</div>
   </div>
   <div class="bg-row">
-    <div class="btn bg-btn" data-id="0x01CD" title="Back">&#8617;</div>
+    <div class="btn bg-btn" data-id="0x01CD" tabindex="0" title="Back">&#8617;</div>
     <div class="hmg-btn" title="Settings (TV only)" style="cursor:default;opacity:.4">&#9881;</div>
   </div>
   <div class="color-row">
-    <div class="btn color-btn c-red" data-id="0x0193" title="Red">&nbsp;</div>
-    <div class="btn color-btn c-green" data-id="0x0194" title="Green">&nbsp;</div>
-    <div class="btn color-btn c-yellow" data-id="0x01A4" title="Yellow">&nbsp;</div>
-    <div class="btn color-btn c-blue" data-id="0x0196" title="Blue">&nbsp;</div>
+    <div class="btn color-btn c-red" data-id="0x0193" tabindex="0" title="Red">&nbsp;</div>
+    <div class="btn color-btn c-green" data-id="0x0194" tabindex="0" title="Green">&nbsp;</div>
+    <div class="btn color-btn c-yellow" data-id="0x01A4" tabindex="0" title="Yellow">&nbsp;</div>
+    <div class="btn color-btn c-blue" data-id="0x0196" tabindex="0" title="Blue">&nbsp;</div>
   </div>
   <div class="app-row">
     <div class="app-btn">NETFLIX</div><div class="app-btn">Prime</div>
@@ -157,8 +155,8 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <div class="app-btn">Disney+</div><div class="app-btn">LG Ch</div>
   </div>
   <div class="click-row">
-    <div class="btn click-btn" data-id="0x0001" title="Short press = Left Click">L-Click</div>
-    <div class="btn click-btn" data-id="0x0195" title="Long press = Right Click">R-Click</div>
+    <div class="btn click-btn" data-id="0x0001" tabindex="0" title="Short press = Left Click">L-Click</div>
+    <div class="btn click-btn" data-id="0x0195" tabindex="0" title="Long press = Right Click">R-Click</div>
   </div>
 </div>
 
@@ -173,7 +171,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <div class="current-binding">Current: <strong id="bd"></strong></div>
     <div class="field">
       <label>Action Type</label>
-      <select id="at" onchange="tc()">
+      <select id="at" onchange="typeChanged()">
         <option value="mouse">Mouse Click</option>
         <option value="keyboard">Keyboard Key</option>
         <option value="shortcut">Keyboard Shortcut</option>
@@ -194,6 +192,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
         <option value="112">F1</option><option value="113">F2</option><option value="114">F3</option><option value="115">F4</option><option value="116">F5</option><option value="117">F6</option><option value="118">F7</option><option value="119">F8</option><option value="120">F9</option><option value="121">F10</option><option value="122">F11</option><option value="123">F12</option>
         <option value="65">A</option><option value="66">B</option><option value="67">C</option><option value="68">D</option><option value="69">E</option><option value="70">F</option><option value="71">G</option><option value="72">H</option><option value="73">I</option><option value="74">J</option><option value="75">K</option><option value="76">L</option><option value="77">M</option><option value="78">N</option><option value="79">O</option><option value="80">P</option><option value="81">Q</option><option value="82">R</option><option value="83">S</option><option value="84">T</option><option value="85">U</option><option value="86">V</option><option value="87">W</option><option value="88">X</option><option value="89">Y</option><option value="90">Z</option>
         <option value="48">0</option><option value="49">1</option><option value="50">2</option><option value="51">3</option><option value="52">4</option><option value="53">5</option><option value="54">6</option><option value="55">7</option><option value="56">8</option><option value="57">9</option>
+        <option value="96">Num 0</option><option value="97">Num 1</option><option value="98">Num 2</option><option value="99">Num 3</option><option value="100">Num 4</option><option value="101">Num 5</option><option value="102">Num 6</option><option value="103">Num 7</option><option value="104">Num 8</option><option value="105">Num 9</option>
         <option value="91">Windows Key</option><option value="173">Mute</option><option value="174">Volume Down</option><option value="175">Volume Up</option>
         <option value="176">Next Track</option><option value="177">Prev Track</option><option value="178">Stop Media</option><option value="179">Play/Pause</option>
         <option value="44">Print Screen</option>
@@ -222,30 +221,31 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
       <label>Action</label>
       <select id="ss"><option value="shutdown">Shutdown PC</option><option value="keyboard">Toggle TV Keyboard</option></select>
     </div>
-    <button class="btn-apply" onclick="apply()">Save Binding</button>
-    <button class="btn-reset" onclick="reset()">Reset to Default</button>
-    <button class="btn-apply" onclick="restart()" style="background:#e6a817;color:#000;margin-top:14px">Save &amp; Restart Service</button>
+    <button class="btn-apply" id="btn-save" onclick="applyBinding()">Save Binding</button>
+    <button class="btn-reset" onclick="resetBinding()">Reset to Default</button>
+    <button class="btn-apply" id="btn-restart" onclick="saveAndRestart()" style="background:#e6a817;color:#000;margin-top:14px">Save &amp; Restart Service</button>
     <div class="note">Save applies the binding. Restart reloads all bindings.</div>
-    <div style="margin-top:20px;border-top:1px solid #30363d;padding-top:16px">
-      <h2 style="font-size:15px;color:#fff;margin-bottom:8px">Smooth Scroll Exclusions</h2>
-      <div class="note" style="margin-bottom:8px;margin-top:0">Apps where scroll sends single steps instead of smooth momentum (e.g. volume controls in media players)</div>
+
+    <div class="excl-section">
+      <h3>Smooth Scroll Exclusions</h3>
+      <div class="note" style="margin-top:0;margin-bottom:8px">Apps where scroll sends single steps instead of smooth momentum</div>
       <div id="excl-list"></div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <input type="text" id="excl-input" placeholder="Process name (e.g. PotPlayerMini64)" style="flex:1;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:13px">
-        <button onclick="addExcl()" style="background:#4ecca3;color:#0d1117;border:none;padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600">Add</button>
+      <div class="excl-add">
+        <input type="text" id="excl-input" placeholder="Process name (e.g. PotPlayerMini64)">
+        <button onclick="addExclusion()">Add</button>
       </div>
     </div>
   </div>
 </div>
 </div>
 
-<div style="max-width:660px;width:100%;margin-top:20px">
-<div class="panel" id="cfg-panel">
-  <h2 style="font-size:16px;color:#fff;margin-bottom:12px">TV App Configuration</h2>
-  <div class="note" style="margin-bottom:12px;margin-top:0">Auto-detected from your PC. Edit and click "Save Config" to update.</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div class="cfg-section">
+<div class="cfg-panel">
+  <h2>TV App Configuration</h2>
+  <div class="note" style="margin-top:0;margin-bottom:12px">Auto-detected from your PC. Edit and click "Save Config" to update.</div>
+  <div class="cfg-grid">
     <div class="field"><label>HDMI Port</label>
-      <select id="cfg-hdmi" onchange="hdmiChanged()">
+      <select id="cfg-hdmi">
         <option value="1">HDMI 1</option><option value="2">HDMI 2</option><option value="3">HDMI 3</option><option value="4">HDMI 4</option>
       </select>
     </div>
@@ -254,140 +254,442 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     </div>
     <div class="field"><label>PC MAC</label><input type="text" id="cfg-mac" readonly style="color:#4ecca3"></div>
     <div class="field"><label>Subnet Mask</label><input type="text" id="cfg-mask" readonly style="color:#4ecca3"></div>
-    <div class="field"><label>Port</label><input type="number" id="cfg-port" value="41230"></div>
+    <div class="field"><label>Port</label><input type="number" id="cfg-port" value="41230" min="1" max="65535"></div>
     <div class="field"><label>Cursor Speed</label><input type="number" id="cfg-speed" value="1.0" step="0.1" min="0.1" max="5.0"></div>
   </div>
-  <div style="display:flex;gap:8px;margin-top:12px">
-    <button class="btn-apply" onclick="saveConfig()" style="flex:1">Save Config</button>
-    <button class="btn-apply" onclick="reinstallTV()" style="flex:1;background:#e6a817;color:#000">Reinstall TV App</button>
+  <div class="cfg-actions">
+    <button class="btn-apply" id="btn-cfg-save" onclick="saveConfig()">Save Config</button>
+    <button class="btn-apply" id="btn-cfg-reinstall" onclick="reinstallTV()" style="background:#e6a817;color:#000">Reinstall TV App</button>
   </div>
   <div id="cfg-status" class="note" style="margin-top:8px"></div>
 </div>
 </div>
 
 <script>
-var B={
-"0x0193":{n:"Power / Red",d:{type:"action",value:"shutdown"}},
-"0x0194":{n:"Green",d:{type:"keyboard",virtualKey:91,scanCode:91,extended:true}},
-"0x0196":{n:"Blue",d:{type:"action",value:"keyboard"}},
-"0x0026":{n:"Up",d:{type:"keyboard",virtualKey:38,scanCode:72,extended:true}},
-"0x0028":{n:"Down",d:{type:"keyboard",virtualKey:40,scanCode:80,extended:true}},
-"0x0025":{n:"Left",d:{type:"keyboard",virtualKey:37,scanCode:75,extended:true}},
-"0x0027":{n:"Right",d:{type:"keyboard",virtualKey:39,scanCode:77,extended:true}},
-"0x000D":{n:"OK / Enter",d:{type:"keyboard",virtualKey:13,scanCode:28,extended:false}},
-"0x01CD":{n:"Back",d:{type:"keyboard",virtualKey:27,scanCode:1,extended:false}},
-"0x0021":{n:"Vol+ (Copy)",d:{type:"keyboard",virtualKey:67,scanCode:46,extended:false,mods:{ctrl:true}}},
-"0x0022":{n:"Yellow / Vol- (Paste)",d:{type:"keyboard",virtualKey:86,scanCode:47,extended:false,mods:{ctrl:true}}},
-"0x0030":{n:"0",d:{type:"keyboard",virtualKey:96,scanCode:82,extended:false}},
-"0x0031":{n:"1",d:{type:"keyboard",virtualKey:97,scanCode:79,extended:false}},
-"0x0032":{n:"2",d:{type:"keyboard",virtualKey:98,scanCode:80,extended:false}},
-"0x0033":{n:"3",d:{type:"keyboard",virtualKey:99,scanCode:81,extended:false}},
-"0x0034":{n:"4",d:{type:"keyboard",virtualKey:100,scanCode:75,extended:false}},
-"0x0035":{n:"5",d:{type:"keyboard",virtualKey:101,scanCode:76,extended:false}},
-"0x0036":{n:"6",d:{type:"keyboard",virtualKey:102,scanCode:77,extended:false}},
-"0x0037":{n:"7",d:{type:"keyboard",virtualKey:103,scanCode:71,extended:false}},
-"0x0038":{n:"8",d:{type:"keyboard",virtualKey:104,scanCode:72,extended:false}},
-"0x0039":{n:"9",d:{type:"keyboard",virtualKey:105,scanCode:73,extended:false}},
-"0x019F":{n:"LIST",d:{type:"keyboard",virtualKey:179,scanCode:34,extended:true}},
-"0x01A1":{n:"MORE (...)",d:{type:"keyboard",virtualKey:176,scanCode:25,extended:true}},
-"0x019C":{n:"GUIDE",d:{type:"keyboard",virtualKey:177,scanCode:16,extended:true}},
-"0x019D":{n:"QUICK ACCESS",d:{type:"keyboard",virtualKey:178,scanCode:36,extended:true}},
-"0x01A2":{n:"AD/SAP",d:{type:"keyboard",virtualKey:173,scanCode:32,extended:false}},
-"0x01A3":{n:"Mute",d:{type:"keyboard",virtualKey:173,scanCode:32,extended:false}},
-"0x01A4":{n:"Yellow",d:{type:"keyboard",virtualKey:86,scanCode:47,extended:false,mods:{ctrl:true}}},
-"0x0001":{n:"Click (Short Press)",d:{type:"mouse",value:"left"}},
-"0x0195":{n:"Click (Long Press)",d:{type:"mouse",value:"right"}}
+/* ========================================
+   Button definitions
+   ======================================== */
+var BUTTONS = {
+  "0x0193": { name: "Power / Red", def: { type: "action", value: "shutdown" } },
+  "0x0194": { name: "Green", def: { type: "keyboard", virtualKey: 91, scanCode: 91, extended: true } },
+  "0x0196": { name: "Blue", def: { type: "action", value: "keyboard" } },
+  "0x0026": { name: "Up", def: { type: "keyboard", virtualKey: 38, scanCode: 72, extended: true } },
+  "0x0028": { name: "Down", def: { type: "keyboard", virtualKey: 40, scanCode: 80, extended: true } },
+  "0x0025": { name: "Left", def: { type: "keyboard", virtualKey: 37, scanCode: 75, extended: true } },
+  "0x0027": { name: "Right", def: { type: "keyboard", virtualKey: 39, scanCode: 77, extended: true } },
+  "0x000D": { name: "OK / Enter", def: { type: "keyboard", virtualKey: 13, scanCode: 28, extended: false } },
+  "0x01CD": { name: "Back", def: { type: "keyboard", virtualKey: 27, scanCode: 1, extended: false } },
+  "0x0021": { name: "Vol+ (Copy)", def: { type: "keyboard", virtualKey: 67, scanCode: 46, extended: false, mods: { ctrl: true } } },
+  "0x0022": { name: "Yellow / Vol- (Paste)", def: { type: "keyboard", virtualKey: 86, scanCode: 47, extended: false, mods: { ctrl: true } } },
+  "0x0030": { name: "0", def: { type: "keyboard", virtualKey: 96, scanCode: 82, extended: false } },
+  "0x0031": { name: "1", def: { type: "keyboard", virtualKey: 97, scanCode: 79, extended: false } },
+  "0x0032": { name: "2", def: { type: "keyboard", virtualKey: 98, scanCode: 80, extended: false } },
+  "0x0033": { name: "3", def: { type: "keyboard", virtualKey: 99, scanCode: 81, extended: false } },
+  "0x0034": { name: "4", def: { type: "keyboard", virtualKey: 100, scanCode: 75, extended: false } },
+  "0x0035": { name: "5", def: { type: "keyboard", virtualKey: 101, scanCode: 76, extended: false } },
+  "0x0036": { name: "6", def: { type: "keyboard", virtualKey: 102, scanCode: 77, extended: false } },
+  "0x0037": { name: "7", def: { type: "keyboard", virtualKey: 103, scanCode: 71, extended: false } },
+  "0x0038": { name: "8", def: { type: "keyboard", virtualKey: 104, scanCode: 72, extended: false } },
+  "0x0039": { name: "9", def: { type: "keyboard", virtualKey: 105, scanCode: 73, extended: false } },
+  "0x019F": { name: "LIST", def: { type: "keyboard", virtualKey: 179, scanCode: 34, extended: true } },
+  "0x01A1": { name: "MORE (...)", def: { type: "keyboard", virtualKey: 176, scanCode: 25, extended: true } },
+  "0x019C": { name: "GUIDE", def: { type: "keyboard", virtualKey: 177, scanCode: 16, extended: true } },
+  "0x019D": { name: "QUICK ACCESS", def: { type: "keyboard", virtualKey: 178, scanCode: 36, extended: true } },
+  "0x01A2": { name: "AD/SAP", def: { type: "keyboard", virtualKey: 173, scanCode: 32, extended: false } },
+  "0x01A3": { name: "Mute", def: { type: "keyboard", virtualKey: 173, scanCode: 32, extended: false } },
+  "0x01A4": { name: "Yellow", def: { type: "keyboard", virtualKey: 86, scanCode: 47, extended: false, mods: { ctrl: true } } },
+  "0x0070": { name: "Channel +", def: { type: "keyboard", virtualKey: 33, scanCode: 73, extended: true } },
+  "0x0071": { name: "Channel -", def: { type: "keyboard", virtualKey: 34, scanCode: 81, extended: true } },
+  "0x0001": { name: "Click (Short Press)", def: { type: "mouse", value: "left" } },
+  "0x0195": { name: "Click (Long Press)", def: { type: "mouse", value: "right" } }
 };
-var binds={},sel=null;
-var fetchOpts={headers:{"X-Requested-With":"MagicRemoteService"}};
-function desc(b){if(!b||!b.length)return"Default";var d=b[0];if(d.type==="mouse")return d.value[0].toUpperCase()+d.value.slice(1)+" Click";if(d.type==="action")return d.value==="shutdown"?"Shutdown PC":"Toggle Keyboard";if(d.type==="command")return"Run: "+d.command;if(d.type==="keyboard"){var k=kn(d.virtualKey),m=[];if(d.mods){if(d.mods.ctrl)m.push("Ctrl");if(d.mods.alt)m.push("Alt");if(d.mods.shift)m.push("Shift");if(d.mods.win)m.push("Win")}return m.length?m.join("+")+"+"+k:k}return JSON.stringify(d)}
-function kn(v){var m={8:"Backspace",9:"Tab",13:"Enter",19:"Pause",27:"Escape",32:"Space",33:"PageUp",34:"PageDown",35:"End",36:"Home",37:"Left",38:"Up",39:"Right",40:"Down",44:"PrtSc",46:"Delete",91:"Win",96:"Num0",97:"Num1",98:"Num2",99:"Num3",100:"Num4",101:"Num5",102:"Num6",103:"Num7",104:"Num8",105:"Num9",112:"F1",113:"F2",114:"F3",115:"F4",116:"F5",117:"F6",118:"F7",119:"F8",120:"F9",121:"F10",122:"F11",123:"F12",173:"Mute",174:"VolDown",175:"VolUp",176:"Next",177:"Prev",178:"Stop",179:"Play/Pause"};if(m[v])return m[v];if(v>=65&&v<=90)return String.fromCharCode(v);if(v>=48&&v<=57)return""+String(v-48);return"VK"+v}
-function pick(id){document.querySelectorAll(".btn").forEach(function(b){b.classList.remove("selected")});document.querySelectorAll('[data-id="'+id+'"]').forEach(function(b){b.classList.add("selected")});sel=id;var i=B[id];if(!i)return;document.getElementById("pe").style.display="none";document.getElementById("pc").style.display="block";document.getElementById("bn").textContent=i.n;var b=binds[id]||[i.d];document.getElementById("bd").textContent=desc(b);var d=b[0];if(d.type==="mouse"){document.getElementById("at").value="mouse";document.getElementById("mb").value=d.value}else if(d.type==="action"){document.getElementById("at").value="special";document.getElementById("ss").value=d.value}else if(d.type==="command"){document.getElementById("at").value="command";document.getElementById("ci").value=d.command||""}else if(d.type==="keyboard"&&d.mods&&(d.mods.ctrl||d.mods.alt||d.mods.shift||d.mods.win)){document.getElementById("at").value="shortcut";document.getElementById("mc").checked=!!d.mods.ctrl;document.getElementById("ma").checked=!!d.mods.alt;document.getElementById("ms").checked=!!d.mods.shift;document.getElementById("mw").checked=!!d.mods.win;document.getElementById("sk").value=d.virtualKey}else if(d.type==="keyboard"){document.getElementById("at").value="keyboard";document.getElementById("ks").value=d.virtualKey}tc()}
-function tc(){var t=document.getElementById("at").value;document.getElementById("fm").style.display=t==="mouse"?"block":"none";document.getElementById("fk").style.display=t==="keyboard"?"block":"none";document.getElementById("fs").style.display=t==="shortcut"?"block":"none";document.getElementById("fc").style.display=t==="command"?"block":"none";document.getElementById("fp").style.display=t==="special"?"block":"none"}
-function apply(){if(!sel)return;var t=document.getElementById("at").value,b;if(t==="mouse")b={type:"mouse",value:document.getElementById("mb").value};else if(t==="special")b={type:"action",value:document.getElementById("ss").value};else if(t==="command")b={type:"command",command:document.getElementById("ci").value};else if(t==="shortcut"){var vk=parseInt(document.getElementById("sk").value);b={type:"keyboard",virtualKey:vk,scanCode:0,extended:false,mods:{ctrl:document.getElementById("mc").checked,alt:document.getElementById("ma").checked,shift:document.getElementById("ms").checked,win:document.getElementById("mw").checked}}}else{var vk=parseInt(document.getElementById("ks").value);b={type:"keyboard",virtualKey:vk,scanCode:0,extended:false}}binds[sel]=[b];save();mark();document.getElementById("bd").textContent=desc([b])}
-function reset(){if(!sel)return;delete binds[sel];save();pick(sel);mark();setTimeout(function(){fetch("/api/restart",{method:"POST",headers:fetchOpts.headers}).then(function(){toast("Restarting...","ok");setTimeout(function(){location.reload()},3000)})},500)}
-function save(){var p={bindings:{},scrollExclude:scrollExclude};for(var k in binds)p.bindings[k]=binds[k];fetch("/api/bindings",{method:"POST",headers:fetchOpts.headers,body:JSON.stringify(p)}).then(function(r){return r.json()}).then(function(){toast("Saved! Reconnect TV to apply.","ok")}).catch(function(e){toast("Error: "+e,"err")})}
-function restart(){apply();setTimeout(function(){fetch("/api/restart",{method:"POST",headers:fetchOpts.headers}).then(function(){toast("Restarting service...","ok");setTimeout(function(){location.reload()},3000)}).catch(function(e){toast("Error: "+e,"err")})},500)}
-var scrollExclude=[];
-function renderExcl(){var el=document.getElementById("excl-list");el.innerHTML="";scrollExclude.forEach(function(name,i){var d=document.createElement("div");d.style.cssText="display:flex;align-items:center;gap:8px;padding:4px 0";var span=document.createElement("span");span.style.cssText="color:#e0e0e0;font-size:13px;font-family:monospace;flex:1";span.textContent=name;var btn=document.createElement("button");btn.style.cssText="background:none;border:1px solid #f8717144;color:#f87171;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px";btn.textContent="x";btn.onclick=function(){rmExcl(i)};d.appendChild(span);d.appendChild(btn);el.appendChild(d)})}
-function addExcl(){var v=document.getElementById("excl-input").value.trim();if(v&&scrollExclude.indexOf(v)<0){scrollExclude.push(v);document.getElementById("excl-input").value="";renderExcl();saveExcl()}}
-function rmExcl(i){scrollExclude.splice(i,1);renderExcl();saveExcl()}
-function saveExcl(){var p={};try{var f=JSON.parse(JSON.stringify(binds));p.bindings=f}catch(e){p.bindings={}}p.scrollExclude=scrollExclude;fetch("/api/bindings",{method:"POST",headers:fetchOpts.headers,body:JSON.stringify(p)}).then(function(r){return r.json()}).then(function(){toast("Scroll exclusions saved!","ok")}).catch(function(e){toast("Error: "+e,"err")})}
-function toast(m,t){var d=document.createElement("div");d.className="toast toast-"+t;d.textContent=m;document.body.appendChild(d);setTimeout(function(){d.remove()},3000)}
-function mark(){document.querySelectorAll(".btn[data-id]").forEach(function(e){e.classList.toggle("custom",!!binds[e.dataset.id])})}
-document.querySelectorAll(".btn[data-id]").forEach(function(e){e.addEventListener("click",function(){pick(e.dataset.id)})});
-// Config editor
-var pcInterfaces=[];
-var currentConfig={};
-function hdmiChanged(){
-  var n=document.getElementById("cfg-hdmi").value;
-  // Auto-fill MAC/mask when IP changes
+
+/* ========================================
+   State
+   ======================================== */
+var bindings = {};
+var selectedButton = null;
+var scrollExclude = [];
+var pcInterfaces = [];
+var fetchHeaders = { "X-Requested-With": "MagicRemoteService" };
+
+/* ========================================
+   Key name helper
+   ======================================== */
+var KEY_NAMES = {
+  8: "Backspace", 9: "Tab", 13: "Enter", 19: "Pause", 27: "Escape", 32: "Space",
+  33: "PageUp", 34: "PageDown", 35: "End", 36: "Home", 37: "Left", 38: "Up", 39: "Right", 40: "Down",
+  44: "PrtSc", 46: "Delete", 91: "Win",
+  96: "Num0", 97: "Num1", 98: "Num2", 99: "Num3", 100: "Num4",
+  101: "Num5", 102: "Num6", 103: "Num7", 104: "Num8", 105: "Num9",
+  112: "F1", 113: "F2", 114: "F3", 115: "F4", 116: "F5", 117: "F6",
+  118: "F7", 119: "F8", 120: "F9", 121: "F10", 122: "F11", 123: "F12",
+  173: "Mute", 174: "VolDown", 175: "VolUp", 176: "Next", 177: "Prev", 178: "Stop", 179: "Play/Pause"
+};
+
+function keyName(vk) {
+  if (KEY_NAMES[vk]) return KEY_NAMES[vk];
+  if (vk >= 65 && vk <= 90) return String.fromCharCode(vk);
+  if (vk >= 48 && vk <= 57) return String(vk - 48);
+  return "VK" + vk;
 }
-function ipChanged(){
-  var sel=document.getElementById("cfg-ip");
-  var ip=sel.value;
-  for(var i=0;i<pcInterfaces.length;i++){
-    if(pcInterfaces[i].ip===ip){
-      document.getElementById("cfg-mac").value=pcInterfaces[i].mac;
-      document.getElementById("cfg-mask").value=pcInterfaces[i].mask;
+
+function describeBinding(arr) {
+  if (!arr || !arr.length) return "Default";
+  var d = arr[0];
+  if (d.type === "mouse") return d.value[0].toUpperCase() + d.value.slice(1) + " Click";
+  if (d.type === "action") return d.value === "shutdown" ? "Shutdown PC" : "Toggle Keyboard";
+  if (d.type === "command") return "Run: " + d.command;
+  if (d.type === "keyboard") {
+    var k = keyName(d.virtualKey);
+    var m = [];
+    if (d.mods) {
+      if (d.mods.ctrl) m.push("Ctrl");
+      if (d.mods.alt) m.push("Alt");
+      if (d.mods.shift) m.push("Shift");
+      if (d.mods.win) m.push("Win");
+    }
+    return m.length ? m.join("+") + "+" + k : k;
+  }
+  return JSON.stringify(d);
+}
+
+/* ========================================
+   Button selection
+   ======================================== */
+function selectButton(id) {
+  document.querySelectorAll(".btn").forEach(function(b) { b.classList.remove("selected"); });
+  document.querySelectorAll('[data-id="' + id + '"]').forEach(function(b) { b.classList.add("selected"); });
+  selectedButton = id;
+  var info = BUTTONS[id];
+  if (!info) return;
+
+  document.getElementById("pe").style.display = "none";
+  document.getElementById("pc").style.display = "block";
+  document.getElementById("bn").textContent = info.name;
+
+  var b = bindings[id] || [info.def];
+  document.getElementById("bd").textContent = describeBinding(b);
+  var d = b[0];
+
+  if (d.type === "mouse") {
+    document.getElementById("at").value = "mouse";
+    document.getElementById("mb").value = d.value;
+  } else if (d.type === "action") {
+    document.getElementById("at").value = "special";
+    document.getElementById("ss").value = d.value;
+  } else if (d.type === "command") {
+    document.getElementById("at").value = "command";
+    document.getElementById("ci").value = d.command || "";
+  } else if (d.type === "keyboard" && d.mods && (d.mods.ctrl || d.mods.alt || d.mods.shift || d.mods.win)) {
+    document.getElementById("at").value = "shortcut";
+    document.getElementById("mc").checked = !!d.mods.ctrl;
+    document.getElementById("ma").checked = !!d.mods.alt;
+    document.getElementById("ms").checked = !!d.mods.shift;
+    document.getElementById("mw").checked = !!d.mods.win;
+    document.getElementById("sk").value = d.virtualKey;
+  } else if (d.type === "keyboard") {
+    document.getElementById("at").value = "keyboard";
+    document.getElementById("ks").value = d.virtualKey;
+  }
+  typeChanged();
+}
+
+function typeChanged() {
+  var t = document.getElementById("at").value;
+  document.getElementById("fm").style.display = t === "mouse" ? "block" : "none";
+  document.getElementById("fk").style.display = t === "keyboard" ? "block" : "none";
+  document.getElementById("fs").style.display = t === "shortcut" ? "block" : "none";
+  document.getElementById("fc").style.display = t === "command" ? "block" : "none";
+  document.getElementById("fp").style.display = t === "special" ? "block" : "none";
+}
+
+/* ========================================
+   Binding save/reset/restart
+   ======================================== */
+function applyBinding() {
+  if (!selectedButton) return;
+  var t = document.getElementById("at").value;
+  var b;
+
+  if (t === "mouse") {
+    b = { type: "mouse", value: document.getElementById("mb").value };
+  } else if (t === "special") {
+    b = { type: "action", value: document.getElementById("ss").value };
+  } else if (t === "command") {
+    b = { type: "command", command: document.getElementById("ci").value };
+  } else if (t === "shortcut") {
+    b = {
+      type: "keyboard", virtualKey: parseInt(document.getElementById("sk").value),
+      scanCode: 0, extended: false,
+      mods: {
+        ctrl: document.getElementById("mc").checked, alt: document.getElementById("ma").checked,
+        shift: document.getElementById("ms").checked, win: document.getElementById("mw").checked
+      }
+    };
+  } else {
+    b = { type: "keyboard", virtualKey: parseInt(document.getElementById("ks").value), scanCode: 0, extended: false };
+  }
+
+  bindings[selectedButton] = [b];
+  setLoading("btn-save", true);
+  saveBindings(function() {
+    setLoading("btn-save", false);
+    markCustomButtons();
+    document.getElementById("bd").textContent = describeBinding([b]);
+  });
+}
+
+function resetBinding() {
+  if (!selectedButton) return;
+  delete bindings[selectedButton];
+  setLoading("btn-save", true);
+  saveBindings(function() {
+    setLoading("btn-save", false);
+    selectButton(selectedButton);
+    markCustomButtons();
+    setTimeout(function() {
+      fetch("/api/restart", { method: "POST", headers: fetchHeaders })
+        .then(function() { showToast("Restarting...", "ok"); setTimeout(function() { location.reload(); }, 3000); });
+    }, 500);
+  });
+}
+
+function saveAndRestart() {
+  applyBinding();
+  setLoading("btn-restart", true);
+  setTimeout(function() {
+    fetch("/api/restart", { method: "POST", headers: fetchHeaders })
+      .then(function() {
+        showToast("Restarting service...", "ok");
+        setTimeout(function() { location.reload(); }, 3000);
+      })
+      .catch(function(e) { showToast("Error: " + e, "err"); setLoading("btn-restart", false); });
+  }, 500);
+}
+
+function saveBindings(callback) {
+  var payload = { bindings: {}, scrollExclude: scrollExclude };
+  for (var k in bindings) payload.bindings[k] = bindings[k];
+  fetch("/api/bindings", { method: "POST", headers: fetchHeaders, body: JSON.stringify(payload) })
+    .then(function(r) { return r.json(); })
+    .then(function() { showToast("Saved! Reconnect TV to apply.", "ok"); if (callback) callback(); })
+    .catch(function(e) { showToast("Error: " + e, "err"); if (callback) callback(); });
+}
+
+/* ========================================
+   Scroll exclusions
+   ======================================== */
+function renderExclusions() {
+  var el = document.getElementById("excl-list");
+  el.innerHTML = "";
+  scrollExclude.forEach(function(name, i) {
+    var row = document.createElement("div");
+    row.className = "excl-item";
+    var span = document.createElement("span");
+    span.className = "excl-name";
+    span.textContent = name;
+    var btn = document.createElement("button");
+    btn.className = "excl-rm";
+    btn.textContent = "x";
+    btn.onclick = function() { removeExclusion(i); };
+    row.appendChild(span);
+    row.appendChild(btn);
+    el.appendChild(row);
+  });
+}
+
+function addExclusion() {
+  var v = document.getElementById("excl-input").value.trim();
+  if (v && scrollExclude.indexOf(v) < 0) {
+    scrollExclude.push(v);
+    document.getElementById("excl-input").value = "";
+    renderExclusions();
+    saveBindings();
+  }
+}
+
+function removeExclusion(i) {
+  scrollExclude.splice(i, 1);
+  renderExclusions();
+  saveBindings();
+}
+
+/* ========================================
+   TV Config
+   ======================================== */
+function ipChanged() {
+  var ipSelect = document.getElementById("cfg-ip");
+  var ip = ipSelect.value;
+  for (var i = 0; i < pcInterfaces.length; i++) {
+    if (pcInterfaces[i].ip === ip) {
+      document.getElementById("cfg-mac").value = pcInterfaces[i].mac;
+      document.getElementById("cfg-mask").value = pcInterfaces[i].mask;
       break;
     }
   }
 }
-function saveConfig(){
-  var port=parseInt(document.getElementById("cfg-port").value);
-  if(isNaN(port)||port<1||port>65535){toast("Invalid port number","err");return}
-  var speed=parseFloat(document.getElementById("cfg-speed").value);
-  if(isNaN(speed)||speed<0.1||speed>5.0){toast("Cursor speed must be 0.1-5.0","err");return}
-  var h=document.getElementById("cfg-hdmi").value;
-  var cfg={
-    inputId:"HDMI_"+h,
-    inputAppId:"com.webos.app.hdmi"+h,
-    inputName:"HDMI "+h,
-    inputSource:"ext://hdmi:hdmi"+h,
-    ip:document.getElementById("cfg-ip").value,
-    port:parseInt(document.getElementById("cfg-port").value)||41230,
-    mask:document.getElementById("cfg-mask").value,
-    mac:document.getElementById("cfg-mac").value,
-    appId:"com.cathwyler.magicremoteservice.hdmi"+h,
-    overlay:true,inputDirect:true,
-    longClick:1500,
-    cursorSpeed:parseFloat(document.getElementById("cfg-speed").value)||1.0,
-    extend:true
+
+function saveConfig() {
+  var port = parseInt(document.getElementById("cfg-port").value);
+  if (isNaN(port) || port < 1 || port > 65535) { showToast("Invalid port (1-65535)", "err"); return; }
+  var speed = parseFloat(document.getElementById("cfg-speed").value);
+  if (isNaN(speed) || speed < 0.1 || speed > 5.0) { showToast("Speed must be 0.1-5.0", "err"); return; }
+
+  var h = document.getElementById("cfg-hdmi").value;
+  var cfg = {
+    inputId: "HDMI_" + h, inputAppId: "com.webos.app.hdmi" + h,
+    inputName: "HDMI " + h, inputSource: "ext://hdmi:hdmi" + h,
+    ip: document.getElementById("cfg-ip").value, port: port,
+    mask: document.getElementById("cfg-mask").value, mac: document.getElementById("cfg-mac").value,
+    appId: "com.cathwyler.magicremoteservice.hdmi" + h,
+    overlay: true, inputDirect: true, longClick: 1500, cursorSpeed: speed, extend: true
   };
-  fetch("/api/config",{method:"POST",headers:fetchOpts.headers,body:JSON.stringify(cfg)})
-    .then(function(r){return r.json()})
-    .then(function(d){toast("Config saved! Reinstall TV app to apply.","ok")})
-    .catch(function(e){toast("Error: "+e,"err")});
+
+  setLoading("btn-cfg-save", true);
+  fetch("/api/config", { method: "POST", headers: fetchHeaders, body: JSON.stringify(cfg) })
+    .then(function(r) { return r.json(); })
+    .then(function() { showToast("Config saved! Reinstall TV app to apply.", "ok"); setLoading("btn-cfg-save", false); })
+    .catch(function(e) { showToast("Error: " + e, "err"); setLoading("btn-cfg-save", false); });
 }
-function reinstallTV(){
-  document.getElementById("cfg-status").textContent="Reinstalling TV app... This may take a minute.";
-  fetch("/api/reinstall",{method:"POST",headers:fetchOpts.headers})
-    .then(function(r){return r.json()})
-    .then(function(d){
-      if(d.success) toast("TV app reinstalled!","ok");
-      else toast("Reinstall failed: "+(d.error||"unknown"),"err");
-      document.getElementById("cfg-status").textContent=d.success?"Done!":"Failed: "+(d.error||"");
+
+function reinstallTV() {
+  document.getElementById("cfg-status").textContent = "Reinstalling...";
+  setLoading("btn-cfg-reinstall", true);
+  fetch("/api/reinstall", { method: "POST", headers: fetchHeaders })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      showToast(d.success ? "TV app reinstalled!" : "Failed: " + (d.error || d.message || "unknown"), d.success ? "ok" : "err");
+      document.getElementById("cfg-status").textContent = d.success ? "Done!" : "Failed";
+      setLoading("btn-cfg-reinstall", false);
     })
-    .catch(function(e){toast("Error: "+e,"err");document.getElementById("cfg-status").textContent="Error: "+e});
+    .catch(function(e) { showToast("Error: " + e, "err"); document.getElementById("cfg-status").textContent = ""; setLoading("btn-cfg-reinstall", false); });
 }
 
-// Load PC info for auto-detection
-fetch("/api/pcinfo").then(function(r){return r.json()}).then(function(d){
-  pcInterfaces=d.interfaces||[];
-  var sel=document.getElementById("cfg-ip");
-  sel.innerHTML="";
-  pcInterfaces.forEach(function(iface){
-    var opt=document.createElement("option");
-    opt.value=iface.ip;
-    opt.textContent=iface.ip+" ("+iface.name+")";
-    sel.appendChild(opt);
-  });
-  sel.onchange=ipChanged;
-  if(pcInterfaces.length>0) ipChanged();
-  document.getElementById("cfg-port").value=d.port||41230;
-}).catch(function(){});
+/* ========================================
+   Utilities
+   ======================================== */
+function showToast(msg, type) {
+  var d = document.createElement("div");
+  d.className = "toast toast-" + type;
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(function() { d.remove(); }, 3000);
+}
 
-fetch("/api/settings").then(function(r){return r.json()}).then(function(d){var s=document.getElementById("sb");var safeIp=(d.clientIp||"").replace(/[<>&"']/g,"");s.innerHTML='<div class="chip"><span class="dot dot-g"></span> Port '+d.port+'</div>'+'<div class="chip"><span class="dot '+(d.connectedClients>0?"dot-g":"dot-r")+'"></span> '+(d.connectedClients>0?safeIp+" connected":"No TV")+'</div>'+'<div class="chip"><span class="dot '+(d.inactivity?"dot-y":"dot-g")+'"></span> Shutdown '+(d.inactivity?"On":"Off")+'</div>';if(d.bindings&&d.bindings.bindings){for(var k in d.bindings.bindings)binds[k]=d.bindings.bindings[k]}else if(d.bindings){for(var k in d.bindings){if(Array.isArray(d.bindings[k]))binds[k]=d.bindings[k]}}mark();if(d.scrollExclude){scrollExclude=d.scrollExclude;renderExcl()}});
+function setLoading(btnId, loading) {
+  var btn = document.getElementById(btnId);
+  if (btn) btn.disabled = loading;
+}
+
+function markCustomButtons() {
+  document.querySelectorAll(".btn[data-id]").forEach(function(e) {
+    e.classList.toggle("custom", !!bindings[e.dataset.id]);
+  });
+}
+
+function sanitize(str) {
+  return (str || "").replace(/[<>&"']/g, "");
+}
+
+/* ========================================
+   Status polling (every 10s)
+   ======================================== */
+function updateStatus() {
+  fetch("/api/settings")
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var sb = document.getElementById("sb");
+      var safeIp = sanitize(d.clientIp);
+      var connected = d.connectedClients > 0;
+      sb.innerHTML =
+        '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
+        '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
+        (connected ? safeIp + " connected" : "No TV") + '</div>' +
+        '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
+        (d.inactivity ? "On" : "Off") + '</div>';
+    })
+    .catch(function() {});
+}
+
+/* ========================================
+   Initialization
+   ======================================== */
+
+// Keyboard navigation for buttons
+document.querySelectorAll(".btn[data-id]").forEach(function(el) {
+  el.addEventListener("click", function() { selectButton(el.dataset.id); });
+  el.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectButton(el.dataset.id); }
+  });
+});
+
+// Load PC info
+fetch("/api/pcinfo")
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    pcInterfaces = d.interfaces || [];
+    var ipSelect = document.getElementById("cfg-ip");
+    ipSelect.innerHTML = "";
+    pcInterfaces.forEach(function(iface) {
+      var opt = document.createElement("option");
+      opt.value = iface.ip;
+      opt.textContent = iface.ip + " (" + sanitize(iface.name) + ")";
+      ipSelect.appendChild(opt);
+    });
+    ipSelect.onchange = ipChanged;
+    if (pcInterfaces.length > 0) ipChanged();
+    document.getElementById("cfg-port").value = d.port || 41230;
+  })
+  .catch(function() {});
+
+// Load settings + bindings
+fetch("/api/settings")
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    // Status bar
+    var sb = document.getElementById("sb");
+    var safeIp = sanitize(d.clientIp);
+    var connected = d.connectedClients > 0;
+    sb.innerHTML =
+      '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
+      '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
+      (connected ? safeIp + " connected" : "No TV") + '</div>' +
+      '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
+      (d.inactivity ? "On" : "Off") + '</div>';
+
+    // Load bindings
+    if (d.bindings && d.bindings.bindings) {
+      for (var k in d.bindings.bindings) bindings[k] = d.bindings.bindings[k];
+    } else if (d.bindings) {
+      for (var k in d.bindings) {
+        if (Array.isArray(d.bindings[k])) bindings[k] = d.bindings[k];
+      }
+    }
+    markCustomButtons();
+
+    // Load scroll exclusions
+    if (d.scrollExclude) {
+      scrollExclude = d.scrollExclude;
+      renderExclusions();
+    }
+  });
+
+// Load saved TV config to pre-select HDMI
+fetch("/api/config")
+  .then(function(r) { if (r.ok) return r.json(); throw new Error(); })
+  .then(function(cfg) {
+    if (cfg && cfg.inputId) {
+      var num = cfg.inputId.replace("HDMI_", "");
+      document.getElementById("cfg-hdmi").value = num;
+    }
+    if (cfg && cfg.cursorSpeed) {
+      document.getElementById("cfg-speed").value = cfg.cursorSpeed;
+    }
+  })
+  .catch(function() {});
+
+// Poll status every 10s
+setInterval(updateStatus, 10000);
 </script>
 </body></html>
