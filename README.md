@@ -56,7 +56,7 @@ Run as **Administrator**. The installer handles everything:
 | Open Windows menu | Press Green button |
 | Toggle TV keyboard | Press Blue button |
 | Numbers 0-9 | Press number pad |
-| Exit TV app | Double-press Back (within 500ms) |
+| Exit TV app | Hold Back button for 1 second |
 
 All mappings are customizable via the web UI.
 
@@ -141,7 +141,7 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | High CPU usage | Update to v2.2.0+ — fixes timer polling and WebSocket spin bugs |
 | Home launcher pointer blocked | Expected in overlay mode — use D-pad to navigate the TV launcher |
 | TV app shows after long delay | Normal on cold boot — webOS takes ~60s to initialize developer apps |
-| Can't exit TV app | Double-press the Back button quickly (within 500ms) |
+| Can't exit TV app | Press and hold the Back button for 1 second |
 | Forgot what a button does | Hover it in the web UI — shows current binding |
 
 ## Building from Source

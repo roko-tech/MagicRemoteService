@@ -864,24 +864,24 @@ function SubscriptionDomEvent() {
 		});
 	}
 
-	var iLastBackPress = 0;
+	var iBackLongPressTimer = 0;
+	var bBackExitTriggered = false;
 	document.addEventListener("keydown", function(inEvent) {
-		// Double-press Back (461) within 500ms to exit the app
-		if(inEvent.keyCode === 461) {
-			var iNow = Date.now();
-			if(iNow - iLastBackPress < 500) {
+		// Long-press Back (461) for 1 second to exit the app
+		if(inEvent.keyCode === 461 && !iBackLongPressTimer && !inEvent.repeat) {
+			bBackExitTriggered = false;
+			iBackLongPressTimer = setTimeout(function() {
+				iBackLongPressTimer = 0;
+				bBackExitTriggered = true;
 				Toast("", "Closing app...");
 				setTimeout(function() {
 					try {
 						if(typeof webOSSystem !== "undefined") webOSSystem.close();
-						else if(typeof PalmSystem !== "undefined") PalmSystem.stagePreparing(), window.close();
+						else if(typeof PalmSystem !== "undefined") { PalmSystem.stagePreparing(); window.close(); }
 						else window.close();
 					} catch(e) { window.close(); }
-				}, 500);
-				return;
-			}
-			iLastBackPress = iNow;
-			Toast("", "Press Back again to exit");
+				}, 400);
+			}, 1000);
 		}
 		SendKey({
 			usC: inEvent.keyCode,
@@ -891,6 +891,11 @@ function SubscriptionDomEvent() {
 	});
 
 	document.addEventListener("keyup", function(inEvent) {
+		// Cancel long-press exit if Back is released early
+		if(inEvent.keyCode === 461 && iBackLongPressTimer) {
+			clearTimeout(iBackLongPressTimer);
+			iBackLongPressTimer = 0;
+		}
 		SendKey({
 			usC: inEvent.keyCode,
 			bS: false
