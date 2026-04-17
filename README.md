@@ -6,6 +6,8 @@ Control your Windows PC with the LG Magic Remote. Point, click, scroll, and type
 
 Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRemoteService) — tested on LG C2 (webOS 25), LG C1 (webOS 6.0), Windows 10/11.
 
+**v2.2.0** — 28 bug fixes including buffer overflow protection, WebSocket security hardening, connection state machine, XSS prevention, and named constants. [Changelog](https://github.com/roko-tech/MagicRemoteService/releases/tag/v2.2.0)
+
 ## Quick Start
 
 ### Prerequisites
@@ -73,6 +75,8 @@ Disable smooth scrolling for specific apps (e.g. PotPlayer volume control). Add 
 | Service keepalive | Prevents webOS 25 from killing the TV service |
 | Node.js v22+ | Polyfill for ares-cli compatibility |
 | Low CPU | Near 0% idle (fixed timer + WebSocket spin bugs) |
+| Security hardened | Buffer overflow protection, command injection blocking, XSS prevention, pipe access control |
+| Connection state machine | Prevents race conditions during connect/disconnect cycles |
 
 ## Default Key Mappings
 
