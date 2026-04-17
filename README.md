@@ -56,6 +56,7 @@ Run as **Administrator**. The installer handles everything:
 | Open Windows menu | Press Green button |
 | Toggle TV keyboard | Press Blue button |
 | Numbers 0-9 | Press number pad |
+| Exit TV app | Double-press Back (within 500ms) |
 
 All mappings are customizable via the web UI.
 
@@ -82,6 +83,14 @@ Click any button on the visual LG remote to remap it:
 ### Smooth Scroll Exclusions
 
 Some apps (like media players) use scroll for volume control. Add their process names to disable momentum scrolling — sends single steps instead.
+
+### Visual Remote Tooltips
+
+Hover any button on the visual remote to see its current binding (e.g. "Green → Win" or "Red → Shutdown PC"). Green dots indicate custom (non-default) bindings.
+
+### Reset All Bindings
+
+A single button at the bottom of the config panel resets all buttons to their default bindings (with confirmation).
 
 ## How It Works
 
@@ -113,6 +122,12 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 - **Service keepalive** — prevents webOS 25 from killing the TV service
 - **One-click install** — `install.bat` handles all prerequisites
 
+## Keyboard Shortcuts in Web UI
+
+- **Tab** — navigate between remote buttons
+- **Enter / Space** — select focused button
+- **Enter** in scroll exclusion input — add to list
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -126,6 +141,8 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | High CPU usage | Update to v2.2.0+ — fixes timer polling and WebSocket spin bugs |
 | Home launcher pointer blocked | Expected in overlay mode — use D-pad to navigate the TV launcher |
 | TV app shows after long delay | Normal on cold boot — webOS takes ~60s to initialize developer apps |
+| Can't exit TV app | Double-press the Back button quickly (within 500ms) |
+| Forgot what a button does | Hover it in the web UI — shows current binding |
 
 ## Building from Source
 
