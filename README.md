@@ -156,13 +156,14 @@ Requires Visual Studio 2022 (or Build Tools) and .NET Framework 4.7.2.
 
 ## Security
 
-- **Device token auth** — the TV presents a shared token (generated into `config.json` at install) in the WebSocket URL; connections without it are rejected, so other devices on your LAN can't drive the PC. Leave the token empty to fall back to open/trusted-LAN mode.
-- **Local network only** — no encryption between TV and PC
+- **Device token auth** — the TV presents a shared token (generated into `config.json` at install) in the WebSocket URL; connections without the matching token are rejected, so other devices on your LAN can't drive the PC. The installer keeps the PC and TV tokens in sync; if you set a token, **every** TV must carry the same one — a PC-side token with an un-updated TV will silently reject that TV. Clear the `token` field in `tv-config.json` (next to the exe) to revert to open mode.
+  - *What the token protects against:* blind LAN devices and malicious web pages (which can neither read it cross-origin nor sniff your wire). *What it does **not**:* the token is sent in cleartext over `ws://` (no TLS), so a passive sniffer on your own network segment could capture and replay it. It raises the bar within a trusted LAN; it is not a substitute for one.
+- **Local network only** — no encryption between TV and PC. Don't use on an untrusted network.
 - **Buffer overflow protection** — WebSocket frame bounds checking (overflow-safe length validation)
 - **Command injection blocking** — shell metacharacters rejected in key bindings (note: a command binding still runs the program you configure; the filter only blocks shell chaining)
 - **XSS prevention** — user input sanitized in web UI
 - **Pipe access control** — named pipe restricted to authenticated users
-- **CSRF protection** — mutating POST requests are rejected server-side unless they carry the `X-Requested-With` header (which cross-origin pages can't set without a CORS preflight)
+- **CSRF protection** — mutating POST requests are rejected server-side unless they carry the `X-Requested-With` header (which cross-origin pages can't set without a CORS preflight). If you script the HTTP API directly, send that header on POSTs.
 
 Don't enter passwords via the remote.
 

@@ -195,6 +195,7 @@ namespace MagicRemoteService {
 					string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 					LoadScrollExclude();
 					this.LoadToken();
+					Service.Log(string.IsNullOrEmpty(this.strToken) ? "Device token auth: disabled (open mode)" : "Device token auth: enabled");
 					// Always seed code defaults first so any button missing from
 					// bindings.json / registry keeps a working default instead of going dead.
 					this.LoadDefaultBindings();
@@ -516,6 +517,20 @@ namespace MagicRemoteService {
 					}
 				}
 			} catch { this.strToken = ""; }
+		}
+		private static string ExtractQueryToken(string strHandshake) {
+			System.Text.RegularExpressions.Match mTarget = System.Text.RegularExpressions.Regex.Match(strHandshake, @"^GET\s+(\S+)\s+HTTP/", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			if(!mTarget.Success) return "";
+			string strTarget = mTarget.Groups[1].Value;
+			int iQuery = strTarget.IndexOf('?');
+			if(iQuery < 0) return "";
+			foreach(string strPair in strTarget.Substring(iQuery + 1).Split('&')) {
+				int iEq = strPair.IndexOf('=');
+				if(iEq > 0 && strPair.Substring(0, iEq) == "t") {
+					try { return System.Uri.UnescapeDataString(strPair.Substring(iEq + 1)); } catch { return strPair.Substring(iEq + 1); }
+				}
+			}
+			return "";
 		}
 		private void LoadDefaultBindings() {
 			this.dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
@@ -1418,7 +1433,7 @@ namespace MagicRemoteService {
 							if(!mWebSocketKey.Success || string.IsNullOrEmpty(mWebSocketKey.Groups[1].Value)) {
 								mreClientStop.Set();
 								Service.Warn("Invalid WebSocket handshake: missing Sec-WebSocket-Key on socket [" + socClient.GetHashCode() + "]");
-							} else if(!string.IsNullOrEmpty(this.strToken) && strHandshake.IndexOf("?t=" + this.strToken, System.StringComparison.Ordinal) < 0) {
+							} else if(!string.IsNullOrEmpty(this.strToken) && !string.Equals(ExtractQueryToken(strHandshake), this.strToken, System.StringComparison.Ordinal)) {
 								// Token auth: when a token is configured (tv-config.json), only a client that
 								// presents it in the WS URL (ws://host:port/?t=TOKEN) is accepted. Empty = open.
 								mreClientStop.Set();
@@ -1446,7 +1461,13 @@ namespace MagicRemoteService {
 							Service.Warn("Connexion refused on socket [" + socClient.GetHashCode() + "]");
 						}
 
-						if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
+						if(mreClientStop.WaitOne(System.TimeSpan.Zero)) {
+							// Handshake rejected (bad key / wrong token / non-GET): send a definitive 403
+							// then close. A bare connection-close makes standard HTTP clients retry on
+							// connection-reset; a real response avoids that and frees the socket immediately.
+							try { socClient.Send(System.Text.Encoding.UTF8.GetBytes("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")); } catch {}
+							try { socClient.Close(); } catch {}
+						} else if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
 							ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 						}
 						System.Threading.Thread.Sleep(1);
