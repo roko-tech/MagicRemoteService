@@ -120,6 +120,7 @@ var aSensor = {
 	dSpeed: 9,
 };
 var dCursorSpeed = 1.0;
+var strToken = "";
 var strAppId = "com.cathwyler.magicremoteservice";
 
 var strPath = webOS.fetchAppRootPath();
@@ -145,6 +146,7 @@ function LoadConfig() {
 			if(cfg.inputDirect !== undefined) bInputDirect = cfg.inputDirect;
 			if(cfg.longClick) uiLongClick = cfg.longClick;
 			if(cfg.cursorSpeed) dCursorSpeed = cfg.cursorSpeed;
+			if(cfg.token) strToken = cfg.token;
 		}
 	} catch(e) {
 		// config.json not found or invalid — use defaults
@@ -1061,7 +1063,7 @@ function DiscoverService(fCallback) {
 	});
 }
 function SocketOpen() {
-	socClient = new WebSocket("ws://" + strIP + ":" + uiPort);
+	socClient = new WebSocket("ws://" + strIP + ":" + uiPort + (strToken ? "/?t=" + encodeURIComponent(strToken) : ""));
 	socClient.binaryType = "arraybuffer";
 	socClient.onopen = function(e) {
 		iConnectionState = CONNECTION_STATE.CONNECTED;

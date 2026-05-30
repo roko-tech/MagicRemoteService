@@ -315,6 +315,7 @@ var bindings = {};
 var selectedButton = null;
 var scrollExclude = [];
 var pcInterfaces = [];
+var cfgToken = "";
 var fetchHeaders = { "X-Requested-With": "MagicRemoteService" };
 
 /* ========================================
@@ -490,7 +491,7 @@ function saveBindings(callback) {
   for (var k in bindings) payload.bindings[k] = bindings[k];
   fetch("/api/bindings", { method: "POST", headers: fetchHeaders, body: JSON.stringify(payload) })
     .then(function(r) { return r.json(); })
-    .then(function() { showToast("Saved! Reconnect TV to apply.", "ok"); if (callback) callback(); })
+    .then(function() { showToast("Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(); })
     .catch(function(e) { showToast("Error: " + e, "err"); if (callback) callback(); });
 }
 
@@ -560,7 +561,7 @@ function saveConfig() {
     ip: document.getElementById("cfg-ip").value, port: port,
     mask: document.getElementById("cfg-mask").value, mac: document.getElementById("cfg-mac").value,
     appId: "com.cathwyler.magicremoteservice.hdmi" + h,
-    overlay: true, inputDirect: true, longClick: 1500, cursorSpeed: speed, extend: true
+    overlay: true, inputDirect: true, longClick: 1500, cursorSpeed: speed, extend: true, token: cfgToken
   };
 
   setLoading("btn-cfg-save", true);
@@ -703,6 +704,7 @@ fetch("/api/config")
     if (cfg && cfg.cursorSpeed) {
       document.getElementById("cfg-speed").value = cfg.cursorSpeed;
     }
+    if (cfg && cfg.token) cfgToken = cfg.token;
   })
   .catch(function() {});
 

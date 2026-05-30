@@ -156,14 +156,15 @@ Requires Visual Studio 2022 (or Build Tools) and .NET Framework 4.7.2.
 
 ## Security
 
+- **Device token auth** — the TV presents a shared token (generated into `config.json` at install) in the WebSocket URL; connections without it are rejected, so other devices on your LAN can't drive the PC. Leave the token empty to fall back to open/trusted-LAN mode.
 - **Local network only** — no encryption between TV and PC
-- **Buffer overflow protection** — WebSocket frame bounds checking
-- **Command injection blocking** — shell metacharacters rejected in key bindings
+- **Buffer overflow protection** — WebSocket frame bounds checking (overflow-safe length validation)
+- **Command injection blocking** — shell metacharacters rejected in key bindings (note: a command binding still runs the program you configure; the filter only blocks shell chaining)
 - **XSS prevention** — user input sanitized in web UI
 - **Pipe access control** — named pipe restricted to authenticated users
-- **CSRF headers** — POST requests require X-Requested-With header
+- **CSRF protection** — mutating POST requests are rejected server-side unless they carry the `X-Requested-With` header (which cross-origin pages can't set without a CORS preflight)
 
-Don't use on untrusted networks. Don't enter passwords via the remote.
+Don't enter passwords via the remote.
 
 ## License
 

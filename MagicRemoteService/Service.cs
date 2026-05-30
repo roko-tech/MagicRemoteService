@@ -24,6 +24,7 @@ namespace MagicRemoteService {
 	}
 	public partial class Service : System.ServiceProcess.ServiceBase {
 		private int iPort;
+		private string strToken = "";
 		private volatile bool bInactivity;
 		private int iTimeoutInactivity;
 		private volatile bool bVideoInput;
@@ -193,42 +194,15 @@ namespace MagicRemoteService {
 					// Try loading from bindings.json first (next to exe)
 					string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 					LoadScrollExclude();
+					this.LoadToken();
+					// Always seed code defaults first so any button missing from
+					// bindings.json / registry keeps a working default instead of going dead.
+					this.LoadDefaultBindings();
 					if(System.IO.File.Exists(strBindingsPath)) {
 						this.LoadBindingsFromJson(strBindingsPath);
 					} else {
 					Microsoft.Win32.RegistryKey rkMagicRemoteServiceRemoteBind = (MagicRemoteService.Program.bElevated ? Microsoft.Win32.Registry.LocalMachine : Microsoft.Win32.Registry.CurrentUser).OpenSubKey(@"Software\MagicRemoteService\Remote\Bind");
-					if(rkMagicRemoteServiceRemoteBind == null) {
-						this.dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
-						this.dBind[0x0002] = new Bind[] { new BindMouse(BindMouseValue.Right) };
-						this.dBind[0x0008] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Back, 0x0E, false) };
-						this.dBind[0x000D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Enter, 0x1C, false) };
-						this.dBind[0x0021] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.C, 0x2E, false) };
-						this.dBind[0x0022] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.V, 0x2F, false) };
-						this.dBind[0x0025] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Left, 0x4B, true) };
-						this.dBind[0x0026] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Up, 0x48, true) };
-						this.dBind[0x0027] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Right, 0x4D, true) };
-						this.dBind[0x0028] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Down, 0x50, true) };
-						this.dBind[0x0030] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad0, 0x52, false) };
-						this.dBind[0x0031] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad1, 0x4F, false) };
-						this.dBind[0x0032] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad2, 0x50, false) };
-						this.dBind[0x0033] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad3, 0x51, false) };
-						this.dBind[0x0034] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad4, 0x4B, false) };
-						this.dBind[0x0035] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad5, 0x4C, false) };
-						this.dBind[0x0036] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad6, 0x4D, false) };
-						this.dBind[0x0037] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad7, 0x47, false) };
-						this.dBind[0x0038] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad8, 0x48, false) };
-						this.dBind[0x0039] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad9, 0x49, false) };
-						this.dBind[0x0193] = new Bind[] { new BindAction(BindActionValue.Shutdown) };
-						this.dBind[0x0194] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.LWin, 0x5B, true) };
-						this.dBind[0x0195] = new Bind[] { new BindMouse(BindMouseValue.Right) };
-						this.dBind[0x0196] = new Bind[] { new BindAction(BindActionValue.Keyboard) };
-						this.dBind[0x01CD] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Escape, 0x01, false) };
-						this.dBind[0x019F] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Play, 0x00, false) };
-						this.dBind[0x0013] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Pause, 0x00, false) };
-						this.dBind[0x01A1] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaNextTrack, 0x00, false) };
-						this.dBind[0x019C] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPreviousTrack, 0x00, false) };
-						this.dBind[0x019D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaStop, 0x00, false) };
-					} else {
+					if(rkMagicRemoteServiceRemoteBind != null) {
 						foreach(string sKey in rkMagicRemoteServiceRemoteBind.GetSubKeyNames()) {
 							System.Collections.Generic.List<Bind> liBind = new System.Collections.Generic.List<Bind>();
 							Microsoft.Win32.RegistryKey rkMagicRemoteServiceRemoteBindKey = rkMagicRemoteServiceRemoteBind.OpenSubKey(sKey);
@@ -531,6 +505,50 @@ namespace MagicRemoteService {
 				return piProcess.dwProcessId;
 			}
 		}
+		private void LoadToken() {
+			try {
+				string strPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
+				if(System.IO.File.Exists(strPath)) {
+					using(System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(strPath))) {
+						if(doc.RootElement.TryGetProperty("token", out var elToken) && elToken.ValueKind == System.Text.Json.JsonValueKind.String) {
+							this.strToken = elToken.GetString() ?? "";
+						}
+					}
+				}
+			} catch { this.strToken = ""; }
+		}
+		private void LoadDefaultBindings() {
+			this.dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
+			this.dBind[0x0002] = new Bind[] { new BindMouse(BindMouseValue.Right) };
+			this.dBind[0x0008] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Back, 0x0E, false) };
+			this.dBind[0x000D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Enter, 0x1C, false) };
+			this.dBind[0x0021] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.C, 0x2E, false) };
+			this.dBind[0x0022] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.V, 0x2F, false) };
+			this.dBind[0x0025] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Left, 0x4B, true) };
+			this.dBind[0x0026] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Up, 0x48, true) };
+			this.dBind[0x0027] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Right, 0x4D, true) };
+			this.dBind[0x0028] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Down, 0x50, true) };
+			this.dBind[0x0030] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad0, 0x52, false) };
+			this.dBind[0x0031] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad1, 0x4F, false) };
+			this.dBind[0x0032] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad2, 0x50, false) };
+			this.dBind[0x0033] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad3, 0x51, false) };
+			this.dBind[0x0034] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad4, 0x4B, false) };
+			this.dBind[0x0035] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad5, 0x4C, false) };
+			this.dBind[0x0036] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad6, 0x4D, false) };
+			this.dBind[0x0037] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad7, 0x47, false) };
+			this.dBind[0x0038] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad8, 0x48, false) };
+			this.dBind[0x0039] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad9, 0x49, false) };
+			this.dBind[0x0193] = new Bind[] { new BindAction(BindActionValue.Shutdown) };
+			this.dBind[0x0194] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.LWin, 0x5B, true) };
+			this.dBind[0x0195] = new Bind[] { new BindMouse(BindMouseValue.Right) };
+			this.dBind[0x0196] = new Bind[] { new BindAction(BindActionValue.Keyboard) };
+			this.dBind[0x01CD] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Escape, 0x01, false) };
+			this.dBind[0x019F] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Play, 0x00, false) };
+			this.dBind[0x0013] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Pause, 0x00, false) };
+			this.dBind[0x01A1] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaNextTrack, 0x00, false) };
+			this.dBind[0x019C] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPreviousTrack, 0x00, false) };
+			this.dBind[0x019D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaStop, 0x00, false) };
+		}
 		private void LoadBindingsFromJson(string strPath) {
 			try {
 				string strJson = System.IO.File.ReadAllText(strPath);
@@ -548,6 +566,14 @@ namespace MagicRemoteService {
 									liBind.Add(new BindMouse(bmv));
 									break;
 								case "keyboard":
+									// Web UI encodes shortcuts as a single key + "mods" object; expand
+									// each modifier into its own keyboard bind so the chord actually fires.
+									if(el.TryGetProperty("mods", out System.Text.Json.JsonElement elMods) && elMods.ValueKind == System.Text.Json.JsonValueKind.Object) {
+										if(elMods.TryGetProperty("ctrl", out System.Text.Json.JsonElement elCtrl) && elCtrl.ValueKind == System.Text.Json.JsonValueKind.True) liBind.Add(new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false));
+										if(elMods.TryGetProperty("alt", out System.Text.Json.JsonElement elAlt) && elAlt.ValueKind == System.Text.Json.JsonValueKind.True) liBind.Add(new BindKeyboard((byte)System.Windows.Forms.Keys.Menu, 0x38, false));
+										if(elMods.TryGetProperty("shift", out System.Text.Json.JsonElement elShift) && elShift.ValueKind == System.Text.Json.JsonValueKind.True) liBind.Add(new BindKeyboard((byte)System.Windows.Forms.Keys.ShiftKey, 0x2A, false));
+										if(elMods.TryGetProperty("win", out System.Text.Json.JsonElement elWin) && elWin.ValueKind == System.Text.Json.JsonValueKind.True) liBind.Add(new BindKeyboard((byte)System.Windows.Forms.Keys.LWin, 0x5B, true));
+									}
 									liBind.Add(new BindKeyboard((byte)el.GetProperty("virtualKey").GetInt32(), (byte)el.GetProperty("scanCode").GetInt32(), el.GetProperty("extended").GetBoolean()));
 									break;
 								case "action":
@@ -586,10 +612,18 @@ namespace MagicRemoteService {
 					if(ctx != null) {
 						try {
 							string strReqPath = ctx.Request.Url.AbsolutePath;
-							if(strReqPath == "/api/settings" && ctx.Request.HttpMethod == "GET") {
+							if(ctx.Request.HttpMethod == "POST" && string.IsNullOrEmpty(ctx.Request.Headers["X-Requested-With"])) {
+								// CSRF guard: a cross-origin page can't set a custom header without a CORS
+								// preflight (never granted here), so a missing header means a forged request.
+								ctx.Response.StatusCode = 403;
+								byte[] bufForbidden = System.Text.Encoding.UTF8.GetBytes("{\"error\":\"forbidden\"}");
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = bufForbidden.Length;
+								ctx.Response.OutputStream.Write(bufForbidden, 0, bufForbidden.Length);
+							} else if(strReqPath == "/api/settings" && ctx.Request.HttpMethod == "GET") {
 								string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 								string strBindings = System.IO.File.Exists(strBindingsFile) ? System.IO.File.ReadAllText(strBindingsFile) : "{}";
-								string strExclude = "[" + string.Join(",", System.Linq.Enumerable.Select(hsScrollExclude, s => "\"" + s + "\"")) + "]";
+								string strExclude = System.Text.Json.JsonSerializer.Serialize(hsScrollExclude);
 								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"connectedClients\":" + Service.iConnectedClients + ",\"clientIp\":\"" + Service.strConnectedClientIp + "\",\"scrollExclude\":" + strExclude + ",\"bindings\":" + strBindings + "}";
 								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strJson);
 								ctx.Response.ContentType = "application/json";
@@ -637,13 +671,6 @@ namespace MagicRemoteService {
 									ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 									Service.Log("Key bindings saved via web UI");
 								}
-							} else if(strReqPath == "/api/config" && ctx.Request.HttpMethod == "GET") {
-								string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
-								string strCfgContent = System.IO.File.Exists(strConfigFile) ? System.IO.File.ReadAllText(strConfigFile) : "{}";
-								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strCfgContent);
-								ctx.Response.ContentType = "application/json";
-								ctx.Response.ContentLength64 = buf.Length;
-								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
 							} else if(strReqPath == "/api/config" && ctx.Request.HttpMethod == "GET") {
 								string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
 								string strCfgContent = System.IO.File.Exists(strConfigFile) ? System.IO.File.ReadAllText(strConfigFile) : "{}";
@@ -1391,6 +1418,11 @@ namespace MagicRemoteService {
 							if(!mWebSocketKey.Success || string.IsNullOrEmpty(mWebSocketKey.Groups[1].Value)) {
 								mreClientStop.Set();
 								Service.Warn("Invalid WebSocket handshake: missing Sec-WebSocket-Key on socket [" + socClient.GetHashCode() + "]");
+							} else if(!string.IsNullOrEmpty(this.strToken) && strHandshake.IndexOf("?t=" + this.strToken, System.StringComparison.Ordinal) < 0) {
+								// Token auth: when a token is configured (tv-config.json), only a client that
+								// presents it in the WS URL (ws://host:port/?t=TOKEN) is accepted. Empty = open.
+								mreClientStop.Set();
+								Service.Warn("Rejected WebSocket: invalid/missing token on socket [" + socClient.GetHashCode() + "]");
 							} else {
 								using(System.Security.Cryptography.SHA1 sha1 = System.Security.Cryptography.SHA1.Create()) {
 									socClient.Send(System.Text.Encoding.UTF8.GetBytes(
@@ -1474,8 +1506,9 @@ namespace MagicRemoteService {
 									ulOffsetData = ulOffsetMask;
 								}
 
-								// Validate frame data fits within received message and buffer
-								if(ulOffsetData + ulLenData > (ulong)tabData.Length || ulOffsetData + ulLenData > ulLenMessage) {
+								// Validate frame data fits within received message (subtraction avoids ulong overflow;
+								// ulLenMessage = BytesTransferred is always <= tabData.Length)
+								if(ulOffsetData > ulLenMessage || ulLenData > ulLenMessage - ulOffsetData) {
 									Service.Warn("WebSocket frame data exceeds buffer bounds on socket [" + socClient.GetHashCode() + "]");
 									break;
 								}
