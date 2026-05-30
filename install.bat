@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo   MagicRemoteService Installer v2.1.0
+echo   MagicRemoteService Installer v2.2.0
 echo ========================================
 echo.
 
@@ -297,10 +297,14 @@ echo Generating config.json...
 set "CFG_IP=!PC_IP!"
 if "!CFG_IP!"=="" set "CFG_IP=127.0.0.1"
 
-powershell -Command "$cfg = [ordered]@{inputId='!HDMI_ID!';inputAppId='com.webos.app.!HDMI_SHORT!';inputName='!HDMI_NAME!';inputSource='!HDMI_SRC!';ip='!CFG_IP!';port=[int]!PORT!;mask='!SUBNET!';mac='!PC_MAC!';appId='!APP_ID!';overlay=$true;inputDirect=$true;longClick=[int]1500;cursorSpeed=[double]1.0;extend=$true}; $json = $cfg | ConvertTo-Json; [System.IO.File]::WriteAllText('!BUILD!\MagicRemoteService\config.json', $json); [System.IO.File]::WriteAllText('!BUILD!\Service\config.json', $json)"
+:: Device token: reuse the PC service's existing one if present, else generate a new one
+set "TOKEN="
+for /f "usebackq delims=" %%t in (`powershell -NoProfile -Command "try { $r=(Invoke-WebRequest 'http://localhost:41231/api/config' -UseBasicParsing -TimeoutSec 4).Content; $c=ConvertFrom-Json $r; if($c.token){$c.token}else{[guid]::NewGuid().ToString('N')} } catch { [guid]::NewGuid().ToString('N') }"`) do set "TOKEN=%%t"
+
+powershell -Command "$cfg = [ordered]@{inputId='!HDMI_ID!';inputAppId='com.webos.app.!HDMI_SHORT!';inputName='!HDMI_NAME!';inputSource='!HDMI_SRC!';ip='!CFG_IP!';port=[int]!PORT!;mask='!SUBNET!';mac='!PC_MAC!';appId='!APP_ID!';overlay=$true;inputDirect=$true;longClick=[int]1500;cursorSpeed=[double]1.0;extend=$true;token='!TOKEN!'}; $json = $cfg | ConvertTo-Json; [System.IO.File]::WriteAllText('!BUILD!\MagicRemoteService\config.json', $json); [System.IO.File]::WriteAllText('!BUILD!\Service\config.json', $json)"
 
 :: Replace IDs in webOS packaging files only
-powershell -Command "$c = Get-Content '!BUILD!\MagicRemoteService\appinfo.json' -Raw; $c = $c -replace '\"id\": \"com.cathwyler.magicremoteservice\"', '\"id\": \"!APP_ID!\"'; $c = $c -replace '\"version\": \"1.0.0\"', '\"version\": \"2.1.0\"'; $c = $c -replace '\"appDescription\": \"HDMI\"', '\"appDescription\": \"!HDMI_NAME!\"'; Set-Content '!BUILD!\MagicRemoteService\appinfo.json' $c -NoNewline"
+powershell -Command "$c = Get-Content '!BUILD!\MagicRemoteService\appinfo.json' -Raw; $c = $c -replace '\"id\": \"com.cathwyler.magicremoteservice\"', '\"id\": \"!APP_ID!\"'; $c = $c -replace '\"version\": \"1.0.0\"', '\"version\": \"2.2.0\"'; $c = $c -replace '\"appDescription\": \"HDMI\"', '\"appDescription\": \"!HDMI_NAME!\"'; Set-Content '!BUILD!\MagicRemoteService\appinfo.json' $c -NoNewline"
 powershell -Command "(Get-Content '!BUILD!\Service\services.json' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!BUILD!\Service\services.json' -NoNewline"
 powershell -Command "(Get-Content '!BUILD!\Service\package.json' -Raw) -replace 'com.cathwyler.magicremoteservice.service', '!SVC_ID!' | Set-Content '!BUILD!\Service\package.json' -NoNewline"
 
@@ -333,6 +337,9 @@ if !errorlevel! neq 0 (
     exit /b 1
 )
 popd
+
+echo Applying device token to PC service...
+powershell -NoProfile -Command "try { $cfg = Get-Content '!BUILD!\MagicRemoteService\config.json' -Raw; $null = Invoke-WebRequest -Uri 'http://localhost:41231/api/config' -Method POST -Headers @{'X-Requested-With'='MagicRemoteService'} -Body $cfg -UseBasicParsing -TimeoutSec 5; $null = Invoke-WebRequest -Uri 'http://localhost:41231/api/restart' -Method POST -Headers @{'X-Requested-With'='MagicRemoteService'} -UseBasicParsing -TimeoutSec 5; Write-Host '  Token applied to PC service (restarting).' } catch { Write-Host '  (PC service not reachable on localhost; TV will use open mode.)' }"
 
 echo.
 echo [OK] TV App installed!
