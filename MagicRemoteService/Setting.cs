@@ -377,7 +377,7 @@ namespace MagicRemoteService {
 				this.dBindControl[0x0195].Value = new Bind[] { new BindMouse(BindMouseValue.Right) };
 				this.dBindControl[0x0196].Value = new Bind[] { new BindAction(BindActionValue.Keyboard) };
 				this.dBindControl[0x01CD].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Escape, 0x01, false) };
-				this.dBindControl[0x019F].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Play, 0x00, false) };
+				this.dBindControl[0x019F].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPlayPause, 0x00, false) };
 				this.dBindControl[0x0013].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Pause, 0x00, false) };
 				this.dBindControl[0x01A1].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaNextTrack, 0x00, false) };
 				this.dBindControl[0x019C].Value = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPreviousTrack, 0x00, false) };

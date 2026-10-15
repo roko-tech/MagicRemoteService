@@ -56,7 +56,7 @@ Run as **Administrator**. The installer handles everything:
 | Open Windows menu | Press Green button |
 | Toggle TV keyboard | Press Blue button |
 | Numbers 0-9 | Press number pad |
-| Media keys | On remotes that have them: Play, Pause and Stop send the Windows media keys; Fast-forward and Rewind send Next and Previous track |
+| Media keys | On remotes that have them: Play toggles play/pause, Stop stops, Fast-forward and Rewind skip to the next and previous track, and Pause sends the keyboard Pause key |
 | Exit TV app | Hold Back button for 1 second |
 
 All mappings are customizable via the web UI.
