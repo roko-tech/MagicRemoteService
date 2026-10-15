@@ -1199,23 +1199,40 @@ namespace MagicRemoteService {
 			}
 		}
 		private void ThreadClient(System.Net.Sockets.Socket socClient) {
+			System.Threading.AutoResetEvent areClientReceiveAsyncCompleted = null;
+			System.Net.Sockets.SocketAsyncEventArgs eaClientReceiveAsync = null;
+			System.Threading.ManualResetEvent mreClientStop = null;
+			System.Timers.Timer tUserInput = null;
+			System.Timers.Timer tPongUserInput = null;
+			System.Timers.Timer tInactivity = null;
+			System.Timers.Timer tVideoInput = null;
+			System.Timers.Timer tPong = null;
+			System.Timers.Timer tPing = null;
+			MagicRemoteService.PowerSettingNotification.NotificationArrivedEventHandler naehPowerSettingNotificationArrived = null;
+			System.Collections.Generic.Dictionary<ushort, WinApi.Input[]> dBindUp = null;
+			System.Collections.Generic.HashSet<ushort> hsKeyDown = new System.Collections.Generic.HashSet<ushort>();
+			bool bConnected = false;
 			try {
 				Service.Log("Socket accepted [" + socClient.GetHashCode() + "]");
 				byte[] tabData = new byte[4096];
-				System.Threading.AutoResetEvent areClientReceiveAsyncCompleted = new System.Threading.AutoResetEvent(false);
+				areClientReceiveAsyncCompleted = new System.Threading.AutoResetEvent(false);
 				void ClientReceiveAsyncCompleted(object o, System.Net.Sockets.SocketAsyncEventArgs e) {
-					areClientReceiveAsyncCompleted.Set();
+					try {
+						areClientReceiveAsyncCompleted.Set();
+					} catch(System.ObjectDisposedException) {
+						// A receive still pending when the socket is closed completes after the cleanup
+					}
 				};
-				System.Net.Sockets.SocketAsyncEventArgs eaClientReceiveAsync = new System.Net.Sockets.SocketAsyncEventArgs();
+				eaClientReceiveAsync = new System.Net.Sockets.SocketAsyncEventArgs();
 				eaClientReceiveAsync.SetBuffer(tabData, 0, tabData.Length);
 				eaClientReceiveAsync.Completed += ClientReceiveAsyncCompleted;
 				if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
 					ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 				}
 
-				System.Threading.ManualResetEvent mreClientStop = new System.Threading.ManualResetEvent(false);
+				mreClientStop = new System.Threading.ManualResetEvent(false);
 
-				System.Timers.Timer tUserInput = new System.Timers.Timer {
+				tUserInput = new System.Timers.Timer {
 					Interval = 500,
 					AutoReset = true
 				};
@@ -1235,16 +1252,19 @@ namespace MagicRemoteService {
 						Service.Log("Client user input activity on socket [" + socClient.GetHashCode() + "]");
 					}
 				};
-				System.Timers.Timer tPongUserInput = new System.Timers.Timer {
+				tPongUserInput = new System.Timers.Timer {
 					Interval = 5000,
 					AutoReset = false
 				};
 				tPongUserInput.Elapsed += delegate (object oSource, System.Timers.ElapsedEventArgs eElapsed) {
-					socClient.Send(Service.tabClose);
-					mreClientStop.Set();
+					try {
+						socClient.Send(Service.tabClose);
+					} finally {
+						mreClientStop.Set();
+					}
 					Service.Warn("Client timeout pong inactivity on socket [" + socClient.GetHashCode() + "]");
 				};
-				System.Timers.Timer tInactivity = new System.Timers.Timer {
+				tInactivity = new System.Timers.Timer {
 					Interval = System.Math.Max(1000, this.iTimeoutInactivity - 300000),
 					AutoReset = false
 				};
@@ -1254,7 +1274,7 @@ namespace MagicRemoteService {
 					Service.Log("Client timeout inactivity on socket [" + socClient.GetHashCode() + "]");
 				};
 
-				System.Timers.Timer tVideoInput = new System.Timers.Timer {
+				tVideoInput = new System.Timers.Timer {
 					Interval = System.Math.Max(1000, this.iTimeoutVideoInput - 300000),
 					AutoReset = false
 				};
@@ -1264,16 +1284,19 @@ namespace MagicRemoteService {
 					Service.Log("Client timeout video input on socket [" + socClient.GetHashCode() + "]");
 				};
 
-				System.Timers.Timer tPong = new System.Timers.Timer {
+				tPong = new System.Timers.Timer {
 					Interval = 5000,
 					AutoReset = false
 				};
 				tPong.Elapsed += delegate (object oSource, System.Timers.ElapsedEventArgs eElapsed) {
-					socClient.Send(Service.tabClose);
-					mreClientStop.Set();
+					try {
+						socClient.Send(Service.tabClose);
+					} finally {
+						mreClientStop.Set();
+					}
 					Service.Warn("Client timeout pong on socket [" + socClient.GetHashCode() + "]");
 				};
-				System.Timers.Timer tPing = new System.Timers.Timer {
+				tPing = new System.Timers.Timer {
 					Interval = 30000,
 					AutoReset = true
 				};
@@ -1298,10 +1321,11 @@ namespace MagicRemoteService {
 						}
 					}
 				};
-				MagicRemoteService.Application.naehPowerSettingNotificationArrived += PowerSettingNotificationArrived;
+				naehPowerSettingNotificationArrived = PowerSettingNotificationArrived;
+				MagicRemoteService.Application.naehPowerSettingNotificationArrived += naehPowerSettingNotificationArrived;
 
 				System.Collections.Generic.Dictionary<ushort, WinApi.Input[]> dBindDown = new System.Collections.Generic.Dictionary<ushort, WinApi.Input[]>();
-				System.Collections.Generic.Dictionary<ushort, WinApi.Input[]> dBindUp = new System.Collections.Generic.Dictionary<ushort, WinApi.Input[]>();
+				dBindUp = new System.Collections.Generic.Dictionary<ushort, WinApi.Input[]>();
 				System.Collections.Generic.Dictionary<ushort, byte[][]> dBindActionDown = new System.Collections.Generic.Dictionary<ushort, byte[][]>();
 				System.Collections.Generic.Dictionary<ushort, string[]> dBindCommandDown = new System.Collections.Generic.Dictionary<ushort, string[]>();
 				foreach(System.Collections.Generic.KeyValuePair<ushort, Bind[]> kvp in this.dBind) {
@@ -1416,6 +1440,8 @@ namespace MagicRemoteService {
 							dBindDown.Add(kvp.Key, liBindDown.ToArray());
 						}
 						if(liBindUp.Count > 0) {
+							// Release in reverse press order (Ctrl+C: C up, then Ctrl up)
+							liBindUp.Reverse();
 							dBindUp.Add(kvp.Key, liBindUp.ToArray());
 						}
 						if(liBindActionDown.Count > 0) {
@@ -1520,60 +1546,79 @@ namespace MagicRemoteService {
 					mreClientStop,
 					areClientReceiveAsyncCompleted
 				};
-				switch(System.Threading.WaitHandle.WaitAny(tabEvent, -1, true)) {
-					case 0:
-						break;
-					case 1:
-						break;
-					case 2:
-						ulong ulLenMessage = (ulong)eaClientReceiveAsync.BytesTransferred;
-						if(tabData[0] == 'G' && tabData[1] == 'E' && tabData[2] == 'T') {
+				while(!bConnected && !mreClientStop.WaitOne(System.TimeSpan.Zero)) {
+					switch(System.Threading.WaitHandle.WaitAny(tabEvent, -1, true)) {
+						case 0:
+							mreClientStop.Set();
+							break;
+						case 1:
+							break;
+						case 2:
+							if(eaClientReceiveAsync.SocketError != System.Net.Sockets.SocketError.Success || eaClientReceiveAsync.BytesTransferred == 0) {
+								mreClientStop.Set();
+								Service.Log("Client connection lost on socket [" + socClient.GetHashCode() + "]");
+								break;
+							}
+							ulong ulLenMessage = (ulong)(eaClientReceiveAsync.Offset + eaClientReceiveAsync.BytesTransferred);
 							string strHandshake = System.Text.Encoding.UTF8.GetString(tabData, 0, (int)ulLenMessage);
-							System.Text.RegularExpressions.Match mWebSocketKey = System.Text.RegularExpressions.Regex.Match(strHandshake, "Sec-WebSocket-Key: (.*)\r\n");
-							if(!mWebSocketKey.Success || string.IsNullOrEmpty(mWebSocketKey.Groups[1].Value)) {
-								mreClientStop.Set();
-								Service.Warn("Invalid WebSocket handshake: missing Sec-WebSocket-Key on socket [" + socClient.GetHashCode() + "]");
-							} else if(!string.IsNullOrEmpty(this.strToken) && !string.Equals(ExtractQueryToken(strHandshake), this.strToken, System.StringComparison.Ordinal)) {
-								// Token auth: when a token is configured (tv-config.json), only a client that
-								// presents it in the WS URL (ws://host:port/?t=TOKEN) is accepted. Empty = open.
-								mreClientStop.Set();
-								Service.Warn("Rejected WebSocket: invalid/missing token on socket [" + socClient.GetHashCode() + "]");
-							} else {
-								using(System.Security.Cryptography.SHA1 sha1 = System.Security.Cryptography.SHA1.Create()) {
-									socClient.Send(System.Text.Encoding.UTF8.GetBytes(
-										"HTTP/1.1 101 Switching Protocols\r\n" +
-										"Connection: Upgrade\r\n" +
-										"Upgrade: websocket\r\n" +
-										"Sec-WebSocket-Accept: " + System.Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(mWebSocketKey.Groups[1].Value.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))) + "\r\n\r\n"));
+							if(strHandshake.IndexOf("\r\n\r\n", System.StringComparison.Ordinal) < 0 && ulLenMessage < (ulong)tabData.Length) {
+								// The handshake may span several reads: receive the rest of its header after the bytes already received
+								eaClientReceiveAsync.SetBuffer((int)ulLenMessage, tabData.Length - (int)ulLenMessage);
+								if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
+									ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 								}
+								break;
+							}
+							if(tabData[0] == 'G' && tabData[1] == 'E' && tabData[2] == 'T') {
+								System.Text.RegularExpressions.Match mWebSocketKey = System.Text.RegularExpressions.Regex.Match(strHandshake, "Sec-WebSocket-Key: (.*)\r\n");
+								if(!mWebSocketKey.Success || string.IsNullOrEmpty(mWebSocketKey.Groups[1].Value)) {
+									mreClientStop.Set();
+									Service.Warn("Invalid WebSocket handshake: missing Sec-WebSocket-Key on socket [" + socClient.GetHashCode() + "]");
+								} else if(!string.IsNullOrEmpty(this.strToken) && !string.Equals(ExtractQueryToken(strHandshake), this.strToken, System.StringComparison.Ordinal)) {
+									// Token auth: when a token is configured (tv-config.json), only a client that
+									// presents it in the WS URL (ws://host:port/?t=TOKEN) is accepted. Empty = open.
+									mreClientStop.Set();
+									Service.Warn("Rejected WebSocket: invalid/missing token on socket [" + socClient.GetHashCode() + "]");
+								} else {
+									using(System.Security.Cryptography.SHA1 sha1 = System.Security.Cryptography.SHA1.Create()) {
+										socClient.Send(System.Text.Encoding.UTF8.GetBytes(
+											"HTTP/1.1 101 Switching Protocols\r\n" +
+											"Connection: Upgrade\r\n" +
+											"Upgrade: websocket\r\n" +
+											"Sec-WebSocket-Accept: " + System.Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.UTF8.GetBytes(mWebSocketKey.Groups[1].Value.Trim() + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))) + "\r\n\r\n"));
+									}
 
-								//TODO Something to ask TV if cursor visible
-								Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
-							System.Threading.Interlocked.Increment(ref Service.iConnectedClients);
-							try { System.Threading.Interlocked.Exchange(ref Service.strConnectedClientIp, ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString()); } catch {}
-								tPing.Start();
-								if(this.bInactivity) {
-									tInactivity.Start();
+									//TODO Something to ask TV if cursor visible
+									Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
+									bConnected = true;
+									System.Threading.Interlocked.Increment(ref Service.iConnectedClients);
+									try { System.Threading.Interlocked.Exchange(ref Service.strConnectedClientIp, ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString()); } catch {}
+									tPing.Start();
+									if(this.bInactivity) {
+										tInactivity.Start();
+									}
+								}
+							} else {
+								mreClientStop.Set();
+								Service.Warn("Connexion refused on socket [" + socClient.GetHashCode() + "]");
+							}
+
+							if(mreClientStop.WaitOne(System.TimeSpan.Zero)) {
+								// Handshake rejected (bad key / wrong token / non-GET): send a definitive 403
+								// then close. A bare connection-close makes standard HTTP clients retry on
+								// connection-reset; a real response avoids that and frees the socket immediately.
+								try { socClient.Send(System.Text.Encoding.UTF8.GetBytes("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")); } catch {}
+								try { socClient.Close(); } catch {}
+							} else {
+								eaClientReceiveAsync.SetBuffer(0, tabData.Length);
+								if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
+									ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 								}
 							}
-						} else {
-							mreClientStop.Set();
-							Service.Warn("Connexion refused on socket [" + socClient.GetHashCode() + "]");
-						}
-
-						if(mreClientStop.WaitOne(System.TimeSpan.Zero)) {
-							// Handshake rejected (bad key / wrong token / non-GET): send a definitive 403
-							// then close. A bare connection-close makes standard HTTP clients retry on
-							// connection-reset; a real response avoids that and frees the socket immediately.
-							try { socClient.Send(System.Text.Encoding.UTF8.GetBytes("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n")); } catch {}
-							try { socClient.Close(); } catch {}
-						} else if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
-							ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
-						}
-						System.Threading.Thread.Sleep(1);
-						break;
-					default:
-						throw new System.Exception("Unmanaged handle error");
+							break;
+						default:
+							throw new System.Exception("Unmanaged handle error");
+					}
 				}
 				while(!mreClientStop.WaitOne(System.TimeSpan.Zero)) {
 					switch(System.Threading.WaitHandle.WaitAny(tabEvent, -1, true)) {
@@ -1584,12 +1629,17 @@ namespace MagicRemoteService {
 						case 1:
 							break;
 						case 2:
-							ulong ulLenMessage = (ulong)eaClientReceiveAsync.BytesTransferred;
+							if(eaClientReceiveAsync.SocketError != System.Net.Sockets.SocketError.Success || eaClientReceiveAsync.BytesTransferred == 0) {
+								mreClientStop.Set();
+								Service.Log("Client connection lost on socket [" + socClient.GetHashCode() + "]");
+								break;
+							}
+							// The bytes of a frame split across reads are kept before Offset by the previous read
+							ulong ulLenMessage = (ulong)(eaClientReceiveAsync.Offset + eaClientReceiveAsync.BytesTransferred);
 							ulong ulOffsetFrame = 0;
 							while(!(ulOffsetFrame == ulLenMessage)) {
-								// Bounds check: need at least 2 bytes for frame header
+								// Bounds check: need at least 2 bytes for frame header, else wait for the next read
 								if(ulOffsetFrame + 1 >= ulLenMessage) {
-									Service.Warn("Incomplete WebSocket frame header on socket [" + socClient.GetHashCode() + "]");
 									break;
 								}
 								bool bFin = (tabData[ulOffsetFrame] & 0b10000000) == 0b10000000;
@@ -1603,14 +1653,12 @@ namespace MagicRemoteService {
 								ulong ulOffsetMask;
 								if((tabData[ulOffsetFrame + 1] & 0b01111111) == 0b01111111) {
 									if(ulOffsetFrame + 9 >= ulLenMessage) {
-										Service.Warn("Incomplete 64-bit length in WebSocket frame on socket [" + socClient.GetHashCode() + "]");
 										break;
 									}
 									ulLenData = System.BitConverter.ToUInt64(new byte[] { tabData[ulOffsetFrame + 9], tabData[ulOffsetFrame + 8], tabData[ulOffsetFrame + 7], tabData[ulOffsetFrame + 6], tabData[ulOffsetFrame + 5], tabData[ulOffsetFrame + 4], tabData[ulOffsetFrame + 3], tabData[ulOffsetFrame + 2] }, 0);
 									ulOffsetMask = ulOffsetFrame + 10;
 								} else if((tabData[ulOffsetFrame + 1] & 0b01111111) == 0b01111110) {
 									if(ulOffsetFrame + 3 >= ulLenMessage) {
-										Service.Warn("Incomplete 16-bit length in WebSocket frame on socket [" + socClient.GetHashCode() + "]");
 										break;
 									}
 									ulLenData = System.BitConverter.ToUInt16(new byte[] { tabData[ulOffsetFrame + 3], tabData[ulOffsetFrame + 2] }, 0);
@@ -1627,10 +1675,9 @@ namespace MagicRemoteService {
 									ulOffsetData = ulOffsetMask;
 								}
 
-								// Validate frame data fits within received message (subtraction avoids ulong overflow;
-								// ulLenMessage = BytesTransferred is always <= tabData.Length)
+								// Validate frame data fits within received message, else wait for the next read
+								// (subtraction avoids ulong overflow; ulLenMessage is always <= tabData.Length)
 								if(ulOffsetData > ulLenMessage || ulLenData > ulLenMessage - ulOffsetData) {
-									Service.Warn("WebSocket frame data exceeds buffer bounds on socket [" + socClient.GetHashCode() + "]");
 									break;
 								}
 								if(bMask) {
@@ -1718,6 +1765,7 @@ namespace MagicRemoteService {
 														if((tabData[ulOffsetData + 3] & 0x01) == 0x01) {
 															if(dBindDown.TryGetValue(usCode, out WinApi.Input[] arrInput)) {
 																Service.SendInputAdmin(arrInput);
+																hsKeyDown.Add(usCode);
 																Service.LogIfDebug("Processed binary message send/key [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
 															} else if(dBindActionDown.TryGetValue(usCode, out byte[][] arr2Byte)) {
 																foreach(byte[] arrByte in arr2Byte) {
@@ -1746,6 +1794,7 @@ namespace MagicRemoteService {
 														} else {
 															if(dBindUp.TryGetValue(usCode, out WinApi.Input[] arrInput)) {
 																Service.SendInputAdmin(arrInput);
+																hsKeyDown.Remove(usCode);
 																Service.LogIfDebug("Processed binary message send/key [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
 															} else {
 																Service.LogIfDebug("Unprocessed binary message send/key [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], usC: " + System.BitConverter.ToUInt16(tabData, (int)ulOffsetData + 1).ToString() + ", bS: " + System.BitConverter.ToBoolean(tabData, (int)ulOffsetData + 3).ToString());
@@ -1846,10 +1895,18 @@ namespace MagicRemoteService {
 								ulOffsetFrame = ulOffsetData + ulLenData;
 							}
 
+							// Move the bytes of an incomplete frame to the start of the buffer and receive the rest after them
+							int iLenPartial = (int)(ulLenMessage - ulOffsetFrame);
+							if(iLenPartial == tabData.Length) {
+								mreClientStop.Set();
+								Service.Warn("WebSocket frame exceeds buffer on socket [" + socClient.GetHashCode() + "]");
+								break;
+							}
+							System.Buffer.BlockCopy(tabData, (int)ulOffsetFrame, tabData, 0, iLenPartial);
+							eaClientReceiveAsync.SetBuffer(iLenPartial, tabData.Length - iLenPartial);
 							if(!socClient.ReceiveAsync(eaClientReceiveAsync)) {
 								ClientReceiveAsyncCompleted(socClient, eaClientReceiveAsync);
 							}
-							System.Threading.Thread.Sleep(1);
 							break;
 						default:
 							throw new System.Exception("Unmanaged handle error");
@@ -1864,9 +1921,30 @@ namespace MagicRemoteService {
 			} catch(System.InvalidOperationException eException) {
 				Service.Error("Invalid operation in client thread: " + eException.ToString());
 			} catch(System.Exception eException) {
-				MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
-				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
 				Service.Error(eException.ToString());
+			} finally {
+				MagicRemoteService.Application.naehPowerSettingNotificationArrived -= naehPowerSettingNotificationArrived;
+				// Disposing a timer also stops it
+				tUserInput?.Dispose();
+				tInactivity?.Dispose();
+				tVideoInput?.Dispose();
+				tPing?.Dispose();
+				tPongUserInput?.Dispose();
+				tPong?.Dispose();
+				// Release what the remote left pressed, so a dropped connection cannot leave Win, Ctrl or a mouse button stuck
+				foreach(ushort usCode in hsKeyDown) {
+					Service.SendInputAdmin(dBindUp[usCode]);
+				}
+				// Only a connection past the handshake may have changed the cursor; a rejected one must not reset it for a connected TV
+				if(bConnected) {
+					MagicRemoteService.SystemCursor.SetDefaultSystemCursor();
+					MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
+					System.Threading.Interlocked.Decrement(ref Service.iConnectedClients);
+				}
+				socClient.Close();
+				eaClientReceiveAsync?.Dispose();
+				areClientReceiveAsyncCompleted?.Dispose();
+				mreClientStop?.Dispose();
 			}
 		}
 	}
