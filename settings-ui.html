@@ -35,6 +35,9 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .app-btn{width:80px;height:22px;border-radius:4px;background:#1a1a1a;font-size:7px;color:#444;display:flex;align-items:center;justify-content:center;cursor:default;opacity:.3;border:1px solid #222}
 .click-row{display:flex;gap:6px;margin-top:4px}
 .click-btn{width:70px;height:26px;border-radius:13px;background:#1e1e1e;font-size:9px;color:#888;border-color:#333}
+.media-row{display:flex;gap:5px;margin:4px 0}
+.media-btn{width:30px;height:22px;border-radius:6px;background:#1e1e1e;font-size:9px;color:#888;border-color:#333}
+.tv-only{display:flex;align-items:center;justify-content:center;font-weight:600;user-select:none;cursor:default;opacity:.4;border:2px solid #333}
 .panel{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;width:380px;min-height:500px}
 .panel h2{color:#fff;font-size:18px;margin-bottom:16px}
 .panel-empty{color:#444;text-align:center;padding:80px 20px;font-size:14px;line-height:1.6}
@@ -89,7 +92,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 <div class="status-bar" id="sb"></div>
 <div class="main">
 <div class="remote">
-  <div class="btn power" data-id="0x0193" tabindex="0" title="Power / Red">&#9211;</div>
+  <div class="power tv-only" title="Power (TV only)">&#9211;</div>
   <div class="numpad">
     <div class="btn num-btn" data-id="0x0031" tabindex="0">1</div>
     <div class="btn num-btn" data-id="0x0032" tabindex="0">2</div>
@@ -102,27 +105,22 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <div class="btn num-btn" data-id="0x0039" tabindex="0">9</div>
   </div>
   <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
-    <div class="btn num-btn" data-id="0x019F" tabindex="0" title="LIST" style="font-size:8px">LIST</div>
+    <div class="num-btn tv-only" title="LIST (TV only)" style="font-size:8px">LIST</div>
     <div class="btn num-btn" data-id="0x0030" tabindex="0">0</div>
-    <div class="btn num-btn" data-id="0x01A1" tabindex="0" title="MORE ..." style="font-size:10px">...</div>
-  </div>
-  <div class="numpad" style="grid-template-columns:repeat(3,1fr);width:170px;gap:5px">
-    <div class="btn num-btn" data-id="0x019C" tabindex="0" title="GUIDE" style="font-size:7px">GUIDE</div>
-    <div class="btn num-btn" data-id="0x019D" tabindex="0" title="QUICK ACCESS" style="font-size:6px">QUICK</div>
-    <div class="btn num-btn" data-id="0x01A2" tabindex="0" title="AD/SAP" style="font-size:7px">AD/SAP</div>
+    <div class="num-btn tv-only" title="MORE (TV only)" style="font-size:10px">...</div>
   </div>
   <div style="display:flex;gap:6px;align-items:center;margin:6px 0">
     <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-      <div class="btn vc-btn" data-id="0x0021" tabindex="0" title="Volume +" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">+</div>
+      <div class="vc-btn tv-only" title="Volume + (TV only; changes the PC volume while Windows plays on headphones)" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">+</div>
       <div style="color:#444;font-size:8px">VOL</div>
-      <div class="btn vc-btn" data-id="0x0022" tabindex="0" title="Volume -" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&minus;</div>
+      <div class="vc-btn tv-only" title="Volume - (TV only; changes the PC volume while Windows plays on headphones)" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&minus;</div>
     </div>
-    <div class="btn" data-id="0x01A3" tabindex="0" title="Mute" style="width:34px;height:34px;border-radius:50%;background:#1e1e1e;border-color:#333;font-size:14px;color:#777">&#128263;</div>
+    <div class="tv-only" title="Mute (TV only)" style="width:34px;height:34px;border-radius:50%;background:#1e1e1e;font-size:14px;color:#777">&#128263;</div>
     <div style="width:20px"></div>
     <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-      <div class="btn vc-btn" data-id="0x0070" tabindex="0" title="Channel +" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8743;</div>
+      <div class="btn vc-btn" data-id="0x0021" tabindex="0" title="CH +" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8743;</div>
       <div style="color:#444;font-size:8px">CH</div>
-      <div class="btn vc-btn" data-id="0x0071" tabindex="0" title="Channel -" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8744;</div>
+      <div class="btn vc-btn" data-id="0x0022" tabindex="0" title="CH -" style="width:44px;height:30px;border-radius:6px;background:#22223a;font-size:10px;color:#888">&#8744;</div>
     </div>
   </div>
   <div class="hmg-row">
@@ -145,8 +143,15 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
   <div class="color-row">
     <div class="btn color-btn c-red" data-id="0x0193" tabindex="0" title="Red">&nbsp;</div>
     <div class="btn color-btn c-green" data-id="0x0194" tabindex="0" title="Green">&nbsp;</div>
-    <div class="btn color-btn c-yellow" data-id="0x01A4" tabindex="0" title="Yellow">&nbsp;</div>
+    <div class="btn color-btn c-yellow" data-id="0x0195" tabindex="0" title="Yellow">&nbsp;</div>
     <div class="btn color-btn c-blue" data-id="0x0196" tabindex="0" title="Blue">&nbsp;</div>
+  </div>
+  <div class="media-row" title="Media keys (remotes that have them)">
+    <div class="btn media-btn" data-id="0x019C" tabindex="0" title="Rewind">&#9194;&#xFE0E;</div>
+    <div class="btn media-btn" data-id="0x019F" tabindex="0" title="Play">&#9654;</div>
+    <div class="btn media-btn" data-id="0x0013" tabindex="0" title="Pause">&#10074;&#10074;</div>
+    <div class="btn media-btn" data-id="0x019D" tabindex="0" title="Stop">&#9632;</div>
+    <div class="btn media-btn" data-id="0x01A1" tabindex="0" title="Fast Forward">&#9193;&#xFE0E;</div>
   </div>
   <div class="app-row">
     <div class="app-btn">NETFLIX</div><div class="app-btn">Prime</div>
@@ -155,8 +160,9 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <div class="app-btn">Disney+</div><div class="app-btn">LG Ch</div>
   </div>
   <div class="click-row">
-    <div class="btn click-btn" data-id="0x0001" tabindex="0" title="Short press = Left Click">L-Click</div>
-    <div class="btn click-btn" data-id="0x0195" tabindex="0" title="Long press = Right Click">R-Click</div>
+    <div class="btn click-btn" data-id="0x0001" tabindex="0" title="Click (short press)" style="width:60px">Click</div>
+    <div class="btn click-btn" data-id="0x0002" tabindex="0" title="Long Click (long press)" style="width:60px">Long Click</div>
+    <div class="btn click-btn" data-id="0x0008" tabindex="0" title="Backspace (TV keyboard)" style="width:40px">&#9003;</div>
   </div>
 </div>
 
@@ -194,7 +200,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
         <option value="48">0</option><option value="49">1</option><option value="50">2</option><option value="51">3</option><option value="52">4</option><option value="53">5</option><option value="54">6</option><option value="55">7</option><option value="56">8</option><option value="57">9</option>
         <option value="96">Num 0</option><option value="97">Num 1</option><option value="98">Num 2</option><option value="99">Num 3</option><option value="100">Num 4</option><option value="101">Num 5</option><option value="102">Num 6</option><option value="103">Num 7</option><option value="104">Num 8</option><option value="105">Num 9</option>
         <option value="91">Windows Key</option><option value="173">Mute</option><option value="174">Volume Down</option><option value="175">Volume Up</option>
-        <option value="176">Next Track</option><option value="177">Prev Track</option><option value="178">Stop Media</option><option value="179">Play/Pause</option>
+        <option value="176">Next Track</option><option value="177">Prev Track</option><option value="178">Stop Media</option><option value="179">Play/Pause</option><option value="250">Play</option><option value="19">Pause</option>
         <option value="44">Print Screen</option>
       </select>
     </div>
@@ -273,64 +279,66 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 /* ========================================
    Button definitions
    ======================================== */
+// Keys are the webOS keyCodes the TV app forwards (main.js); names follow the
+// WinForms settings (Setting.cs). Defaults come from GET /api/defaults.
 var BUTTONS = {
-  "0x0193": { name: "Power / Red", def: { type: "action", value: "shutdown" } },
-  "0x0194": { name: "Green", def: { type: "keyboard", virtualKey: 91, scanCode: 91, extended: true } },
-  "0x0196": { name: "Blue", def: { type: "action", value: "keyboard" } },
-  "0x0026": { name: "Up", def: { type: "keyboard", virtualKey: 38, scanCode: 72, extended: true } },
-  "0x0028": { name: "Down", def: { type: "keyboard", virtualKey: 40, scanCode: 80, extended: true } },
-  "0x0025": { name: "Left", def: { type: "keyboard", virtualKey: 37, scanCode: 75, extended: true } },
-  "0x0027": { name: "Right", def: { type: "keyboard", virtualKey: 39, scanCode: 77, extended: true } },
-  "0x000D": { name: "OK / Enter", def: { type: "keyboard", virtualKey: 13, scanCode: 28, extended: false } },
-  "0x01CD": { name: "Back", def: { type: "keyboard", virtualKey: 27, scanCode: 1, extended: false } },
-  "0x0021": { name: "Vol+ (Copy)", def: { type: "keyboard", virtualKey: 67, scanCode: 46, extended: false, mods: { ctrl: true } } },
-  "0x0022": { name: "Yellow / Vol- (Paste)", def: { type: "keyboard", virtualKey: 86, scanCode: 47, extended: false, mods: { ctrl: true } } },
-  "0x0030": { name: "0", def: { type: "keyboard", virtualKey: 96, scanCode: 82, extended: false } },
-  "0x0031": { name: "1", def: { type: "keyboard", virtualKey: 97, scanCode: 79, extended: false } },
-  "0x0032": { name: "2", def: { type: "keyboard", virtualKey: 98, scanCode: 80, extended: false } },
-  "0x0033": { name: "3", def: { type: "keyboard", virtualKey: 99, scanCode: 81, extended: false } },
-  "0x0034": { name: "4", def: { type: "keyboard", virtualKey: 100, scanCode: 75, extended: false } },
-  "0x0035": { name: "5", def: { type: "keyboard", virtualKey: 101, scanCode: 76, extended: false } },
-  "0x0036": { name: "6", def: { type: "keyboard", virtualKey: 102, scanCode: 77, extended: false } },
-  "0x0037": { name: "7", def: { type: "keyboard", virtualKey: 103, scanCode: 71, extended: false } },
-  "0x0038": { name: "8", def: { type: "keyboard", virtualKey: 104, scanCode: 72, extended: false } },
-  "0x0039": { name: "9", def: { type: "keyboard", virtualKey: 105, scanCode: 73, extended: false } },
-  "0x019F": { name: "LIST", def: { type: "keyboard", virtualKey: 179, scanCode: 34, extended: true } },
-  "0x01A1": { name: "MORE (...)", def: { type: "keyboard", virtualKey: 176, scanCode: 25, extended: true } },
-  "0x019C": { name: "GUIDE", def: { type: "keyboard", virtualKey: 177, scanCode: 16, extended: true } },
-  "0x019D": { name: "QUICK ACCESS", def: { type: "keyboard", virtualKey: 178, scanCode: 36, extended: true } },
-  "0x01A2": { name: "AD/SAP", def: { type: "keyboard", virtualKey: 173, scanCode: 32, extended: false } },
-  "0x01A3": { name: "Mute", def: { type: "keyboard", virtualKey: 173, scanCode: 32, extended: false } },
-  "0x01A4": { name: "Yellow", def: { type: "keyboard", virtualKey: 86, scanCode: 47, extended: false, mods: { ctrl: true } } },
-  "0x0070": { name: "Channel +", def: { type: "keyboard", virtualKey: 33, scanCode: 73, extended: true } },
-  "0x0071": { name: "Channel -", def: { type: "keyboard", virtualKey: 34, scanCode: 81, extended: true } },
-  "0x0001": { name: "Click (Short Press)", def: { type: "mouse", value: "left" } },
-  "0x0195": { name: "Click (Long Press)", def: { type: "mouse", value: "right" } }
+  "0x0001": { name: "Click (Short Press)" },
+  "0x0002": { name: "Long Click (Long Press)" },
+  "0x0008": { name: "Backspace (TV Keyboard)" },
+  "0x000D": { name: "OK" },
+  "0x0021": { name: "CH +" },
+  "0x0022": { name: "CH -" },
+  "0x0025": { name: "Left" },
+  "0x0026": { name: "Up" },
+  "0x0027": { name: "Right" },
+  "0x0028": { name: "Down" },
+  "0x0030": { name: "0" },
+  "0x0031": { name: "1" },
+  "0x0032": { name: "2" },
+  "0x0033": { name: "3" },
+  "0x0034": { name: "4" },
+  "0x0035": { name: "5" },
+  "0x0036": { name: "6" },
+  "0x0037": { name: "7" },
+  "0x0038": { name: "8" },
+  "0x0039": { name: "9" },
+  "0x0193": { name: "Red" },
+  "0x0194": { name: "Green" },
+  "0x0195": { name: "Yellow" },
+  "0x0196": { name: "Blue" },
+  "0x01CD": { name: "Back" },
+  "0x019F": { name: "Play" },
+  "0x0013": { name: "Pause" },
+  "0x01A1": { name: "Fast Forward" },
+  "0x019C": { name: "Rewind" },
+  "0x019D": { name: "Stop" }
 };
 
 /* ========================================
    State
    ======================================== */
+var defaults = {};
 var bindings = {};
 var selectedButton = null;
 var scrollExclude = [];
 var pcInterfaces = [];
-var cfgToken = "";
+var savedCfg = null; // tv-config.json, null until GET /api/config succeeds
 var fetchHeaders = { "X-Requested-With": "MagicRemoteService" };
 
 /* ========================================
    Key name helper
    ======================================== */
 var KEY_NAMES = {
-  8: "Backspace", 9: "Tab", 13: "Enter", 19: "Pause", 27: "Escape", 32: "Space",
+  8: "Backspace", 9: "Tab", 13: "Enter", 16: "Shift", 17: "Ctrl", 18: "Alt", 19: "Pause", 27: "Escape", 32: "Space",
   33: "PageUp", 34: "PageDown", 35: "End", 36: "Home", 37: "Left", 38: "Up", 39: "Right", 40: "Down",
   44: "PrtSc", 46: "Delete", 91: "Win",
   96: "Num0", 97: "Num1", 98: "Num2", 99: "Num3", 100: "Num4",
   101: "Num5", 102: "Num6", 103: "Num7", 104: "Num8", 105: "Num9",
   112: "F1", 113: "F2", 114: "F3", 115: "F4", 116: "F5", 117: "F6",
   118: "F7", 119: "F8", 120: "F9", 121: "F10", 122: "F11", 123: "F12",
-  173: "Mute", 174: "VolDown", 175: "VolUp", 176: "Next", 177: "Prev", 178: "Stop", 179: "Play/Pause"
+  173: "Mute", 174: "VolDown", 175: "VolUp", 176: "Next", 177: "Prev", 178: "Stop", 179: "Play/Pause", 250: "Play"
 };
+var MOD_KEYS = { 17: "ctrl", 18: "alt", 16: "shift", 91: "win" };
 
 function keyName(vk) {
   if (KEY_NAMES[vk]) return KEY_NAMES[vk];
@@ -339,9 +347,22 @@ function keyName(vk) {
   return "VK" + vk;
 }
 
+// The service and the WinForms export store a shortcut as one keyboard bind per
+// key ([Ctrl, C]); fold that into the single key + mods form the editor uses.
+function editable(arr) {
+  var last = arr[arr.length - 1];
+  if (arr.length < 2 || last.type !== "keyboard") return arr[0];
+  var mods = {};
+  for (var i = 0; i < arr.length - 1; i++) {
+    if (arr[i].type !== "keyboard" || !MOD_KEYS[arr[i].virtualKey]) return arr[0];
+    mods[MOD_KEYS[arr[i].virtualKey]] = true;
+  }
+  return { type: "keyboard", virtualKey: last.virtualKey, scanCode: last.scanCode, extended: last.extended, mods: mods };
+}
+
 function describeBinding(arr) {
   if (!arr || !arr.length) return "Default";
-  var d = arr[0];
+  var d = editable(arr);
   if (d.type === "mouse") return d.value[0].toUpperCase() + d.value.slice(1) + " Click";
   if (d.type === "action") return d.value === "shutdown" ? "Shutdown PC" : "Toggle Keyboard";
   if (d.type === "command") return "Run: " + d.command;
@@ -373,9 +394,10 @@ function selectButton(id) {
   document.getElementById("pc").style.display = "block";
   document.getElementById("bn").textContent = info.name;
 
-  var b = bindings[id] || [info.def];
+  var b = bindings[id] || defaults[id];
   document.getElementById("bd").textContent = describeBinding(b);
-  var d = b[0];
+  if (!b || !b.length) { typeChanged(); return; }
+  var d = editable(b);
 
   if (d.type === "mouse") {
     document.getElementById("at").value = "mouse";
@@ -543,8 +565,13 @@ function ipChanged() {
     if (pcInterfaces[i].ip === ip) {
       document.getElementById("cfg-mac").value = pcInterfaces[i].mac;
       document.getElementById("cfg-mask").value = pcInterfaces[i].mask;
-      break;
+      return;
     }
+  }
+  // The saved IP is on no interface right now: keep its saved MAC and mask
+  if (savedCfg && savedCfg.ip === ip) {
+    document.getElementById("cfg-mac").value = savedCfg.mac || "";
+    document.getElementById("cfg-mask").value = savedCfg.mask || "";
   }
 }
 
@@ -554,20 +581,23 @@ function saveConfig() {
   var speed = parseFloat(document.getElementById("cfg-speed").value);
   if (isNaN(speed) || speed < 0.1 || speed > 5.0) { showToast("Speed must be 0.1-5.0", "err"); return; }
 
+  // Without the saved config, a save would drop the token and the fields this form doesn't show
+  if (!savedCfg) { showToast("Saved config not loaded yet. Reload the page and try again.", "err"); return; }
+
   var h = document.getElementById("cfg-hdmi").value;
-  var cfg = {
+  var cfg = Object.assign({ overlay: true, inputDirect: true, longClick: 1500, extend: true }, savedCfg, {
     inputId: "HDMI_" + h, inputAppId: "com.webos.app.hdmi" + h,
     inputName: "HDMI " + h, inputSource: "ext://hdmi:hdmi" + h,
     ip: document.getElementById("cfg-ip").value, port: port,
     mask: document.getElementById("cfg-mask").value, mac: document.getElementById("cfg-mac").value,
     appId: "com.cathwyler.magicremoteservice.hdmi" + h,
-    overlay: true, inputDirect: true, longClick: 1500, cursorSpeed: speed, extend: true, token: cfgToken
-  };
+    cursorSpeed: speed
+  });
 
   setLoading("btn-cfg-save", true);
   fetch("/api/config", { method: "POST", headers: fetchHeaders, body: JSON.stringify(cfg) })
     .then(function(r) { return r.json(); })
-    .then(function() { showToast("Config saved! Reinstall TV app to apply.", "ok"); setLoading("btn-cfg-save", false); })
+    .then(function() { savedCfg = cfg; showToast("Config saved! Reinstall TV app to apply.", "ok"); setLoading("btn-cfg-save", false); })
     .catch(function(e) { showToast("Error: " + e, "err"); setLoading("btn-cfg-save", false); });
 }
 
@@ -607,7 +637,7 @@ function markCustomButtons() {
     e.classList.toggle("custom", hasCustom);
     var info = BUTTONS[id];
     if (info) {
-      var b = bindings[id] || [info.def];
+      var b = bindings[id] || defaults[id];
       e.title = info.name + " → " + describeBinding(b);
     }
   });
@@ -651,8 +681,21 @@ document.querySelectorAll(".btn[data-id]").forEach(function(el) {
   });
 });
 
-// Load PC info
-fetch("/api/pcinfo")
+// Load the saved TV config first, so the PC info can preselect its IP
+fetch("/api/config")
+  .then(function(r) { if (r.ok) return r.json(); throw new Error(); })
+  .then(function(cfg) {
+    savedCfg = cfg || {};
+    if (cfg && cfg.inputId) {
+      var num = cfg.inputId.replace("HDMI_", "");
+      document.getElementById("cfg-hdmi").value = num;
+    }
+    if (cfg && cfg.cursorSpeed) {
+      document.getElementById("cfg-speed").value = cfg.cursorSpeed;
+    }
+  })
+  .catch(function() {})
+  .then(function() { return fetch("/api/pcinfo"); })
   .then(function(r) { return r.json(); })
   .then(function(d) {
     pcInterfaces = d.interfaces || [];
@@ -664,9 +707,27 @@ fetch("/api/pcinfo")
       opt.textContent = iface.ip + " (" + sanitize(iface.name) + ")";
       ipSelect.appendChild(opt);
     });
+    var savedIp = savedCfg && savedCfg.ip;
+    if (savedIp && !pcInterfaces.some(function(iface) { return iface.ip === savedIp; })) {
+      var opt = document.createElement("option");
+      opt.value = savedIp;
+      opt.textContent = savedIp + " (saved)";
+      ipSelect.insertBefore(opt, ipSelect.firstChild);
+    }
+    if (savedIp) ipSelect.value = savedIp;
     ipSelect.onchange = ipChanged;
-    if (pcInterfaces.length > 0) ipChanged();
+    if (ipSelect.options.length > 0) ipChanged();
     document.getElementById("cfg-port").value = d.port || 41230;
+  })
+  .catch(function() {});
+
+// Load the service's built-in bindings, shown for every button without a custom one
+fetch("/api/defaults")
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    defaults = d;
+    markCustomButtons();
+    if (selectedButton) selectButton(selectedButton);
   })
   .catch(function() {});
 
@@ -692,21 +753,6 @@ fetch("/api/settings")
       renderExclusions();
     }
   });
-
-// Load saved TV config to pre-select HDMI
-fetch("/api/config")
-  .then(function(r) { if (r.ok) return r.json(); throw new Error(); })
-  .then(function(cfg) {
-    if (cfg && cfg.inputId) {
-      var num = cfg.inputId.replace("HDMI_", "");
-      document.getElementById("cfg-hdmi").value = num;
-    }
-    if (cfg && cfg.cursorSpeed) {
-      document.getElementById("cfg-speed").value = cfg.cursorSpeed;
-    }
-    if (cfg && cfg.token) cfgToken = cfg.token;
-  })
-  .catch(function() {});
 
 // Poll status every 10s
 setInterval(updateStatus, 10000);

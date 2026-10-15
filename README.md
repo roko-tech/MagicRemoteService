@@ -45,17 +45,18 @@ Run as **Administrator**. The installer handles everything:
 |--------|-----|
 | Move cursor | Point and wave the Magic Remote |
 | Left click | Short press the OK/wheel button |
-| Right click | Long press the OK/wheel button |
+| Right click | Long press the OK/wheel button, or press Yellow |
 | Scroll | Roll the scroll wheel (smooth momentum) |
 | Arrow keys | Press the D-pad directions |
 | Enter | Press OK |
 | Escape | Press Back |
-| Copy | Volume + |
-| Paste | Volume - |
+| Copy | Press CH + |
+| Paste | Press CH - |
 | Shutdown PC | Press Red button |
 | Open Windows menu | Press Green button |
 | Toggle TV keyboard | Press Blue button |
 | Numbers 0-9 | Press number pad |
+| Media keys | On remotes that have them: Play, Pause and Stop send the Windows media keys; Fast-forward and Rewind send Next and Previous track |
 | Exit TV app | Hold Back button for 1 second |
 
 All mappings are customizable via the web UI.

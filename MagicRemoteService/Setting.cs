@@ -473,8 +473,17 @@ namespace MagicRemoteService {
 						if(liActions.Count > 0) dJsonBindings[strKey] = liActions;
 					}
 				}
-				string strJsonExport = System.Text.Json.JsonSerializer.Serialize(new { bindings = dJsonBindings });
 				string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
+				var dJsonExport = new System.Collections.Generic.Dictionary<string, object>() { { "bindings", dJsonBindings } };
+				// Keep the web UI's scroll exclusions, which this form doesn't edit
+				try {
+					using(System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(strBindingsPath))) {
+						if(doc.RootElement.TryGetProperty("scrollExclude", out System.Text.Json.JsonElement elScrollExclude) && elScrollExclude.ValueKind == System.Text.Json.JsonValueKind.Array) {
+							dJsonExport["scrollExclude"] = elScrollExclude.Clone();
+						}
+					}
+				} catch {}
+				string strJsonExport = System.Text.Json.JsonSerializer.Serialize(dJsonExport);
 				System.IO.File.WriteAllText(strBindingsPath, strJsonExport);
 			} catch {}
 		}
