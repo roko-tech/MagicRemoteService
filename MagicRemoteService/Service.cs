@@ -20,7 +20,8 @@ namespace MagicRemoteService {
 		Visible = 0x03,
 		Key = 0x04,
 		Unicode = 0x05,
-		Shutdown = 0x06
+		Shutdown = 0x06,
+		Volume = 0x07
 	}
 	public partial class Service : System.ServiceProcess.ServiceBase {
 		private int iPort;
@@ -1400,6 +1401,25 @@ namespace MagicRemoteService {
 						}
 					}
 				};
+				WinApi.Input[] piVolume = new WinApi.Input[] {
+					new WinApi.Input {
+						type = WinApi.InputType.INPUT_KEYBOARD,
+						u = new WinApi.InputDummyUnionName {
+							ki = new WinApi.KeybdInput {
+								dwFlags = WinApi.KeybdInputFlags.KEYEVENTF_EXTENDEDKEY | WinApi.KeybdInputFlags.KEYEVENTF_KEYDOWN,
+								dwExtraInfo = System.IntPtr.Zero
+							}
+						}
+					}, new WinApi.Input {
+						type = WinApi.InputType.INPUT_KEYBOARD,
+						u = new WinApi.InputDummyUnionName {
+							ki = new WinApi.KeybdInput {
+								dwFlags = WinApi.KeybdInputFlags.KEYEVENTF_EXTENDEDKEY | WinApi.KeybdInputFlags.KEYEVENTF_KEYUP,
+								dwExtraInfo = System.IntPtr.Zero
+							}
+						}
+					}
+				};
 
 				MagicRemoteService.Screen scrDisplay = MagicRemoteService.Screen.PrimaryScreen;
 				try {
@@ -1669,6 +1689,21 @@ namespace MagicRemoteService {
 															pProcessShutdown.Start();
 														}
 														Service.LogIfDebug("Processed binary message send/shutdown [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");
+														break;
+													case (byte)MagicRemoteService.MessageType.Volume:
+														// A TV volume step: when Windows plays on the TV it stays there,
+														// otherwise it moves the PC volume and the TV is told to undo it.
+														if(ulLenData < 2) break;
+														sbyte sbStep = (sbyte)tabData[ulOffsetData + 1];
+														if(sbStep != 0 && MagicRemoteService.Audio.DefaultIsLocal()) {
+															piVolume[0].u.ki.wVk = (ushort)(sbStep > 0 ? System.Windows.Forms.Keys.VolumeUp : System.Windows.Forms.Keys.VolumeDown);
+															piVolume[1].u.ki.wVk = piVolume[0].u.ki.wVk;
+															for(int i = 0; i < System.Math.Abs((int)sbStep); i++) {
+																Service.SendInputAdmin(piVolume);
+															}
+															socClient.Send(new byte[] { (0b1000 << 4) | (0x2 << 0), 0x02, 0x03, (byte)sbStep });
+														}
+														Service.LogIfDebug("Processed binary message send/volume [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "], sbStep: " + sbStep.ToString());
 														break;
 													default:
 														Service.Warn("Unprocessed binary message [0x" + System.BitConverter.ToString(tabData, (int)ulOffsetData, (int)ulLenData).Replace("-", string.Empty) + "]");

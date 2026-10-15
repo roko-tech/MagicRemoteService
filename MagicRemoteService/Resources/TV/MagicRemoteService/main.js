@@ -79,7 +79,8 @@ const MessageType = {
 	Visible: 0x03,
 	Key: 0x04,
 	Unicode: 0x05,
-	Shutdown: 0x06
+	Shutdown: 0x06,
+	Volume: 0x07
 }
 
 var BUFFER_RECONNECT_INTERVAL = 5000;
@@ -692,6 +693,50 @@ function SubscriptionClose() {
 	});
 }
 
+// webOS keeps the volume keys for itself but reports every step. Steps the
+// user makes on the PC input go to the PC; when Windows plays on another
+// device than the TV, the PC answers with 0x03 and the step is undone here.
+// Steps this app makes carry its own callerId and are not forwarded.
+var iVolume = -1;
+var strSoundOutput = "";
+function SubscriptionVolume() {
+	webOS.service.request("luna://com.webos.service.audio", {
+		method: "master/getVolume",
+		parameters: {
+			subscribe: true
+		},
+		onSuccess: function(inResponse) {
+			var vsStatus = inResponse.volumeStatus;
+			if(!vsStatus || typeof vsStatus.volume !== "number") return;
+			var bUserStep = (vsStatus.cause === "volumeUp" || vsStatus.cause === "volumeDown") && String(inResponse.callerId).indexOf(strAppId) !== 0;
+			if(bUserStep && iVolume >= 0 && vsStatus.volume !== iVolume && AppVisible()) {
+				SendVolume({
+					sD: vsStatus.volume - iVolume
+				});
+			}
+			iVolume = vsStatus.volume;
+			strSoundOutput = vsStatus.soundOutput;
+		},
+		onFailure: function(inError) {
+			LogIfDebug("Volume subscription unavailable [" + inError.errorCode + ", " + inError.errorText + "]");
+		}
+	});
+}
+
+function RestoreVolume(sD) {
+	for(var i = 0; i < Math.abs(sD); i++) {
+		webOS.service.request("luna://com.webos.service.audio", {
+			method: sD > 0 ? "master/volumeDown" : "master/volumeUp",
+			parameters: {
+				soundOutput: strSoundOutput
+			},
+			onFailure: function(inError) {
+				Error("Volume restore failed [", inError.errorCode, ", ", inError.errorText, "]");
+			}
+		});
+	}
+}
+
 function SubscriptionLog() {
 	webOS.service.request("luna://" + strAppId + ".service", {
 		method: "log",
@@ -1128,6 +1173,10 @@ function SocketOpen() {
 						deKeyboard.focus();
 					}
 					break;
+				case 0x03:
+					if(e.data.byteLength < 2) break;
+					RestoreVolume(dwData.getInt8(1));
+					break;
 				default:
 					Error(oString.strActionUnprocessed);
 			}
@@ -1296,6 +1345,21 @@ function SendUnicode(kUnicode) {
 	}
 }
 
+var bufVolume = new ArrayBuffer(2);
+var dwVolume = new DataView(bufVolume);
+dwVolume.setUint8(0, MessageType.Volume);
+function SendVolume(vVolume) {
+	if(socClient !== null && socClient.readyState === WebSocket.OPEN) {
+		try {
+			dwVolume.setInt8(1, vVolume.sD);
+			socClient.send(bufVolume);
+			LogIfDebug("Volume step sent @" + strIP + ":" + uiPort + " ", vVolume);
+		} catch(eError) {
+			Error("Volume step failed [", eError, "]@" + strIP + ":" + uiPort + " ", vVolume);
+		}
+	}
+}
+
 var bufShutdown = new ArrayBuffer(1);
 var dwShutdown = new DataView(bufShutdown);
 dwShutdown.setUint8(0, MessageType.Shutdown);
@@ -1405,6 +1469,7 @@ function Load() {
 		SubscriptionGetSensorData();
 		SubscriptionDomEvent();
 		SubscriptionScreenSaverRequest();
+		SubscriptionVolume();
 		if(bOverlay) {
 			SubscriptionClose();
 			LaunchInput();

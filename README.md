@@ -60,6 +60,8 @@ Run as **Administrator**. The installer handles everything:
 
 All mappings are customizable via the web UI.
 
+The remote's volume buttons stay with the TV while Windows plays through it (HDMI, DisplayPort, or S/PDIF, such as the TV or a soundbar on its eARC). While Windows plays on another device, such as headphones, they change the PC volume instead, and the TV app sets the TV volume back after each step. This works while the TV app shows the PC input.
+
 ## Web Settings
 
 Open **http://localhost:41231** while the service is running.

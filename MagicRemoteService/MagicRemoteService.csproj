@@ -107,6 +107,7 @@
     <Compile Include="Application.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Audio.cs" />
     <Compile Include="BindCreator.cs">
       <SubType>Form</SubType>
     </Compile>
