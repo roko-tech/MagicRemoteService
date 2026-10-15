@@ -185,7 +185,7 @@ namespace MagicRemoteService {
 			dAresCommandCache[strCommand] = strResult;
 			return strResult;
 		}
-		private static string ExecWebOSCLICommand(string strCommand, string strArgument, System.Collections.Generic.Dictionary<ushort, string> dInput = null, string strWorkingDirectory = null) {
+		private static string ExecWebOSCLICommand(string strCommand, string strArgument, System.Collections.Generic.Dictionary<ushort, string> dInput = null, string strWorkingDirectory = null, string strUserProfile = null) {
 			using(System.Diagnostics.Process pProcess = new System.Diagnostics.Process()) {
 			pProcess.StartInfo.FileName = "cmd";
 			if(!string.IsNullOrEmpty(strWorkingDirectory)) {
@@ -220,6 +220,12 @@ namespace MagicRemoteService {
 			} catch {}
 			pProcess.StartInfo.UseShellExecute = false;
 			pProcess.StartInfo.EnvironmentVariables["PATH"] = strPath;
+			if(!string.IsNullOrEmpty(strUserProfile)) {
+				// ares-cli reads its device list from %APPDATA%\.webos and its SSH keys from %HOME% or %USERPROFILE%\.ssh
+				pProcess.StartInfo.EnvironmentVariables["APPDATA"] = System.IO.Path.Combine(strUserProfile, "AppData", "Roaming");
+				pProcess.StartInfo.EnvironmentVariables["USERPROFILE"] = strUserProfile;
+				pProcess.StartInfo.EnvironmentVariables["HOME"] = strUserProfile;
+			}
 			// Try to run via node with polyfill for Node.js v22+ compatibility
 			string strNodeExe = ResolveNodePath(strPath);
 			string strCommandPath = ResolveAresCommand(strCommand, strPath);
@@ -275,11 +281,11 @@ namespace MagicRemoteService {
 				new MagicRemoteService.WebOSCLIDeviceInput() { Id = "HDMI_4", Name = "HDMI 4", Source = "ext://hdmi:4", AppIdShort = "hdmi4" }
 			};
 		}
-		public static MagicRemoteService.WebOSCLIDevice[] SetupDeviceList() {
+		public static MagicRemoteService.WebOSCLIDevice[] SetupDeviceList(string strUserProfile = null) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {
 				"-F"
 			};
-			return System.Text.Json.JsonSerializer.Deserialize<MagicRemoteService.WebOSCLIDevice[]>(MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-setup-device", string.Join(" ", tabArgument)));
+			return System.Text.Json.JsonSerializer.Deserialize<MagicRemoteService.WebOSCLIDevice[]>(MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-setup-device", string.Join(" ", tabArgument), null, null, strUserProfile));
 		}
 		public static void SetupDeviceAdd(MagicRemoteService.WebOSCLIDevice wocdDevice, string strPassword) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {
@@ -349,12 +355,12 @@ namespace MagicRemoteService {
 			}
 			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-package", string.Join(" ", tabArgument));
 		}
-		public static void Install(string strDevice, string strPackageFile) {
+		public static void Install(string strDevice, string strPackageFile, string strUserProfile = null) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {
 				"-d \"" + strDevice + "\"",
 				"\"" + strPackageFile + "\""
 			};
-			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-install", string.Join(" ", tabArgument));
+			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-install", string.Join(" ", tabArgument), null, null, strUserProfile);
 		}
 		public static void InstallRemove(string strDevice, string strPackageFile) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {
@@ -363,7 +369,7 @@ namespace MagicRemoteService {
 			};
 			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-install", string.Join(" ", tabArgument));
 		}
-		public static void Launch(string strDevice, string strApplicationId, string strParameter = null) {
+		public static void Launch(string strDevice, string strApplicationId, string strParameter = null, string strUserProfile = null) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {
 				"-d \"" + strDevice + "\"",
 				"\"" + strApplicationId + "\""
@@ -371,7 +377,7 @@ namespace MagicRemoteService {
 			if(!string.IsNullOrEmpty(strParameter)) {
 				tabArgument.Add("-p \"" + strParameter + "\"");
 			}
-			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-launch", string.Join(" ", tabArgument));
+			MagicRemoteService.WebOSCLI.ExecWebOSCLICommand("ares-launch", string.Join(" ", tabArgument), null, null, strUserProfile);
 		}
 		public static void InspectApplication(string strDevice, string strApplicationId) {
 			System.Collections.Generic.List<string> tabArgument = new System.Collections.Generic.List<string> {

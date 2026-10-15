@@ -80,7 +80,7 @@ Click any button on the visual LG remote to remap it:
 - **HDMI port** — auto-detected at runtime, or select manually
 - **PC IP / MAC / Subnet** — auto-detected from your network interfaces
 - **Cursor speed** — adjustable from 0.1 (slow) to 5.0 (fast)
-- **Reinstall TV App** — one-click deploy without command line
+- **Reinstall TV App** — one-click deploy without command line: packages the TV app built into the service with the saved config, installs it on the default ares-cli device of the user signed in at the PC, and launches it
 
 ### Smooth Scroll Exclusions
 

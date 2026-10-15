@@ -710,45 +710,17 @@ namespace MagicRemoteService {
 								}
 							} else if(strReqPath == "/api/reinstall" && ctx.Request.HttpMethod == "POST") {
 								// Reinstall TV app using saved config
-								string strResult = "";
+								string strResult;
 								bool bSuccess = false;
 								try {
-									string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
-									if(!System.IO.File.Exists(strConfigFile)) {
-										strResult = "No tv-config.json found. Save config first.";
-									} else {
-										string strCfg = System.IO.File.ReadAllText(strConfigFile);
-										var cfgDoc = System.Text.Json.JsonDocument.Parse(strCfg);
-										string strAppIdCfg = cfgDoc.RootElement.GetProperty("appId").GetString();
-										string strHdmiShort = strAppIdCfg.Replace("com.cathwyler.magicremoteservice.", "");
-										// Extract TV app to temp dir
-										string strTempDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mrs-webui-deploy");
-										if(System.IO.Directory.Exists(strTempDir)) System.IO.Directory.Delete(strTempDir, true);
-										System.IO.Directory.CreateDirectory(strTempDir);
-										// Validate hdmi short name
-									if(string.IsNullOrEmpty(strHdmiShort) || strHdmiShort.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0) throw new System.Exception("Invalid HDMI config");
-										// Find the first configured TV device
-										MagicRemoteService.WebOSCLIDevice[] devices = MagicRemoteService.WebOSCLI.SetupDeviceList();
-										if(devices == null || devices.Length == 0) {
-											strResult = "No TV devices configured. Add one in the Settings UI first.";
-										} else {
-											string strDeviceName = devices[0].Name;
-											// Use AppExtract-style deploy but with config.json
-											string strSrcApp = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "..", "TV", "MagicRemoteService");
-											// Write config.json to both dirs
-											string strAppDir = System.IO.Path.Combine(strTempDir, "MagicRemoteService");
-											string strSvcDir = System.IO.Path.Combine(strTempDir, "Service");
-											// Use the existing AppExtract infrastructure by doing a minimal deploy
-											System.IO.File.WriteAllText(System.IO.Path.Combine(strTempDir, "config.json"), strCfg);
-											strResult = "Reinstall triggered for device " + strDeviceName + ". Check the TV.";
-											bSuccess = true;
-										}
-										cfgDoc.Dispose();
-									}
+									strResult = Service.ReinstallTVApp();
+									bSuccess = true;
+									Service.Log("TV app reinstalled via web UI: " + strResult);
 								} catch(System.Exception ex) {
 									strResult = ex.Message;
+									Service.Warn("TV app reinstall via web UI failed: " + strResult);
 								}
-								byte[] buf = System.Text.Encoding.UTF8.GetBytes("{\"success\":" + (bSuccess ? "true" : "false") + ",\"message\":\"" + strResult.Replace("\"", "\\\"") + "\"}");
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(new { success = bSuccess, message = strResult }));
 								ctx.Response.ContentType = "application/json";
 								ctx.Response.ContentLength64 = buf.Length;
 								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
@@ -794,6 +766,114 @@ namespace MagicRemoteService {
 				return System.IO.File.ReadAllText(strHtmlFile);
 			}
 			return @"<!DOCTYPE html><html><body><h1>MagicRemoteService</h1><p>settings-ui.html not found. Place it next to MagicRemoteService.exe.</p></body></html>";
+		}
+		private static string ReinstallTVApp() {
+			// Same steps as install.bat: the TV app sources embedded in this exe, with tv-config.json
+			// as config.json, then ares-package, ares-install and ares-launch on the default TV.
+			string strConfigFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "tv-config.json");
+			if(!System.IO.File.Exists(strConfigFile)) {
+				throw new System.Exception("No tv-config.json found. Save config first.");
+			}
+			string strCfg = System.IO.File.ReadAllText(strConfigFile);
+			string strAppId;
+			string strInputName;
+			using(System.Text.Json.JsonDocument cfgDoc = System.Text.Json.JsonDocument.Parse(strCfg)) {
+				strAppId = cfgDoc.RootElement.GetProperty("appId").GetString();
+				strInputName = cfgDoc.RootElement.GetProperty("inputName").GetString();
+			}
+			// appId goes into the ares command lines, so accept only the ids install.bat generates
+			if(strAppId == null || !System.Text.RegularExpressions.Regex.IsMatch(strAppId, @"^com\.cathwyler\.magicremoteservice\.[a-z0-9]+$")) {
+				throw new System.Exception("Invalid appId in tv-config.json.");
+			}
+			string strServiceId = strAppId + ".service";
+			System.Version vAssembly = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+			string strVersion = vAssembly.Major + "." + vAssembly.Minor + "." + vAssembly.Build;
+			string strUserProfile = Service.AresUserProfile();
+
+			string strBuildDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mrs-webui-deploy");
+			string strAppDir = System.IO.Path.Combine(strBuildDir, "MagicRemoteService");
+			string strSvcDir = System.IO.Path.Combine(strBuildDir, "Service");
+			if(System.IO.Directory.Exists(strBuildDir)) {
+				System.IO.Directory.Delete(strBuildDir, true);
+			}
+			string strStep = "ares-setup-device";
+			try {
+				System.IO.Directory.CreateDirectory(System.IO.Path.Combine(strAppDir, "webOSTVjs-1.2.12"));
+				System.IO.Directory.CreateDirectory(System.IO.Path.Combine(strAppDir, "resources", "fr"));
+				System.IO.Directory.CreateDirectory(System.IO.Path.Combine(strAppDir, "resources", "es"));
+				System.IO.Directory.CreateDirectory(strSvcDir);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "config.json"), strCfg);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strSvcDir, "config.json"), strCfg);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "appinfo.json"), MagicRemoteService.Properties.Resources.appinfo
+					.Replace(@"""id"": ""com.cathwyler.magicremoteservice""", @"""id"": """ + strAppId + @"""")
+					.Replace(@"""version"": ""1.0.0""", @"""version"": """ + strVersion + @"""")
+					.Replace(@"""appDescription"": ""HDMI""", @"""appDescription"": " + System.Text.Json.JsonSerializer.Serialize(strInputName))
+				);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "appstring.json"), MagicRemoteService.Properties.Resources.appstring);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "index.html"), MagicRemoteService.Properties.Resources.index);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "main.js"), MagicRemoteService.Properties.Resources.main);
+				System.IO.File.WriteAllBytes(System.IO.Path.Combine(strAppDir, "icon.png"), MagicRemoteService.Properties.Resources.icon);
+				System.IO.File.WriteAllBytes(System.IO.Path.Combine(strAppDir, "miniIcon.png"), MagicRemoteService.Properties.Resources.miniIcon);
+				System.IO.File.WriteAllBytes(System.IO.Path.Combine(strAppDir, "largeIcon.png"), MagicRemoteService.Properties.Resources.largeIcon);
+				System.IO.File.WriteAllBytes(System.IO.Path.Combine(strAppDir, "cursor.png"), MagicRemoteService.Properties.Resources.cursor);
+				System.IO.File.WriteAllBytes(System.IO.Path.Combine(strAppDir, "MuseoSans-Medium.ttf"), MagicRemoteService.Properties.Resources.MuseoSans_Medium);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "webOSTVjs-1.2.12", "webOSTV-dev.js"), MagicRemoteService.Properties.Resources.webOSTV_dev);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "webOSTVjs-1.2.12", "webOSTV.js"), MagicRemoteService.Properties.Resources.webOSTV);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "resources", "fr", "appinfo.json"), MagicRemoteService.Properties.Resources.frappinfo);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "resources", "fr", "appstring.json"), MagicRemoteService.Properties.Resources.frappstring);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "resources", "es", "appinfo.json"), MagicRemoteService.Properties.Resources.esappinfo);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strAppDir, "resources", "es", "appstring.json"), MagicRemoteService.Properties.Resources.esappstring);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strSvcDir, "package.json"), MagicRemoteService.Properties.Resources.package.Replace("com.cathwyler.magicremoteservice.service", strServiceId));
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strSvcDir, "service.js"), MagicRemoteService.Properties.Resources.service);
+				System.IO.File.WriteAllText(System.IO.Path.Combine(strSvcDir, "services.json"), MagicRemoteService.Properties.Resources.services.Replace("com.cathwyler.magicremoteservice.service", strServiceId));
+
+				MagicRemoteService.WebOSCLIDevice[] tabDevice = MagicRemoteService.WebOSCLI.SetupDeviceList(strUserProfile) ?? new MagicRemoteService.WebOSCLIDevice[0];
+				MagicRemoteService.WebOSCLIDevice wocdDevice = System.Array.Find(tabDevice, delegate (MagicRemoteService.WebOSCLIDevice wocd) {
+					return wocd.Default;
+				}) ?? (tabDevice.Length > 0 ? tabDevice[0] : null);
+				if(wocdDevice == null) {
+					throw new System.Exception("No TV device configured in ares-cli. Add one with ares-setup-device.");
+				}
+				strStep = "ares-package";
+				MagicRemoteService.WebOSCLI.Package(strBuildDir, strAppDir, strSvcDir);
+				strStep = "ares-install on " + wocdDevice.Name;
+				MagicRemoteService.WebOSCLI.Install(wocdDevice.Name, System.IO.Path.Combine(strBuildDir, strAppId + "_" + strVersion + "_all.ipk"), strUserProfile);
+				strStep = "Installed " + strAppId + " " + strVersion + " on " + wocdDevice.Name + ", but ares-launch";
+				MagicRemoteService.WebOSCLI.Launch(wocdDevice.Name, strAppId, null, strUserProfile);
+				return "Installed and launched " + strAppId + " " + strVersion + " on " + wocdDevice.Name + ".";
+			} catch(MagicRemoteService.WebOSCLIException ex) {
+				throw new System.Exception(strStep + " failed: " + ex.Message);
+			} finally {
+				// The build dir's config.json holds the device token, so never leave it behind
+				try {
+					System.IO.Directory.Delete(strBuildDir, true);
+				} catch {}
+			}
+		}
+		private static string AresUserProfile() {
+			// ares-cli keeps its TV device list and SSH keys in a user profile, which SYSTEM
+			// can't see as its own, so run it with the profile of the user signed in at the PC.
+			using(System.Security.Principal.WindowsIdentity wiCurrent = System.Security.Principal.WindowsIdentity.GetCurrent()) {
+				if(!wiCurrent.IsSystem) {
+					return null;
+				}
+			}
+			uint uiSessionId = WinApi.Kernel32.WTSGetActiveConsoleSessionId();
+			if(uiSessionId == 0xFFFFFFFF || !WinApi.Wtsapi32.WTSQueryUserToken(uiSessionId, out System.IntPtr hUserToken)) {
+				throw new System.Exception("No user is signed in at the PC. The service runs as SYSTEM and needs that user's ares-cli setup (device list and SSH key) to reach the TV.");
+			}
+			try {
+				using(System.Security.Principal.WindowsIdentity wiUser = new System.Security.Principal.WindowsIdentity(hUserToken))
+				using(Microsoft.Win32.RegistryKey rkProfile = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + wiUser.User.Value)) {
+					string strProfile = rkProfile?.GetValue("ProfileImagePath") as string;
+					if(string.IsNullOrEmpty(strProfile)) {
+						throw new System.Exception("Cannot find the profile folder of the signed-in user.");
+					}
+					return strProfile;
+				}
+			} finally {
+				WinApi.Kernel32.CloseHandle(hUserToken);
+			}
 		}
 		private void ThreadSsdp() {
 			try {
