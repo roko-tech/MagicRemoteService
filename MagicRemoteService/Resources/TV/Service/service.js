@@ -588,7 +588,6 @@ if(bOverlay){
 										break;
 									case 0x8: //Close
 										LogIfDebug("Ssap close frame", bufFrame);
-										strSsapClientKey = "";
 										break;
 									case 0x9: //Ping
 										LogIfDebug("Ssap data Ping", bufFrame);
@@ -671,7 +670,7 @@ if(bOverlay){
 			var bufData = bufStream.slice(ulOffsetData, ulOffsetData + ulLenData);
 			var bufFrame = bufStream.slice(ulOffsetFrame, ulOffsetData + ulLenData);
 			fCallback(bufFrame, bFin, bRsv1, bRsv2, bRsv3, ucOpcode, bufMask, bufData);
-			ulOffsetFrame = bufFrame.length;
+			ulOffsetFrame += bufFrame.length;
 		}
 	}
 
