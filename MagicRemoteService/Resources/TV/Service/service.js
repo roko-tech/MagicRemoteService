@@ -486,6 +486,9 @@ if(bOverlay){
 			headers: {
 				Connection: "Upgrade",
 				Upgrade: "websocket",
+				// Since firmware 43.21.94 (webOS 11.2, Oct 2026) the TV closes SSAP
+				// sockets without an accepted Origin (1008 "invalid origin").
+				Origin: "file://",
 				"Sec-WebSocket-Version": 13,
 				"Sec-WebSocket-Key": strSsapWebSocketClientKey
 			}
