@@ -76,6 +76,47 @@ namespace MagicRemoteService {
 		private static readonly System.Threading.ManualResetEvent mreStop = new System.Threading.ManualResetEvent(true);
 		private static int iConnectedClients = 0;
 		private static string strConnectedClientIp = "";
+		private static readonly System.Collections.Generic.Dictionary<System.Net.Sockets.Socket, string> dConnectedClient = new System.Collections.Generic.Dictionary<System.Net.Sockets.Socket, string>();
+		private static readonly string strClientStatusPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "client-status.json");
+		private void SetClientConnected(System.Net.Sockets.Socket socClient, bool bConnected) {
+			lock(Service.dConnectedClient) {
+				if(bConnected) {
+					string strIp = "";
+					try { strIp = ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString(); } catch {}
+					Service.dConnectedClient[socClient] = strIp;
+					Service.strConnectedClientIp = strIp;
+				} else if(Service.dConnectedClient.Remove(socClient)) {
+					Service.strConnectedClientIp = "";
+					foreach(string strIp in Service.dConnectedClient.Values) {
+						Service.strConnectedClientIp = strIp;
+					}
+				} else {
+					return;
+				}
+				Service.iConnectedClients = Service.dConnectedClient.Count;
+				if(this.stType == ServiceType.Client) {
+					// The web UI runs in the Server process, which never sees the TV connections, so hand it the state
+					try {
+						using(System.Diagnostics.Process pCurrent = System.Diagnostics.Process.GetCurrentProcess()) {
+							System.IO.File.WriteAllText(Service.strClientStatusPath, System.Text.Json.JsonSerializer.Serialize(new { pid = pCurrent.Id, connectedClients = Service.iConnectedClients, clientIp = Service.strConnectedClientIp }));
+						}
+					} catch {}
+				}
+			}
+		}
+		private static void ReadClientStatus(ref int iClients, ref string strIp) {
+			try {
+				using(System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(Service.strClientStatusPath)))
+				using(System.Diagnostics.Process pClient = System.Diagnostics.Process.GetProcessById(doc.RootElement.GetProperty("pid").GetInt32()))
+				using(System.Diagnostics.Process pCurrent = System.Diagnostics.Process.GetCurrentProcess()) {
+					// A client that died while connected never rewrote the file, so only trust a live one
+					if(pClient.ProcessName == pCurrent.ProcessName) {
+						iClients = doc.RootElement.GetProperty("connectedClients").GetInt32();
+						strIp = doc.RootElement.GetProperty("clientIp").GetString() ?? "";
+					}
+				}
+			} catch {}
+		}
 		private static System.Collections.Generic.HashSet<string> hsScrollExclude = new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase) { "PotPlayerMini64", "PotPlayerMini", "PotPlayer", "PotPlayer64" };
 		private static void LoadScrollExclude() {
 			try {
@@ -88,7 +129,7 @@ namespace MagicRemoteService {
 							string v = item.GetString();
 							if(!string.IsNullOrEmpty(v)) hs.Add(v);
 						}
-						if(hs.Count > 0) System.Threading.Interlocked.Exchange(ref hsScrollExclude, hs);
+						System.Threading.Interlocked.Exchange(ref hsScrollExclude, hs);
 					}
 					doc.Dispose();
 				}
@@ -176,30 +217,31 @@ namespace MagicRemoteService {
 				case ServiceType.Client:
 					break;
 			}
+			// Every type loads these: the Server hosts the web UI, which shows them and saves the exclusions back
+			if(rkMagicRemoteService == null) {
+				this.bInactivity = true;
+				System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, 7200000);
+				this.bVideoInput = true;
+				System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, 900000);
+			} else {
+				this.bInactivity = (int)rkMagicRemoteService.GetValue("Inactivity", 1) != 0;
+				System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, (int)rkMagicRemoteService.GetValue("TimeoutInactivity", 7200000));
+				this.bVideoInput = (int)rkMagicRemoteService.GetValue("VideoInput", 1) != 0;
+				System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, (int)rkMagicRemoteService.GetValue("TimeoutVideoInput", 900000));
+			}
+			LoadScrollExclude();
 			switch(this.stType) {
 				case ServiceType.Server:
 					break;
 				case ServiceType.Both:
 				case ServiceType.Client:
-					if(rkMagicRemoteService == null) {
-						this.bInactivity = true;
-						System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, 7200000);
-						this.bVideoInput = true;
-						System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, 900000);
-					} else {
-						this.bInactivity = (int)rkMagicRemoteService.GetValue("Inactivity", 1) != 0;
-						System.Threading.Interlocked.Exchange(ref this.iTimeoutInactivity, (int)rkMagicRemoteService.GetValue("TimeoutInactivity", 7200000));
-						this.bVideoInput = (int)rkMagicRemoteService.GetValue("VideoInput", 1) != 0;
-						System.Threading.Interlocked.Exchange(ref this.iTimeoutVideoInput, (int)rkMagicRemoteService.GetValue("TimeoutVideoInput", 900000));
-					}
 					// Try loading from bindings.json first (next to exe)
 					string strBindingsPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
-					LoadScrollExclude();
 					this.LoadToken();
 					Service.Log(string.IsNullOrEmpty(this.strToken) ? "Device token auth: disabled (open mode)" : "Device token auth: enabled");
 					// Always seed code defaults first so any button missing from
 					// bindings.json / registry keeps a working default instead of going dead.
-					this.LoadDefaultBindings();
+					Service.LoadDefaultBindings(this.dBind);
 					if(System.IO.File.Exists(strBindingsPath)) {
 						this.LoadBindingsFromJson(strBindingsPath);
 					} else {
@@ -533,37 +575,37 @@ namespace MagicRemoteService {
 			}
 			return "";
 		}
-		private void LoadDefaultBindings() {
-			this.dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
-			this.dBind[0x0002] = new Bind[] { new BindMouse(BindMouseValue.Right) };
-			this.dBind[0x0008] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Back, 0x0E, false) };
-			this.dBind[0x000D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Enter, 0x1C, false) };
-			this.dBind[0x0021] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.C, 0x2E, false) };
-			this.dBind[0x0022] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.V, 0x2F, false) };
-			this.dBind[0x0025] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Left, 0x4B, true) };
-			this.dBind[0x0026] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Up, 0x48, true) };
-			this.dBind[0x0027] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Right, 0x4D, true) };
-			this.dBind[0x0028] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Down, 0x50, true) };
-			this.dBind[0x0030] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad0, 0x52, false) };
-			this.dBind[0x0031] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad1, 0x4F, false) };
-			this.dBind[0x0032] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad2, 0x50, false) };
-			this.dBind[0x0033] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad3, 0x51, false) };
-			this.dBind[0x0034] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad4, 0x4B, false) };
-			this.dBind[0x0035] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad5, 0x4C, false) };
-			this.dBind[0x0036] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad6, 0x4D, false) };
-			this.dBind[0x0037] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad7, 0x47, false) };
-			this.dBind[0x0038] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad8, 0x48, false) };
-			this.dBind[0x0039] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad9, 0x49, false) };
-			this.dBind[0x0193] = new Bind[] { new BindAction(BindActionValue.Shutdown) };
-			this.dBind[0x0194] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.LWin, 0x5B, true) };
-			this.dBind[0x0195] = new Bind[] { new BindMouse(BindMouseValue.Right) };
-			this.dBind[0x0196] = new Bind[] { new BindAction(BindActionValue.Keyboard) };
-			this.dBind[0x01CD] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Escape, 0x01, false) };
-			this.dBind[0x019F] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Play, 0x00, false) };
-			this.dBind[0x0013] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Pause, 0x00, false) };
-			this.dBind[0x01A1] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaNextTrack, 0x00, false) };
-			this.dBind[0x019C] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPreviousTrack, 0x00, false) };
-			this.dBind[0x019D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaStop, 0x00, false) };
+		private static void LoadDefaultBindings(System.Collections.Generic.Dictionary<ushort, Bind[]> dBind) {
+			dBind[0x0001] = new Bind[] { new BindMouse(BindMouseValue.Left) };
+			dBind[0x0002] = new Bind[] { new BindMouse(BindMouseValue.Right) };
+			dBind[0x0008] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Back, 0x0E, false) };
+			dBind[0x000D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Enter, 0x1C, false) };
+			dBind[0x0021] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.C, 0x2E, false) };
+			dBind[0x0022] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.ControlKey, 0x1D, false), new BindKeyboard((byte)System.Windows.Forms.Keys.V, 0x2F, false) };
+			dBind[0x0025] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Left, 0x4B, true) };
+			dBind[0x0026] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Up, 0x48, true) };
+			dBind[0x0027] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Right, 0x4D, true) };
+			dBind[0x0028] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Down, 0x50, true) };
+			dBind[0x0030] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad0, 0x52, false) };
+			dBind[0x0031] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad1, 0x4F, false) };
+			dBind[0x0032] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad2, 0x50, false) };
+			dBind[0x0033] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad3, 0x51, false) };
+			dBind[0x0034] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad4, 0x4B, false) };
+			dBind[0x0035] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad5, 0x4C, false) };
+			dBind[0x0036] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad6, 0x4D, false) };
+			dBind[0x0037] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad7, 0x47, false) };
+			dBind[0x0038] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad8, 0x48, false) };
+			dBind[0x0039] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.NumPad9, 0x49, false) };
+			dBind[0x0193] = new Bind[] { new BindAction(BindActionValue.Shutdown) };
+			dBind[0x0194] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.LWin, 0x5B, true) };
+			dBind[0x0195] = new Bind[] { new BindMouse(BindMouseValue.Right) };
+			dBind[0x0196] = new Bind[] { new BindAction(BindActionValue.Keyboard) };
+			dBind[0x01CD] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Escape, 0x01, false) };
+			dBind[0x019F] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPlayPause, 0x00, false) };
+			dBind[0x0013] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.Pause, 0x00, false) };
+			dBind[0x01A1] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaNextTrack, 0x00, false) };
+			dBind[0x019C] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaPreviousTrack, 0x00, false) };
+			dBind[0x019D] = new Bind[] { new BindKeyboard((byte)System.Windows.Forms.Keys.MediaStop, 0x00, false) };
 		}
 		private void LoadBindingsFromJson(string strPath) {
 			try {
@@ -640,8 +682,42 @@ namespace MagicRemoteService {
 								string strBindingsFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "bindings.json");
 								string strBindings = System.IO.File.Exists(strBindingsFile) ? System.IO.File.ReadAllText(strBindingsFile) : "{}";
 								string strExclude = System.Text.Json.JsonSerializer.Serialize(hsScrollExclude);
-								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"connectedClients\":" + Service.iConnectedClients + ",\"clientIp\":\"" + Service.strConnectedClientIp + "\",\"scrollExclude\":" + strExclude + ",\"bindings\":" + strBindings + "}";
+								int iClients = Service.iConnectedClients;
+								string strClientIp = Service.strConnectedClientIp;
+								if(this.stType == ServiceType.Server) {
+									Service.ReadClientStatus(ref iClients, ref strClientIp);
+								}
+								string strJson = "{\"port\":" + this.iPort + ",\"inactivity\":" + (this.bInactivity ? "true" : "false") + ",\"timeoutInactivity\":" + this.iTimeoutInactivity + ",\"videoInput\":" + (this.bVideoInput ? "true" : "false") + ",\"timeoutVideoInput\":" + this.iTimeoutVideoInput + ",\"connectedClients\":" + iClients + ",\"clientIp\":" + System.Text.Json.JsonSerializer.Serialize(strClientIp) + ",\"scrollExclude\":" + strExclude + ",\"bindings\":" + strBindings + "}";
 								byte[] buf = System.Text.Encoding.UTF8.GetBytes(strJson);
+								ctx.Response.ContentType = "application/json";
+								ctx.Response.ContentLength64 = buf.Length;
+								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+							} else if(strReqPath == "/api/defaults" && ctx.Request.HttpMethod == "GET") {
+								// Built-in bindings in bindings.json form, so the web UI shows what an unmapped button really does
+								System.Collections.Generic.Dictionary<ushort, Bind[]> dDefault = new System.Collections.Generic.Dictionary<ushort, Bind[]>();
+								Service.LoadDefaultBindings(dDefault);
+								System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<object>> dJsonDefault = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<object>>();
+								foreach(System.Collections.Generic.KeyValuePair<ushort, Bind[]> kvp in dDefault) {
+									System.Collections.Generic.List<object> liActions = new System.Collections.Generic.List<object>();
+									foreach(Bind b in kvp.Value) {
+										switch(b) {
+											case MagicRemoteService.BindMouse bm:
+												liActions.Add(new { type = "mouse", value = bm.bmvValue == BindMouseValue.Left ? "left" : bm.bmvValue == BindMouseValue.Right ? "right" : "middle" });
+												break;
+											case MagicRemoteService.BindKeyboard bk:
+												liActions.Add(new { type = "keyboard", virtualKey = (int)bk.ucVirtualKey, scanCode = (int)bk.ucScanCode, extended = bk.bExtended });
+												break;
+											case MagicRemoteService.BindAction ba:
+												liActions.Add(new { type = "action", value = ba.bavValue == BindActionValue.Shutdown ? "shutdown" : "keyboard" });
+												break;
+											case MagicRemoteService.BindCommand bc:
+												liActions.Add(new { type = "command", command = bc.strCommand });
+												break;
+										}
+									}
+									dJsonDefault["0x" + kvp.Key.ToString("X4")] = liActions;
+								}
+								byte[] buf = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(dJsonDefault));
 								ctx.Response.ContentType = "application/json";
 								ctx.Response.ContentLength64 = buf.Length;
 								ctx.Response.OutputStream.Write(buf, 0, buf.Length);
@@ -1549,8 +1625,7 @@ namespace MagicRemoteService {
 
 								//TODO Something to ask TV if cursor visible
 								Service.Log("Client connected on socket [" + socClient.GetHashCode() + "]");
-							System.Threading.Interlocked.Increment(ref Service.iConnectedClients);
-							try { System.Threading.Interlocked.Exchange(ref Service.strConnectedClientIp, ((System.Net.IPEndPoint)socClient.RemoteEndPoint).Address.ToString()); } catch {}
+								this.SetClientConnected(socClient, true);
 								tPing.Start();
 								if(this.bInactivity) {
 									tInactivity.Start();
@@ -1868,6 +1943,7 @@ namespace MagicRemoteService {
 				MagicRemoteService.SystemCursor.SetDefaultMouseSpeedAccel();
 				Service.Error(eException.ToString());
 			}
+			this.SetClientConnected(socClient, false);
 		}
 	}
 	public static class PipeExtension {
