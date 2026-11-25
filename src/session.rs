@@ -74,6 +74,7 @@ pub struct Session<E: Effects> {
     presence_pong_by: Option<Instant>,
     input_watch_at: Option<Instant>,
     last_excluded_scroll: Option<(Instant, i32)>,
+    monitor_off: bool,
 }
 
 impl<E: Effects> Session<E> {
@@ -93,6 +94,7 @@ impl<E: Effects> Session<E> {
             presence_pong_by: None,
             input_watch_at: None,
             last_excluded_scroll: None,
+            monitor_off: false,
         }
     }
 
@@ -254,11 +256,28 @@ impl<E: Effects> Session<E> {
 
     /// The PC's monitor turned on or off.
     pub fn on_monitor(&mut self, on: bool, now: Instant) {
+        self.monitor_off = !on;
         if let Some(d) = self.cfg.video_input {
             if on {
                 self.video_at = None;
             } else if self.video_at.is_none() {
                 self.video_at = Some(now + d);
+            }
+        }
+    }
+
+    /// New timeout settings were saved: restart the countdowns with them. Turning both off also
+    /// cancels a shutdown this connection already scheduled.
+    pub fn set_timeouts(&mut self, inactivity: Option<Duration>, video_input: Option<Duration>, now: Instant) {
+        self.cfg.inactivity = inactivity;
+        self.cfg.video_input = video_input;
+        self.inactivity_at = inactivity.map(|d| now + d);
+        self.video_at = video_input.filter(|_| self.monitor_off).map(|d| now + d);
+        if inactivity.is_none() && video_input.is_none() {
+            self.presence_pong_by = None;
+            if self.input_watch_at.take().is_some() {
+                self.fx.shutdown(ShutdownKind::Abort);
+                log::info(format!("{}: shutdown timeouts turned off, scheduled shutdown cancelled", self.cfg.name));
             }
         }
     }
@@ -557,6 +576,31 @@ mod tests {
         assert_eq!(std::mem::take(&mut s.out), [0x89, 0x01, 0x01]);
         s.tick(t0 + Duration::from_secs(1605));
         assert_eq!(s.closed, Some("presence pong timeout"));
+    }
+
+    #[test]
+    fn saved_timeouts_apply_to_a_connected_tv() {
+        let fake = Fake::default();
+        fake.idle.set(10_000);
+        let (t0, b) = (Instant::now(), Compiled::new(&defaults()));
+        let mut s = session(&fake, SessionConfig { inactivity: Some(Duration::from_secs(600)), ..Default::default() }, t0);
+        s.ping_at = None;
+        // Turned off before it fires: no presence check at the old time
+        s.set_timeouts(None, None, t0 + Duration::from_secs(100));
+        s.tick(t0 + Duration::from_secs(700));
+        assert!(s.out.is_empty());
+        // Monitor already off when the video timeout is turned on: it starts counting
+        s.on_monitor(false, t0 + Duration::from_secs(800));
+        s.set_timeouts(None, Some(Duration::from_secs(60)), t0 + Duration::from_secs(900));
+        s.tick(t0 + Duration::from_secs(960));
+        assert_eq!(std::mem::take(&mut s.out), [0x89, 0x01, 0x01]);
+        // A shutdown already scheduled is cancelled when both are turned off
+        s.on_frame(true, ws::OP_PONG, &[0x01], &b, t0 + Duration::from_secs(961));
+        assert_eq!(take(&fake), vec![Call::Shutdown(ShutdownKind::InFiveMinutes)]);
+        s.set_timeouts(None, None, t0 + Duration::from_secs(962));
+        assert_eq!(take(&fake), vec![Call::Shutdown(ShutdownKind::Abort)]);
+        s.tick(t0 + Duration::from_secs(1000));
+        assert!(take(&fake).is_empty());
     }
 
     #[test]

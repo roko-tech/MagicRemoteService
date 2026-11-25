@@ -345,25 +345,43 @@ if(bInputDirect){
 		}
 	};
 }
-function InputDisconnected() {};
+// Wakes the PC for WOL_TIMEOUT, then gives up (a PC that stays asleep is not woken forever)
+function WakeStart() {
+	if(iIntervalWakeOnLan) return;
+	iIntervalWakeOnLan = startInterval(function() {
+		SendWol({
+			arrMac: arrMac
+		}, strBroadcast);
+	}, WOL_INTERVAL);
+	iTimeoutSourceStatus = setTimeout(function() {
+		iTimeoutSourceStatus = 0;
+		WakeStop();
+		Toast("", "Wake-on-LAN failed — check PC");
+	}, WOL_TIMEOUT);
+}
+function WakeStop() {
+	if(iIntervalWakeOnLan) {
+		clearInterval(iIntervalWakeOnLan);
+		iIntervalWakeOnLan = 0;
+	}
+	if(iTimeoutSourceStatus) {
+		clearTimeout(iTimeoutSourceStatus);
+		iTimeoutSourceStatus = 0;
+	}
+}
+// bWasConnected: the PC's signal just went away (it shut down or slept), so it must not be woken
+function InputDisconnected(bWasConnected) {};
 if(bInputDirect){
-	InputDisconnected = function() {
-		Toast("", "PC not reachable — retrying...");
-		// Auto-retry WoL silently
-		if(!iIntervalWakeOnLan) {
-			iIntervalWakeOnLan = startInterval(function() {
-				SendWol({
-					arrMac: arrMac
-				}, strBroadcast);
-			}, WOL_INTERVAL);
-			iTimeoutSourceStatus = setTimeout(function() {
-				iTimeoutSourceStatus = 0;
-				Toast("", "Wake-on-LAN failed — check PC");
-			}, WOL_TIMEOUT);
+	InputDisconnected = function(bWasConnected) {
+		if(bWasConnected) {
+			Toast("", "PC signal lost");
+		} else {
+			Toast("", "PC not reachable — waking it...");
+			WakeStart();
 		}
 	};
 } else {
-	InputDisconnected = function() {
+	InputDisconnected = function(bWasConnected) {
 		Toast("", "PC not reachable — retrying...");
 	};
 }
@@ -418,7 +436,7 @@ function SubscriptionInputStatus() {
 							if(pbLastInputSourceStatus !== null && AppVisible()) {
 								Close();
 							}
-							InputDisconnected();
+							InputDisconnected(pbLastInputSourceStatus === true);
 						}
 					}
 					break;
@@ -915,7 +933,8 @@ function SubscriptionDomEvent() {
 	var bBackExitTriggered = false;
 	document.addEventListener("keydown", function(inEvent) {
 		// Long-press Back (461) for 1 second to exit the app
-		if(inEvent.keyCode === 461 && !iBackLongPressTimer && !inEvent.repeat) {
+		if(inEvent.keyCode === 461) {
+			if(!iBackLongPressTimer && !inEvent.repeat) {
 			bBackExitTriggered = false;
 			iBackLongPressTimer = setTimeout(function() {
 				iBackLongPressTimer = 0;
@@ -929,6 +948,9 @@ function SubscriptionDomEvent() {
 					} catch(e) { window.close(); }
 				}, 400);
 			}, 1000);
+			}
+			SetRemoteEvent();
+			return;
 		}
 		SendKey({
 			usC: inEvent.keyCode,
@@ -939,9 +961,22 @@ function SubscriptionDomEvent() {
 
 	document.addEventListener("keyup", function(inEvent) {
 		// Cancel long-press exit if Back is released early
-		if(inEvent.keyCode === 461 && iBackLongPressTimer) {
-			clearTimeout(iBackLongPressTimer);
-			iBackLongPressTimer = 0;
+		if(inEvent.keyCode === 461) {
+			// Released before the exit fired: a normal Back press for the PC
+			if(iBackLongPressTimer) {
+				clearTimeout(iBackLongPressTimer);
+				iBackLongPressTimer = 0;
+				SendKey({
+					usC: 461,
+					bS: true
+				});
+				SendKey({
+					usC: 461,
+					bS: false
+				});
+			}
+			SetRemoteEvent();
+			return;
 		}
 		SendKey({
 			usC: inEvent.keyCode,
@@ -966,6 +1001,9 @@ function SubscriptionDomEvent() {
 			} else {
 				Close();
 			}
+		} else if(pbInputSourceStatus === false && AppVisible()) {
+			// Back on the input of a PC that is off: this is when to wake it
+			InputDisconnected(false);
 		}
 	});
 
@@ -1044,18 +1082,16 @@ if(bInputDirect){
 			clearTimeout(iTimeoutOpen);
 			iTimeoutOpen = 0;
 		}
-		if(iIntervalWakeOnLan) {
-			clearInterval(iIntervalWakeOnLan);
-			iIntervalWakeOnLan = 0;
-		}
+		WakeStop();
 		if(ScreenExist(deScreenOpen)) {
 			ScreenCancel(deScreenOpen);
 		}
 	}
 }
-function SocketClosed() {};
+// bWake: the user is opening the connection (not a reconnect after the PC went away)
+function SocketClosed(bWake) {};
 if(bInputDirect){
-	SocketClosed = function() {
+	SocketClosed = function(bWake) {
 		Toast("", "Connecting to " + strIP + "...");
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
@@ -1063,15 +1099,10 @@ if(bInputDirect){
 		}, SOCKET_TIMEOUT);
 	};
 } else {
-	SocketClosed = function() {
+	SocketClosed = function(bWake) {
 		Toast("", "Connecting to " + strIP + "...");
-		// Auto-start WoL silently
-		if(!iIntervalWakeOnLan) {
-			iIntervalWakeOnLan = startInterval(function() {
-				SendWol({
-					arrMac: arrMac
-				}, strBroadcast);
-			}, WOL_INTERVAL);
+		if(bWake) {
+			WakeStart();
 		}
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
@@ -1107,16 +1138,35 @@ function DiscoverService(fCallback) {
 		}
 	});
 }
+// One reconnect timer at a time; it never replaces a socket that is already open
+function RetryStart() {
+	RetryStop();
+	iIntervalRetryOpen = setInterval(function() {
+		if(socClient !== null && socClient.readyState === WebSocket.OPEN) return;
+		if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
+			socClient.close();
+		}
+		SocketOpen();
+	}, BUFFER_RECONNECT_INTERVAL);
+}
+function RetryStop() {
+	if(iIntervalRetryOpen) {
+		clearInterval(iIntervalRetryOpen);
+		iIntervalRetryOpen = 0;
+	}
+}
 function SocketOpen() {
-	socClient = new WebSocket("ws://" + strIP + ":" + uiPort + (strToken ? "/?t=" + encodeURIComponent(strToken) : ""));
-	socClient.binaryType = "arraybuffer";
-	socClient.onopen = function(e) {
+	var soc = new WebSocket("ws://" + strIP + ":" + uiPort + (strToken ? "/?t=" + encodeURIComponent(strToken) : ""));
+	socClient = soc;
+	soc.binaryType = "arraybuffer";
+	soc.onopen = function(e) {
+		// A socket that was replaced or closed on purpose no longer counts
+		if(soc !== socClient) return;
 		iConnectionState = CONNECTION_STATE.CONNECTED;
 		LogIfDebug(oString.strSocketOpened);
 		Toast(oString.strAppTittle || "MagicRemoteService", "Connected to " + strIP);
 		SocketOpened();
-		clearInterval(iIntervalRetryOpen);
-		iIntervalRetryOpen = 0;
+		RetryStop();
 		if(ScreenExist(deScreenOpen)) {
 			ScreenCancel(deScreenOpen);
 		}
@@ -1127,24 +1177,21 @@ function SocketOpen() {
 			});
 		}
 	};
-	socClient.onclose = function(e) {
+	soc.onclose = function(e) {
+		if(soc !== socClient) return;
 		iConnectionState = CONNECTION_STATE.DISCONNECTED;
 		LogIfDebug(oString.strSocketClosed);
-		if(socClient !== null && !iIntervalRetryOpen) {
+		if(!iIntervalRetryOpen) {
 			// Only show toast on first disconnect, not on every retry
 			Toast("", "Disconnected — reconnecting...");
 			CursorShowCountIf0();
-			SocketClosed();
+			SocketClosed(false);
 			SocketOpen();
-			iIntervalRetryOpen = setInterval(function() {
-				if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
-					socClient.close();
-				}
-				SocketOpen();
-			}, BUFFER_RECONNECT_INTERVAL);
+			RetryStart();
 		}
 	};
-	socClient.onmessage = function(e) {
+	soc.onmessage = function(e) {
+		if(soc !== socClient) return;
 		if(e.data instanceof ArrayBuffer) {
 			if(e.data.byteLength < 1) return;
 			var dwData = new DataView(e.data);
@@ -1198,29 +1245,27 @@ function Open() {
 		Error(oString.strSocketErrorOpen);
 	} else {
 		iConnectionState = CONNECTION_STATE.CONNECTING;
-		SocketClosed();
+		SocketClosed(true);
 		DiscoverService(function() {
-			SocketOpen();
-		});
-		iIntervalRetryOpen = setInterval(function() {
-			if(socClient !== null && socClient.readyState === WebSocket.CONNECTING) {
-				socClient.close();
+			// Close() may have run while the discovery was pending
+			if(iConnectionState === CONNECTION_STATE.CONNECTING) {
+				SocketOpen();
 			}
-			SocketOpen();
-		}, BUFFER_RECONNECT_INTERVAL);
+		});
+		RetryStart();
 	}
 }
 function Close() {
-	if(iConnectionState === CONNECTION_STATE.DISCONNECTED) return;
-	if(socClient === null) {
-		Error(oString.strSocketErrorClose);
+	// Stop reconnecting whatever the state, so no timer outlives the connection
+	RetryStop();
+	if(iConnectionState === CONNECTION_STATE.DISCONNECTED || socClient === null) {
+		SocketOpened();
+		SocketClose();
+		iConnectionState = CONNECTION_STATE.DISCONNECTED;
+		return;
 	} else {
 		iConnectionState = CONNECTION_STATE.CLOSING;
 		SocketOpened();
-		if(iIntervalRetryOpen) {
-			clearInterval(iIntervalRetryOpen);
-			iIntervalRetryOpen = 0;
-		}
 		if(AppVisible() && AppFocus() && CursorVisible()) {
 			SendVisible({
 				bV: false
@@ -1233,6 +1278,8 @@ function Close() {
 			deKeyboard.blur();
 		}
 		SocketClose();
+		// The closed socket's events are ignored from now on, so Open() can start again at once
+		iConnectionState = CONNECTION_STATE.DISCONNECTED;
 	}
 }
 

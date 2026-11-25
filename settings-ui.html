@@ -303,7 +303,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
       <div class="inline"><input type="number" id="pc-video-min" min="1" max="1440"><span>minutes</span></div>
     </div>
   </div>
-  <div class="note" style="margin-top:0">Five minutes before the time is up, the TV asks whether anyone is watching. If nobody answers on the TV, Windows schedules a shutdown in five minutes, cancelled as soon as the PC is used.</div>
+  <div class="note" style="margin-top:0">With the TV connected, Windows shuts down when the time is up. Using the PC in the last five minutes cancels it (the remote counts).</div>
   <div class="cfg-actions">
     <button class="btn-apply" id="btn-pc-save" onclick="savePc()">Save PC Settings</button>
     <button class="btn-apply" id="btn-pc-restart" onclick="restartService()" style="background:#e6a817;color:#000;display:none">Restart to Use the New Port</button>
@@ -523,28 +523,31 @@ function resetBinding() {
   if (!selectedButton) return;
   delete bindings[selectedButton];
   setLoading("btn-save", true);
-  saveBindings(function() {
+  saveBindings(function(d) {
     setLoading("btn-save", false);
     selectButton(selectedButton);
     markCustomButtons();
-    setTimeout(function() {
-      fetch("/api/restart", { method: "POST", headers: fetchHeaders })
-        .then(function() { showToast("Restarting...", "ok"); setTimeout(function() { location.reload(); }, 3000); });
-    }, 500);
+    restartIfNeeded(d);
   });
 }
 
 function resetAll() {
   if (!confirm("Reset all button bindings to defaults?")) return;
   bindings = {};
-  saveBindings(function() {
+  saveBindings(function(d) {
     markCustomButtons();
     if (selectedButton) selectButton(selectedButton);
-    setTimeout(function() {
-      fetch("/api/restart", { method: "POST", headers: fetchHeaders })
-        .then(function() { showToast("Restarting...", "ok"); setTimeout(function() { location.reload(); }, 3000); });
-    }, 500);
+    restartIfNeeded(d);
   });
+}
+
+// An older (C#) service loads bindings only at start; this one applies them as soon as they're saved
+function restartIfNeeded(saved) {
+  if (!saved || saved.applied) return;
+  setTimeout(function() {
+    fetch("/api/restart", { method: "POST", headers: fetchHeaders })
+      .then(function() { showToast("Restarting...", "ok"); setTimeout(function() { location.reload(); }, 3000); });
+  }, 500);
 }
 
 function saveAndRestart() {
@@ -563,10 +566,9 @@ function saveAndRestart() {
 function saveBindings(callback) {
   var payload = { bindings: {}, scrollExclude: scrollExclude };
   for (var k in bindings) payload.bindings[k] = bindings[k];
-  fetch("/api/bindings", { method: "POST", headers: fetchHeaders, body: JSON.stringify(payload) })
-    .then(function(r) { return r.json(); })
-    .then(function(d) { showToast(d && d.applied ? "Saved and applied." : "Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(); })
-    .catch(function(e) { showToast("Error: " + e, "err"); if (callback) callback(); });
+  postJson("/api/bindings", payload)
+    .then(function(d) { showToast(d.applied ? "Saved and applied." : "Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(d); })
+    .catch(function(e) { showToast("Error: " + e.message, "err"); if (callback) callback(null); });
 }
 
 /* ========================================
@@ -647,10 +649,9 @@ function saveConfig() {
   });
 
   setLoading("btn-cfg-save", true);
-  fetch("/api/config", { method: "POST", headers: fetchHeaders, body: JSON.stringify(cfg) })
-    .then(function(r) { return r.json(); })
+  postJson("/api/config", cfg)
     .then(function() { savedCfg = cfg; showToast("Config saved! Reinstall TV app to apply.", "ok"); setLoading("btn-cfg-save", false); })
-    .catch(function(e) { showToast("Error: " + e, "err"); setLoading("btn-cfg-save", false); });
+    .catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-cfg-save", false); });
 }
 
 function reinstallTV() {
@@ -764,11 +765,14 @@ function savePc() {
   var ia = mins("pc-inact-min"), va = mins("pc-video-min");
   if (isNaN(ia) || ia < 1 || ia > 1440 || isNaN(va) || va < 1 || va > 1440) { showToast("Minutes must be 1-1440", "err"); return; }
   setLoading("btn-pc-save", true);
-  postJson("/api/pc", {
-    port: port, startup: document.getElementById("pc-startup").checked,
+  var body = {
+    port: port,
     inactivity: document.getElementById("pc-inact").checked, timeoutInactivity: ia * 60000,
     videoInput: document.getElementById("pc-video").checked, timeoutVideoInput: va * 60000
-  }).then(function(d) {
+  };
+  var startup = document.getElementById("pc-startup");
+  if (!startup.disabled) body.startup = startup.checked;
+  postJson("/api/pc", body).then(function(d) {
     showToast(d.restartRequired ? "Saved. Restart to listen on the new port." : "Saved and applied.", "ok");
     document.getElementById("btn-pc-restart").style.display = d.restartRequired ? "" : "none";
     setLoading("btn-pc-save", false);

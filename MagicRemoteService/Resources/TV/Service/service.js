@@ -475,6 +475,16 @@ if(bOverlay){
 		SsapLaunch();
 	});
 
+	// Tries the SSAP connection again in 5 s. Used after every way it can fail: refused (the TV's
+	// SSAP server isn't up yet around standby or power-on), answered without an upgrade, or closed.
+	function SsapRetry() {
+		if(iSsapReconnectTimeout) clearTimeout(iSsapReconnectTimeout);
+		iSsapReconnectTimeout = setTimeout(function() {
+			iSsapReconnectTimeout = 0;
+			SsapLaunch();
+		}, 5000);
+	}
+
 	function SsapLaunch() {
 		var strSsapWebSocketClientKey = Buffer.from("13-" + Date.now()).toString("base64");
 		var haSsapWebSocketShaSum = Crypto.createHash("sha1");
@@ -494,6 +504,16 @@ if(bOverlay){
 			}
 		});
 		hrSsap.end();
+		// Without these, a refused connection is an unhandled 'error' that ends the service
+		hrSsap.on("error", function(eError) {
+			LogIfDebug("Ssap request error", eError.message);
+			SsapRetry();
+		});
+		hrSsap.on("response", function(imSsap) {
+			LogIfDebug("Ssap upgrade refused", imSsap.statusCode);
+			imSsap.resume();
+			SsapRetry();
+		});
 		hrSsap.on("upgrade", function(hsrSsap, socSsap, hSsap) {
 			if(hsrSsap.headers["sec-websocket-accept"] !== haSsapWebSocketShaSum.digest("base64")) {
 				Error("Ssap invalid server key");
@@ -501,13 +521,13 @@ if(bOverlay){
 			} else {
 				socSsap.setTimeout(0);
 				socSsap.setNoDelay(true);
+				socSsap.on("error", function(eError) {
+					// 'close' follows and reconnects
+					LogIfDebug("Ssap socket error", eError.message);
+				});
 				socSsap.on("close", function() {
 					LogIfDebug("Ssap close");
-					if(iSsapReconnectTimeout) clearTimeout(iSsapReconnectTimeout);
-					iSsapReconnectTimeout = setTimeout(function() {
-						iSsapReconnectTimeout = 0;
-						SsapLaunch();
-					}, 5000);
+					SsapRetry();
 				});
 				socSsap.on("data", function(bufStream) {
 					try{

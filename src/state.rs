@@ -29,6 +29,7 @@ pub struct Shared {
     on_clients: Mutex<Option<Listener>>,
     /// `generation << 1 | on` for the PC's monitor power.
     monitor: AtomicU64,
+    settings_gen: AtomicU64,
     next_id: AtomicU64,
     stopping: AtomicBool,
 }
@@ -44,6 +45,7 @@ impl Shared {
             clients: Mutex::new(Vec::new()),
             on_clients: Mutex::new(None),
             monitor: AtomicU64::new(1),
+            settings_gen: AtomicU64::new(0),
             next_id: AtomicU64::new(1),
             stopping: AtomicBool::new(false),
         });
@@ -58,6 +60,12 @@ impl Shared {
 
     pub fn set_settings(&self, s: PcSettings) {
         *self.settings.write().unwrap_or_else(|e| e.into_inner()) = s;
+        self.settings_gen.fetch_add(1, Ordering::Release);
+    }
+
+    /// Changes each time the settings are saved, so connected TVs pick up new timeouts.
+    pub fn settings_gen(&self) -> u64 {
+        self.settings_gen.load(Ordering::Acquire)
     }
 
     /// Re-reads `bindings.json` (defaults when absent) and the scroll exclusions in it.

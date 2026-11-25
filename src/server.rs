@@ -97,14 +97,17 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, platform: Arc<dyn Pla
             continue;
         }
         active.fetch_add(1, Ordering::AcqRel);
-        let (shared, platform, active) = (shared.clone(), platform.clone(), active.clone());
+        let (shared, platform, counter) = (shared.clone(), platform.clone(), active.clone());
         let spawned = std::thread::Builder::new().name("ws-conn".into()).spawn(move || {
             connection(stream, &shared, &*platform);
-            active.fetch_sub(1, Ordering::AcqRel);
+            counter.fetch_sub(1, Ordering::AcqRel);
         });
         match spawned {
             Ok(t) => threads.push(t),
-            Err(e) => log::error(format!("Cannot start a connection thread: {e}")),
+            Err(e) => {
+                active.fetch_sub(1, Ordering::AcqRel);
+                log::error(format!("Cannot start a connection thread: {e}"));
+            }
         }
     }
     for t in threads {
@@ -120,7 +123,9 @@ enum Handshake {
 
 /// Reads and answers the upgrade request. Returns bytes received after it.
 fn handshake(stream: &mut TcpStream, shared: &Shared) -> Handshake {
-    let _ = stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT));
+    // One deadline for the whole request head, so a client trickling a byte at a time can't
+    // hold a connection slot open
+    let deadline = Instant::now() + HANDSHAKE_TIMEOUT;
     let mut buf = Vec::with_capacity(1024);
     let mut chunk = [0u8; 2048];
     let end = loop {
@@ -130,9 +135,19 @@ fn handshake(stream: &mut TcpStream, shared: &Shared) -> Handshake {
         if buf.len() >= MAX_HEAD {
             return Handshake::Rejected("request head too large");
         }
+        if shared.stopping() {
+            return Handshake::Gone;
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Handshake::Rejected("handshake not finished in time");
+        }
+        let _ = stream.set_read_timeout(Some(left.min(MAX_WAIT)));
         match stream.read(&mut chunk) {
-            Ok(0) | Err(_) => return Handshake::Gone,
+            Ok(0) => return Handshake::Gone,
             Ok(n) => buf.extend_from_slice(&chunk[..n]),
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+            Err(_) => return Handshake::Gone,
         }
     };
     let head = String::from_utf8_lossy(&buf[..end]);
@@ -182,6 +197,7 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
     };
     let mut session = Session::new(platform.effects(), cfg, Instant::now());
     let mut monitor_seen = shared.monitor().0;
+    let mut settings_seen = shared.settings_gen();
     let mut chunk = vec![0u8; 16 * 1024];
     let reason = loop {
         let now = Instant::now();
@@ -203,6 +219,15 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
         if gen != monitor_seen {
             monitor_seen = gen;
             session.on_monitor(on, now);
+        }
+        if shared.settings_gen() != settings_seen {
+            settings_seen = shared.settings_gen();
+            let s = shared.settings();
+            session.set_timeouts(
+                s.inactivity.then(|| warning_delay(s.timeout_inactivity_ms)),
+                s.video_input.then(|| warning_delay(s.timeout_video_input_ms)),
+                now,
+            );
         }
         session.tick(now);
         if shared.stopping() {

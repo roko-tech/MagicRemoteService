@@ -173,14 +173,20 @@ The exe is `target\release\MagicRemoteService.exe`:
 
 | Command | What it does |
 |---------|--------------|
-| `MagicRemoteService.exe install` | Install or update the service from this exe, with restart-on-failure, the event log source and firewall rules, then start it (admin) |
+| `MagicRemoteService.exe install` | Copy this exe to `C:\Program Files\MagicRemoteService`, bring `bindings.json` and `tv-config.json` over from where the service ran before, and install or update the service from there, with restart-on-failure, the event log source and firewall rules, then start it (admin) |
 | `MagicRemoteService.exe uninstall` | Stop and remove the service (admin) |
 | `MagicRemoteService.exe status` | Service state, port and connected TVs |
 | `MagicRemoteService.exe --port 41330 --no-ssdp` | Run on its own beside an installed service, to try a build |
 
 These are window-less programs, so in PowerShell use `Start-Process -Wait` (or run them from a `.bat`) to wait for their output.
 
-To switch an install made from this repository without admin rights, rename the running exe in `MagicRemoteService\bin\Release` aside, copy the Rust exe in as `MagicRemoteService.exe`, then send `POST http://localhost:41231/api/restart` with the `X-Requested-With` header. To go back, rename the files back and restart the same way. If the new exe fails to start as a service, put the old one back and run `net start MagicRemoteService` from an elevated prompt.
+To install or upgrade, run `install` from an elevated PowerShell, whichever folder the new exe is in:
+
+```
+Start-Process -Wait -Verb RunAs target\release\MagicRemoteService.exe install
+```
+
+The service always runs from `C:\Program Files\MagicRemoteService`. It runs as SYSTEM, so its exe must sit where only administrators can change it; a folder that ordinary accounts can write to (a source checkout, `C:\MagicRemoteService`) would let any account on the PC replace it. To go back to the C# build, point the service at its exe from an elevated prompt (`sc.exe config MagicRemoteService binPath= "<path>\MagicRemoteService.exe"`) and restart it.
 
 ## Building from Source
 

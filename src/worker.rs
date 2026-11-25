@@ -15,7 +15,10 @@ use std::time::Duration;
 use windows_sys::Win32::Foundation::{GetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS};
 use windows_sys::Win32::System::Threading::{CreateMutexW, OpenEventW, WaitForMultipleObjects, INFINITE, SYNCHRONIZATION_SYNCHRONIZE};
 
-pub const MUTEX: &str = "Global\\MagicRemoteService.Worker";
+/// One worker per port, so a trial copy on another port can run beside the service.
+fn mutex_name(port: u16) -> String {
+    format!("Global\\MagicRemoteService.Worker.{port}")
+}
 const RUN_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 pub struct Options {
@@ -126,8 +129,8 @@ impl Host for WorkerHost {
 }
 
 /// Creates the single-instance mutex; `None` when another worker holds it.
-fn single_instance() -> Option<Handle> {
-    let h = unsafe { CreateMutexW(std::ptr::null(), 1, wide(MUTEX).as_ptr()) };
+fn single_instance(port: u16) -> Option<Handle> {
+    let h = unsafe { CreateMutexW(std::ptr::null(), 1, wide(&mutex_name(port)).as_ptr()) };
     let err = unsafe { GetLastError() };
     if h.is_null() || err == ERROR_ALREADY_EXISTS || err == ERROR_ACCESS_DENIED {
         if !h.is_null() {
@@ -190,7 +193,7 @@ pub fn run(opts: Options) -> i32 {
     if let (Some(port), false) = (opts.port, service_mode) {
         pc.port = port;
     }
-    let Some(_instance) = single_instance() else {
+    let Some(_instance) = single_instance(pc.port) else {
         if service_mode {
             log::warn("Another worker is already running");
             return 2;

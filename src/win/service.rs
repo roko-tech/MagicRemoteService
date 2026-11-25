@@ -4,7 +4,7 @@
 use super::{proc, wide, Handle};
 use crate::log;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use windows_service::service::*;
@@ -197,12 +197,79 @@ fn firewall(exe: &Path, port: u16, add: bool) -> bool {
 
 /// Registers (or re-points) the service at this exe, sets restart-on-failure, the event log
 /// source and firewall rules, then starts it.
+/// Where `install` puts the exe: the service runs it as SYSTEM, so it must sit where only
+/// administrators can change it, never in a folder ordinary accounts can write to.
+pub fn install_dir() -> PathBuf {
+    let pf = std::env::var_os("ProgramW6432").or_else(|| std::env::var_os("ProgramFiles")).unwrap_or_else(|| "C:\\Program Files".into());
+    PathBuf::from(pf).join(NAME)
+}
+
+/// The folder the installed service currently runs from.
+fn current_service_dir(svc: &windows_service::service::Service) -> Option<PathBuf> {
+    let path = svc.query_config().ok()?.executable_path;
+    let path = PathBuf::from(path.to_string_lossy().trim().trim_matches('"'));
+    path.parent().map(Path::to_path_buf)
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    matches!((a.canonicalize(), b.canonicalize()), (Ok(x), Ok(y)) if x == y)
+}
+
+/// Copies, retrying while a process that just stopped still holds the old file.
+fn copy_with_retry(from: &Path, to: &Path) -> std::io::Result<()> {
+    let mut tries = 0;
+    loop {
+        match std::fs::copy(from, to) {
+            Ok(_) => return Ok(()),
+            Err(_) if tries < 20 => {
+                tries += 1;
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn wait_stopped(svc: &windows_service::service::Service) {
+    if svc.query_status().is_ok_and(|s| s.current_state != ServiceState::Stopped) {
+        let _ = svc.stop();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while svc.query_status().is_ok_and(|s| s.current_state != ServiceState::Stopped) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+}
+
+/// Installs or upgrades: copies this exe to `install_dir()`, brings `bindings.json` and
+/// `tv-config.json` over from where the service ran before, then registers and starts that copy.
 pub fn install() -> Result<String, String> {
     if !proc::is_elevated() {
         return Err("Run this from an elevated (administrator) prompt.".into());
     }
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let source = std::env::current_exe().map_err(|e| e.to_string())?;
+    let dir = install_dir();
+    let exe = dir.join(format!("{NAME}.exe"));
     let m = manager(ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE)?;
+    let existing = m.open_service(NAME, ServiceAccess::all()).ok();
+    let previous = existing.as_ref().and_then(current_service_dir);
+    if let Some(svc) = &existing {
+        wait_stopped(svc);
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot create {}: {e}", dir.display()))?;
+    if !same_file(&source, &exe) {
+        copy_with_retry(&source, &exe).map_err(|e| format!("Cannot copy the exe to {}: {e}", exe.display()))?;
+    }
+    let mut copied = Vec::new();
+    for name in ["bindings.json", "tv-config.json"] {
+        let target = dir.join(name);
+        if target.exists() {
+            continue;
+        }
+        if let Some(from) = previous.iter().map(PathBuf::as_path).chain(source.parent()).map(|d| d.join(name)).find(|p| p.is_file()) {
+            std::fs::copy(&from, &target).map_err(|e| format!("Cannot copy {}: {e}", from.display()))?;
+            copied.push(format!("{name} from {}", from.parent().map(|p| p.display().to_string()).unwrap_or_default()));
+        }
+    }
     let info = ServiceInfo {
         name: NAME.into(),
         display_name: NAME.into(),
@@ -215,19 +282,12 @@ pub fn install() -> Result<String, String> {
         account_name: None,
         account_password: None,
     };
-    let svc = match m.open_service(NAME, ServiceAccess::all()) {
-        Ok(svc) => {
-            if svc.query_status().is_ok_and(|s| s.current_state != ServiceState::Stopped) {
-                let _ = svc.stop();
-                let deadline = Instant::now() + Duration::from_secs(20);
-                while svc.query_status().is_ok_and(|s| s.current_state != ServiceState::Stopped) && Instant::now() < deadline {
-                    std::thread::sleep(Duration::from_millis(300));
-                }
-            }
+    let svc = match existing {
+        Some(svc) => {
             svc.change_config(&info).map_err(|e| format!("Cannot update the service: {e}"))?;
             svc
         }
-        Err(_) => m.create_service(&info, ServiceAccess::all()).map_err(|e| format!("Cannot create the service: {e}"))?,
+        None => m.create_service(&info, ServiceAccess::all()).map_err(|e| format!("Cannot create the service: {e}"))?,
     };
     let _ = svc.set_description("Lets the LG Magic Remote control this PC through the MagicRemoteService TV app.");
     let restart = ServiceAction { action_type: ServiceActionType::Restart, delay: Duration::from_secs(5) };
@@ -241,12 +301,17 @@ pub fn install() -> Result<String, String> {
     let port = crate::settings::Scope::Machine.load().port;
     let fw = firewall(&exe, port, true);
     svc.start(&[] as &[&str]).map_err(|e| format!("Installed, but the service did not start: {e}"))?;
-    Ok(format!(
-        "Service installed from {} and started.{}\nSettings: http://localhost:{}/",
-        exe.display(),
-        if fw { "" } else { "\nWarning: the firewall rules could not be added." },
-        port + 1
-    ))
+    let mut msg = format!("Service installed in {} and started.\nSettings: http://localhost:{}/", dir.display(), port as u32 + 1);
+    if !copied.is_empty() {
+        msg += &format!("\nCopied {}.", copied.join(", "));
+    }
+    if let Some(old) = previous.filter(|p| !same_file(p, &dir)) {
+        msg += &format!("\nThe service no longer runs from {}; you can delete that copy once everything works.", old.display());
+    }
+    if !fw {
+        msg += "\nWarning: the firewall rules could not be added.";
+    }
+    Ok(msg)
 }
 
 pub fn uninstall() -> Result<String, String> {

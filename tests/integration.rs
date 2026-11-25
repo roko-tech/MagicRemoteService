@@ -389,3 +389,30 @@ fn http_server_answers_over_a_real_socket() {
     t.join().unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_trickled_handshake_is_cut_off_after_ten_seconds() {
+    let rig = Rig::new("trickle", None);
+    let mut s = TcpStream::connect((Ipv4Addr::LOCALHOST, rig.port())).unwrap();
+    let start = Instant::now();
+    let writer = {
+        let mut w = s.try_clone().unwrap();
+        std::thread::spawn(move || {
+            // One byte a second, never finishing the request head
+            for b in b"GET / HTTP/1.1\r\nHost: pc\r\nX-Slow: aaaaaaaaaaaaaaaaaaaa".iter() {
+                if w.write_all(&[*b]).is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        })
+    };
+    s.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    let took = start.elapsed();
+    assert!(out.starts_with("HTTP/1.1 403"), "{out:?}");
+    assert!(took >= Duration::from_millis(9_500) && took < Duration::from_secs(13), "{took:?}");
+    drop(s);
+    let _ = writer.join();
+}

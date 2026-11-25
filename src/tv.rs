@@ -6,6 +6,8 @@ use crate::win::Handle;
 use serde_json::Value;
 use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 macro_rules! tv_files {
@@ -39,6 +41,16 @@ static FILES: &[(&str, &[u8])] = tv_files![
 static NODE_POLYFILL: &[u8] = include_bytes!("../MagicRemoteService/Resources/node-polyfill.js");
 const TEMPLATE_APP_ID: &str = "com.cathwyler.magicremoteservice";
 const ARES_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Gives each polyfill copy and build folder its own name, so concurrent ares runs (a reinstall
+/// while the web UI lists TVs) never share or delete each other's files.
+static UNIQUE: AtomicU64 = AtomicU64::new(1);
+/// One TV reinstall at a time.
+static REINSTALL: Mutex<()> = Mutex::new(());
+
+fn unique(prefix: &str) -> String {
+    format!("{prefix}-{}-{}", std::process::id(), UNIQUE.fetch_add(1, Ordering::Relaxed))
+}
 
 /// Only the ids `install.bat` and the web UI generate, since the id ends up on a command line.
 pub fn valid_app_id(id: &str) -> bool {
@@ -130,13 +142,19 @@ impl Ares {
         env.push(("PATH".into(), path.clone()));
         let scratch = get(&env, "TEMP").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
         let node = path.split(';').map(|d| Path::new(d).join("node.exe")).find(|p| p.is_file());
-        let polyfill = scratch.join("MagicRemoteService-node-polyfill.js");
-        std::fs::write(&polyfill, NODE_POLYFILL).map_err(|e| format!("Cannot write to {}: {e}", scratch.display()))?;
-        Ok(Ares { user, env, scratch, node, polyfill })
+        let polyfill = scratch.join(format!("{}.js", unique("MagicRemoteService-node-polyfill")));
+        let ares = Ares { user, env, scratch, node, polyfill };
+        ares.as_user(|| std::fs::write(&ares.polyfill, NODE_POLYFILL))?.map_err(|e| format!("Cannot write to {}: {e}", ares.scratch.display()))?;
+        Ok(ares)
     }
 
     pub fn scratch(&self) -> &Path {
         &self.scratch
+    }
+
+    /// Runs file work in the scratch folder (the user's TEMP) with the user's rights, never SYSTEM's.
+    fn as_user<T>(&self, f: impl FnOnce() -> T) -> Result<T, String> {
+        proc::as_user(self.user.as_ref(), f).map_err(|e| format!("Cannot act as the signed-in user: {e}"))
     }
 
     /// Runs `command args`; through `node --require polyfill` when possible (Node 22+ removed
@@ -154,15 +172,7 @@ impl Ares {
             }
             _ => (proc::system_dir().join("cmd.exe"), format!("/c {command} {args}")),
         };
-        let spec = RunSpec {
-            program: &program,
-            args: &line,
-            cwd: Some(&self.scratch),
-            env: &self.env,
-            user: self.user.as_ref(),
-            timeout: ARES_TIMEOUT,
-            scratch: &self.scratch,
-        };
+        let spec = RunSpec { program: &program, args: &line, cwd: Some(&self.scratch), env: &self.env, user: self.user.as_ref(), timeout: ARES_TIMEOUT };
         let out = proc::run(&spec).map_err(|e| format!("{command}: {e}"))?;
         if out.code != 0 {
             let detail = if out.stderr.trim().is_empty() { out.stdout.trim() } else { out.stderr.trim() };
@@ -183,22 +193,26 @@ impl Ares {
 
 impl Drop for Ares {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.polyfill);
+        let _ = self.as_user(|| std::fs::remove_file(&self.polyfill));
     }
 }
 
 /// Writes the TV sources into `build` and runs ares-package there. Returns the .ipk path.
 fn package(ares: &Ares, build: &Path, app_id: &str, version: &str, input_name: &str, config: &[u8]) -> Result<PathBuf, String> {
-    for (rel, data) in render(app_id, version, input_name, config) {
-        let path = build.join(rel.replace('/', "\\"));
-        std::fs::create_dir_all(path.parent().unwrap_or(build)).map_err(|e| e.to_string())?;
-        std::fs::write(&path, data).map_err(|e| e.to_string())?;
-    }
+    ares.as_user(|| -> std::io::Result<()> {
+        for (rel, data) in render(app_id, version, input_name, config) {
+            let path = build.join(rel.replace('/', "\\"));
+            std::fs::create_dir_all(path.parent().unwrap_or(build))?;
+            std::fs::write(&path, data)?;
+        }
+        Ok(())
+    })?
+    .map_err(|e| format!("Cannot write the TV sources: {e}"))?;
     let q = |p: &Path| proc::quote(&p.to_string_lossy());
     ares.run("ares-package", &format!("{} -n -o {} {}", q(&build.join("MagicRemoteService")), q(build), q(&build.join("Service"))))
         .map_err(|e| format!("ares-package failed: {e}"))?;
     let ipk = build.join(format!("{app_id}_{version}_all.ipk"));
-    if ipk.is_file() {
+    if ares.as_user(|| ipk.is_file())? {
         Ok(ipk)
     } else {
         Err(format!("ares-package did not produce {}", ipk.display()))
@@ -214,9 +228,14 @@ pub fn reinstall(tv_config: &Path, version: &str) -> Result<String, String> {
         return Err("Invalid appId in tv-config.json.".into());
     }
     let input_name = doc.get("inputName").and_then(Value::as_str).unwrap_or("HDMI").to_string();
+    let _one_at_a_time = match REINSTALL.try_lock() {
+        Ok(guard) => guard,
+        // A reinstall that panicked left nothing that matters behind
+        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return Err("A TV reinstall is already running.".into()),
+    };
     let ares = Ares::new()?;
-    let build = ares.scratch().join("mrs-webui-deploy");
-    let _ = std::fs::remove_dir_all(&build);
+    let build = ares.scratch().join(unique("mrs-tv-deploy"));
     let result = (|| {
         let devices = ares.devices().map_err(|e| format!("ares-setup-device failed: {e}"))?;
         let device =
@@ -229,7 +248,7 @@ pub fn reinstall(tv_config: &Path, version: &str) -> Result<String, String> {
         Ok(format!("Installed and launched {app_id} {version} on {device}."))
     })();
     // The build folder's config.json holds the device token, so never leave it behind
-    if std::fs::remove_dir_all(&build).is_err() && build.exists() {
+    if ares.as_user(|| std::fs::remove_dir_all(&build).is_err() && build.exists()).unwrap_or(true) {
         log::warn("Could not remove the TV build folder");
     }
     result
