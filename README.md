@@ -147,6 +147,41 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | Can't exit TV app | Press and hold the Back button for 1 second |
 | Forgot what a button does | Hover it in the web UI — shows current binding |
 
+## Rust Version (3.0, in testing)
+
+The PC side has been rebuilt in Rust (`src/`, `Cargo.toml`). It speaks the same protocol to the same TV app and reads the same `bindings.json`, `tv-config.json` and registry settings, so it is a drop-in replacement for `MagicRemoteService.exe`. Until it replaces the C# build below, both live in this repository.
+
+What changes:
+
+- **One file.** A 1.4 MB exe with the web UI, TV app, cursor and icon built in. No .NET Framework, MSBuild, Visual Studio Build Tools or NuGet. Node.js and `@webos-tools/cli` are still needed to deploy the TV app.
+- **Lighter.** About 2 MB of private memory for the idle worker (plus a small supervisor in service mode), against about 50 MB for the two C# processes.
+- **Simpler and self-healing.** The service keeps one worker running in the console session and restarts it after a crash. This replaces the socket hand-off through a named pipe and the six global events.
+- **Settings apply live.** Saved bindings, scroll exclusions, the device token and the shutdown timeouts take effect without a restart. Only a port change needs one.
+- **Web UI only.** The WinForms window is gone. The web UI gains PC settings (port, shutdown timeouts, start with Windows), a per-TV pointer display, every connected TV in the status bar, and a Recent Events log.
+- **Safer.** Shell-command bindings, ares-cli and the browser run as the signed-in user, not as SYSTEM. The web UI listens on loopback only and refuses other `Host` names (DNS rebinding) and foreign `Origin`s. The token is compared in constant time, request sizes are capped, and a connection that does not finish its WebSocket handshake within 10 seconds is dropped.
+- **Correct pointing on high-DPI and multi-monitor PCs.** The process is per-monitor DPI aware, so the TV's absolute pointer lands on exact pixels.
+- **Fixes.** Mouse speed is restored when the remote's pointer hides; the C# build never restored it. One TV hiding its pointer no longer resets the cursor for another. `/api/pcinfo` lists the network with a gateway first, so `install.bat` no longer picks a VPN or Hyper-V adapter. ares-cli only runs on a TV connection when a TV is mapped to a display.
+
+Build and test (Rust 1.85+, MSVC toolchain):
+
+```
+cargo test
+cargo build --release
+```
+
+The exe is `target\release\MagicRemoteService.exe`:
+
+| Command | What it does |
+|---------|--------------|
+| `MagicRemoteService.exe install` | Install or update the service from this exe, with restart-on-failure, the event log source and firewall rules, then start it (admin) |
+| `MagicRemoteService.exe uninstall` | Stop and remove the service (admin) |
+| `MagicRemoteService.exe status` | Service state, port and connected TVs |
+| `MagicRemoteService.exe --port 41330 --no-ssdp` | Run on its own beside an installed service, to try a build |
+
+These are window-less programs, so in PowerShell use `Start-Process -Wait` (or run them from a `.bat`) to wait for their output.
+
+To switch an install made from this repository without admin rights, rename the running exe in `MagicRemoteService\bin\Release` aside, copy the Rust exe in as `MagicRemoteService.exe`, then send `POST http://localhost:41231/api/restart` with the `X-Requested-With` header. To go back, rename the files back and restart the same way. If the new exe fails to start as a service, put the old one back and run `net start MagicRemoteService` from an elevated prompt.
+
 ## Building from Source
 
 ```

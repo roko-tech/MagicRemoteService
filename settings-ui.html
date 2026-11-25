@@ -81,6 +81,18 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .excl-item{display:flex;align-items:center;gap:8px;padding:4px 0}
 .excl-name{color:#e0e0e0;font-size:13px;font-family:monospace;flex:1}
 .excl-rm{background:none;border:1px solid #f8717144;color:#f87171;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px}
+.field label.check,.check{display:flex;align-items:center;gap:8px;color:#aaa;font-size:13px;cursor:pointer;margin-bottom:6px;text-transform:none;letter-spacing:0;font-weight:400}
+.check input{width:auto;accent-color:#4ecca3}
+.inline{display:flex;align-items:center;gap:8px}
+.inline input{width:90px}
+.inline span{color:#7d8590;font-size:12px}
+.map-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+.map-row .tv{flex:0 0 150px;font-size:13px;color:#e0e0e0}
+.map-row .tv small{display:block;color:#7d8590;font-size:11px}
+.map-row select{flex:1;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:13px}
+.log{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;max-height:260px;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}
+.log div{white-space:pre-wrap;word-break:break-word}
+.log .t{color:#555}.log .warn{color:#f59e0b}.log .error{color:#f87171}
 @media(max-width:700px){
   .main{flex-direction:column;align-items:center}
   .panel{width:100%;min-height:auto}
@@ -232,7 +244,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <button class="btn-apply" id="btn-save" onclick="applyBinding()">Save Binding</button>
     <button class="btn-reset" onclick="resetBinding()">Reset to Default</button>
     <button class="btn-apply" id="btn-restart" onclick="saveAndRestart()" style="background:#e6a817;color:#000;margin-top:14px">Save &amp; Restart Service</button>
-    <div class="note">Save applies the binding. Restart reloads all bindings.</div>
+    <div class="note" id="bind-note">Save applies the binding. Restart reloads all bindings.</div>
 
     <button class="btn-reset" onclick="resetAll()" style="margin-top:14px;border-color:#f5920044;color:#f59e0b">Reset All Bindings</button>
 
@@ -272,6 +284,46 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <button class="btn-apply" id="btn-cfg-reinstall" onclick="reinstallTV()" style="background:#e6a817;color:#000">Reinstall TV App</button>
   </div>
   <div id="cfg-status" class="note" style="margin-top:8px"></div>
+</div>
+</div>
+
+<div class="cfg-section" id="pc-section" style="display:none">
+<div class="cfg-panel">
+  <h2>PC</h2>
+  <div class="note" id="pc-mode" style="margin-top:0;margin-bottom:12px"></div>
+  <div class="cfg-grid">
+    <div class="field"><label>TV Port</label><input type="number" id="pc-port" min="1024" max="65534"></div>
+    <div class="field"><label>Startup</label><label class="check"><input type="checkbox" id="pc-startup"> Start with Windows</label></div>
+    <div class="field"><label>Inactivity</label>
+      <label class="check"><input type="checkbox" id="pc-inact"> Offer to shut down when the remote is idle</label>
+      <div class="inline"><input type="number" id="pc-inact-min" min="1" max="1440"><span>minutes</span></div>
+    </div>
+    <div class="field"><label>Monitor off</label>
+      <label class="check"><input type="checkbox" id="pc-video"> Offer to shut down when the monitor is off</label>
+      <div class="inline"><input type="number" id="pc-video-min" min="1" max="1440"><span>minutes</span></div>
+    </div>
+  </div>
+  <div class="note" style="margin-top:0">Five minutes before the time is up, the TV asks whether anyone is watching. If nobody answers on the TV, Windows schedules a shutdown in five minutes, cancelled as soon as the PC is used.</div>
+  <div class="cfg-actions">
+    <button class="btn-apply" id="btn-pc-save" onclick="savePc()">Save PC Settings</button>
+    <button class="btn-apply" id="btn-pc-restart" onclick="restartService()" style="background:#e6a817;color:#000;display:none">Restart to Use the New Port</button>
+  </div>
+</div>
+</div>
+
+<div class="cfg-section" id="disp-section" style="display:none">
+<div class="cfg-panel">
+  <h2>Pointer Display</h2>
+  <div class="note" style="margin-top:0;margin-bottom:12px">With several monitors, pick the one each TV shows, so its pointer lands there.</div>
+  <div id="disp-list" class="note">Loading TVs from ares-cli...</div>
+</div>
+</div>
+
+<div class="cfg-section" id="log-section" style="display:none">
+<div class="cfg-panel">
+  <h2>Recent Events</h2>
+  <div class="log" id="log"></div>
+  <div class="cfg-actions"><button class="btn-reset" onclick="loadLogs()" style="margin-top:0">Refresh</button></div>
 </div>
 </div>
 
@@ -513,7 +565,7 @@ function saveBindings(callback) {
   for (var k in bindings) payload.bindings[k] = bindings[k];
   fetch("/api/bindings", { method: "POST", headers: fetchHeaders, body: JSON.stringify(payload) })
     .then(function(r) { return r.json(); })
-    .then(function() { showToast("Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(); })
+    .then(function(d) { showToast(d && d.applied ? "Saved and applied." : "Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(); })
     .catch(function(e) { showToast("Error: " + e, "err"); if (callback) callback(); });
 }
 
@@ -652,14 +704,16 @@ function sanitize(str) {
    ======================================== */
 function renderStatus(d) {
   var sb = document.getElementById("sb");
-  var safeIp = sanitize(d.clientIp);
+  var ips = (d.clients || []).map(function(c) { return sanitize(c.ip); });
+  var safeIp = ips.length > 1 ? ips.length + " TVs (" + ips.join(", ") + ")" : sanitize(d.clientIp);
   var connected = d.connectedClients > 0;
   sb.innerHTML =
     '<div class="chip"><span class="dot dot-g"></span> Port ' + d.port + '</div>' +
     '<div class="chip"><span class="dot ' + (connected ? "dot-g dot-pulse" : "dot-r") + '"></span> ' +
     (connected ? safeIp + " connected" : "No TV") + '</div>' +
     '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
-    (d.inactivity ? "On" : "Off") + '</div>';
+    (d.inactivity ? "On" : "Off") + '</div>' +
+    (d.version ? '<div class="chip">v' + sanitize(d.version) + (d.mode ? " &middot; " + sanitize(d.mode) : "") + '</div>' : "");
 }
 
 function updateStatus() {
@@ -667,6 +721,130 @@ function updateStatus() {
     .then(function(r) { return r.json(); })
     .then(function(d) { renderStatus(d); })
     .catch(function() {});
+}
+
+/* ========================================
+   PC settings, pointer display, events (Rust service only)
+   ======================================== */
+function getJson(url) {
+  return fetch(url).then(function(r) {
+    if (!r.ok || (r.headers.get("Content-Type") || "").indexOf("application/json") < 0) throw new Error(url + " unavailable");
+    return r.json();
+  });
+}
+
+function postJson(url, body) {
+  return fetch(url, { method: "POST", headers: fetchHeaders, body: JSON.stringify(body) }).then(function(r) {
+    return r.json().then(function(d) { if (!r.ok) throw new Error(d.error || ("HTTP " + r.status)); return d; });
+  });
+}
+
+function loadPc() {
+  getJson("/api/pc").then(function(d) {
+    document.getElementById("pc-section").style.display = "";
+    document.getElementById("pc-port").value = d.port;
+    document.getElementById("pc-inact").checked = d.inactivity;
+    document.getElementById("pc-inact-min").value = Math.round(d.timeoutInactivity / 60000);
+    document.getElementById("pc-video").checked = d.videoInput;
+    document.getElementById("pc-video-min").value = Math.round(d.timeoutVideoInput / 60000);
+    var st = document.getElementById("pc-startup");
+    st.checked = !!d.startup;
+    st.disabled = d.startup === null;
+    document.getElementById("pc-mode").textContent = d.mode === "service"
+      ? "Running as the Windows service. Start with Windows switches the service between automatic and manual start."
+      : "Running on its own (not as the service). Start with Windows adds it to your sign-in programs.";
+    document.getElementById("btn-pc-restart").style.display = d.port !== d.runningPort ? "" : "none";
+  }).catch(function() {});
+}
+
+function savePc() {
+  var mins = function(id) { return parseInt(document.getElementById(id).value, 10); };
+  var port = parseInt(document.getElementById("pc-port").value, 10);
+  if (isNaN(port) || port < 1024 || port > 65534) { showToast("Port must be 1024-65534", "err"); return; }
+  var ia = mins("pc-inact-min"), va = mins("pc-video-min");
+  if (isNaN(ia) || ia < 1 || ia > 1440 || isNaN(va) || va < 1 || va > 1440) { showToast("Minutes must be 1-1440", "err"); return; }
+  setLoading("btn-pc-save", true);
+  postJson("/api/pc", {
+    port: port, startup: document.getElementById("pc-startup").checked,
+    inactivity: document.getElementById("pc-inact").checked, timeoutInactivity: ia * 60000,
+    videoInput: document.getElementById("pc-video").checked, timeoutVideoInput: va * 60000
+  }).then(function(d) {
+    showToast(d.restartRequired ? "Saved. Restart to listen on the new port." : "Saved and applied.", "ok");
+    document.getElementById("btn-pc-restart").style.display = d.restartRequired ? "" : "none";
+    setLoading("btn-pc-save", false);
+  }).catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-pc-save", false); });
+}
+
+function restartService() {
+  setLoading("btn-pc-restart", true);
+  postJson("/api/restart", {}).then(function() {
+    showToast("Restarting...", "ok");
+    var port = parseInt(document.getElementById("pc-port").value, 10);
+    setTimeout(function() { location.href = "http://" + location.hostname + ":" + (port + 1) + "/"; }, 4000);
+  }).catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-pc-restart", false); });
+}
+
+function loadDisplays() {
+  getJson("/api/displays").then(function(d) {
+    document.getElementById("disp-section").style.display = "";
+    var list = document.getElementById("disp-list");
+    list.className = "";
+    list.innerHTML = "";
+    if (!d.devices.length) {
+      list.className = "note";
+      list.textContent = d.error ? "ares-cli: " + d.error : "No TVs set up in ares-cli.";
+      return;
+    }
+    d.devices.forEach(function(dev) {
+      var row = document.createElement("div");
+      row.className = "map-row";
+      var tv = document.createElement("div");
+      tv.className = "tv";
+      tv.textContent = dev.name;
+      var ip = document.createElement("small");
+      ip.textContent = dev.ip || "";
+      tv.appendChild(ip);
+      var sel = document.createElement("select");
+      var opt = document.createElement("option");
+      opt.value = "0";
+      opt.textContent = "Primary display";
+      sel.appendChild(opt);
+      d.displays.forEach(function(s) {
+        var o = document.createElement("option");
+        o.value = String(s.id);
+        o.textContent = s.number + ": " + (s.name || "Display") + (s.active ? " (" + s.width + "x" + s.height + (s.primary ? ", primary" : "") + ")" : " (off)");
+        sel.appendChild(o);
+      });
+      sel.value = dev.display === null || dev.display === undefined ? "0" : String(dev.display);
+      sel.onchange = function() {
+        postJson("/api/display", { device: dev.name, display: parseInt(sel.value, 10) })
+          .then(function() { showToast(dev.name + ": saved, applies when it next connects.", "ok"); })
+          .catch(function(e) { showToast("Error: " + e.message, "err"); });
+      };
+      row.appendChild(tv);
+      row.appendChild(sel);
+      list.appendChild(row);
+    });
+  }).catch(function() {});
+}
+
+function loadLogs() {
+  getJson("/api/logs").then(function(entries) {
+    document.getElementById("log-section").style.display = "";
+    var el = document.getElementById("log");
+    el.innerHTML = "";
+    entries.slice(-100).reverse().forEach(function(e) {
+      var row = document.createElement("div");
+      row.className = e.level;
+      var t = document.createElement("span");
+      t.className = "t";
+      t.textContent = new Date(e.time).toLocaleTimeString() + "  ";
+      row.appendChild(t);
+      row.appendChild(document.createTextNode(e.message));
+      el.appendChild(row);
+    });
+    if (!entries.length) el.textContent = "Nothing yet.";
+  }).catch(function() {});
 }
 
 /* ========================================
@@ -736,6 +914,10 @@ fetch("/api/settings")
   .then(function(r) { return r.json(); })
   .then(function(d) {
     renderStatus(d);
+    if (d.version) {
+      document.getElementById("btn-restart").style.display = "none";
+      document.getElementById("bind-note").textContent = "Bindings apply as soon as they are saved.";
+    }
 
     // Load bindings
     if (d.bindings && d.bindings.bindings) {
@@ -753,6 +935,10 @@ fetch("/api/settings")
       renderExclusions();
     }
   });
+
+loadPc();
+loadDisplays();
+loadLogs();
 
 // Poll status every 10s
 setInterval(updateStatus, 10000);

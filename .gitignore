@@ -359,3 +359,6 @@ service_stdout.log
 service_stderr.log
 magic_remote.log
 nuget.exe
+
+# Rust
+/target/

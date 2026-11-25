@@ -40,6 +40,37 @@ jobs:
           MagicRemoteService/bin/Release/fr/
         retention-days: 30
 
+  rust:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Rust
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup component add clippy rustfmt
+
+    - name: Check formatting
+      run: cargo fmt --check
+
+    - name: Lint
+      run: cargo clippy --all-targets --locked -- -D warnings
+
+    - name: Test
+      run: cargo test --locked
+
+    - name: Build release
+      run: cargo build --release --locked
+
+    - name: Upload Rust build
+      uses: actions/upload-artifact@v4
+      with:
+        name: MagicRemoteService-Rust
+        path: target/release/MagicRemoteService.exe
+        retention-days: 30
+
   release:
     needs: build
     runs-on: ubuntu-latest
