@@ -1,6 +1,6 @@
 [package]
 name = "magic-remote-service"
-version = "3.0.0"
+version = "3.0.1"
 edition = "2021"
 rust-version = "1.85"
 description = "Control a Windows PC with the LG Magic Remote"
