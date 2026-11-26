@@ -144,6 +144,17 @@ impl Files {
     pub fn tv_config(&self) -> PathBuf {
         self.dir.join("tv-config.json")
     }
+    /// The paired TVs, with the passphrases of their keys.
+    pub fn tvs(&self) -> PathBuf {
+        self.dir.join("tvs.json")
+    }
+    /// A paired TV's SSH key, as its Developer Mode app served it.
+    pub fn tv_key(&self, name: &str) -> PathBuf {
+        self.dir.join(format!("tv-{name}.key"))
+    }
+    pub fn tv_known_hosts(&self) -> PathBuf {
+        self.dir.join("tv-known_hosts")
+    }
 }
 
 pub fn read_json(path: &Path) -> Option<Value> {

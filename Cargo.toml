@@ -17,6 +17,8 @@ name = "MagicRemoteService"
 path = "src/main.rs"
 
 [dependencies]
+# gzip for the TV package (.ipk); pure Rust
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 sha1_smol = "1"
 socket2 = "0.6"

@@ -295,7 +295,13 @@ impl Host for FakeHost {
         json!({ "port": 41230, "interfaces": [] })
     }
     fn reinstall_tv(&self) -> Result<String, String> {
-        Err("no ares here".into())
+        Err("no TV here".into())
+    }
+    fn tvs(&self) -> Value {
+        json!([])
+    }
+    fn pair_tv(&self, _: &str, _: std::net::Ipv4Addr, _: &str) -> Result<String, String> {
+        Err("no TV here".into())
     }
     fn restart(&self) {
         *self.restarts.lock().unwrap() += 1;
@@ -403,7 +409,16 @@ fn http_api_keeps_the_c_sharp_contract_and_guards_requests() {
     assert_eq!(host.saved.lock().unwrap().as_ref().unwrap().timeout_inactivity_ms, 3_600_000);
     assert_eq!(shared.settings().timeout_inactivity_ms, 3_600_000);
 
-    assert_eq!(api(&shared, &host, "POST", "/api/reinstall", "", true).1, json!({"success": false, "message": "no ares here"}));
+    assert_eq!(api(&shared, &host, "POST", "/api/reinstall", "", true).1, json!({"success": false, "message": "no TV here"}));
+
+    // Paired TVs: pairing needs an address; the list is edited by name and never shows a passphrase
+    assert_eq!(api(&shared, &host, "POST", "/api/tvs/pair", r#"{"ip": "tv", "passphrase": "ABC123"}"#, true).0, 400);
+    assert_eq!(api(&shared, &host, "POST", "/api/tvs/pair", r#"{"ip": "192.168.1.5", "passphrase": "ABC123"}"#, false).0, 403);
+    std::fs::write(shared.files.tvs(), r#"{"tvs": [{"name": "C2", "host": "192.168.1.5", "passphrase": "ABC123", "default": true}]}"#).unwrap();
+    assert_eq!(api(&shared, &host, "POST", "/api/tvs/default", r#"{"name": "Kitchen"}"#, true).0, 400);
+    assert_eq!(api(&shared, &host, "POST", "/api/tvs/default", r#"{"name": "C2"}"#, true).0, 200);
+    assert_eq!(api(&shared, &host, "POST", "/api/tvs/remove", r#"{"name": "C2"}"#, true).0, 200);
+    assert_eq!(serde_json::from_slice::<Value>(&std::fs::read(shared.files.tvs()).unwrap()).unwrap(), json!({"tvs": []}));
     assert_eq!(api(&shared, &host, "POST", "/api/restart", "", true).1, json!({"restarting": true}));
     assert_eq!(*host.restarts.lock().unwrap(), 1);
     assert_eq!(api(&shared, &host, "GET", "/api/nope", "", false).0, 404);

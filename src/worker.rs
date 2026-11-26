@@ -61,7 +61,15 @@ impl Host for WorkerHost {
     }
 
     fn reinstall_tv(&self) -> Result<String, String> {
-        tv::reinstall(&self.shared.files.tv_config(), env!("CARGO_PKG_VERSION"))
+        tv::reinstall(&self.shared.files, env!("CARGO_PKG_VERSION"))
+    }
+
+    fn tvs(&self) -> Value {
+        Value::Array(tv::tvs(&self.shared.files).iter().map(tv::Tv::public).collect())
+    }
+
+    fn pair_tv(&self, name: &str, ip: std::net::Ipv4Addr, passphrase: &str) -> Result<String, String> {
+        tv::pair(&self.shared.files, name, ip, passphrase)
     }
 
     fn restart(&self) {
@@ -112,15 +120,11 @@ impl Host for WorkerHost {
             .map(|s| json!({ "id": s.id, "number": s.number, "name": s.name, "active": s.active, "primary": s.primary, "width": s.bounds.width, "height": s.bounds.height }))
             .collect();
         let mappings = self.scope.displays();
-        let (devices, error) = match tv::Ares::new().and_then(|a| a.devices()) {
-            Ok(list) => (list, None),
-            Err(e) => (Vec::new(), Some(e)),
-        };
-        let devices: Vec<Value> = devices
+        let devices: Vec<Value> = tv::tvs(&self.shared.files)
             .iter()
-            .map(|d| json!({ "name": d.name, "ip": d.ip.map(|i| i.to_string()), "default": d.default, "display": mappings.iter().find(|(n, _)| *n == d.name).map(|(_, v)| *v) }))
+            .map(|t| json!({ "name": t.name, "ip": t.host.to_string(), "default": t.default, "display": mappings.iter().find(|(n, _)| *n == t.name).map(|(_, v)| *v) }))
             .collect();
-        json!({ "displays": displays, "devices": devices, "error": error })
+        json!({ "displays": displays, "devices": devices })
     }
 
     fn set_display(&self, device: &str, display: u32) -> Result<(), String> {

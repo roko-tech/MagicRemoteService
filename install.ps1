@@ -5,9 +5,9 @@ Installs or updates MagicRemoteService on this PC and deploys its app to an LG w
 .DESCRIPTION
 Uses MagicRemoteService.exe from next to this script (a release download) or from
 target\release (a source checkout, built with cargo when missing). The exe copies itself to
-C:\Program Files\MagicRemoteService and registers the Windows service. The TV app is then
-configured and installed through the service's local API, which runs the webOS CLI (ares)
-as the signed-in user.
+C:\Program Files\MagicRemoteService and registers the Windows service. The TV is then paired
+and the TV app configured and installed through the service's local API, which uses Windows'
+own OpenSSH client (no Node.js or webOS CLI needed).
 
 .PARAMETER Part
 Both (default), Pc (service only) or Tv (TV app only).
@@ -40,10 +40,6 @@ function Test-Admin {
 function Write-Step([string]$Text) {
     Write-Host ''
     Write-Host "== $Text" -ForegroundColor Cyan
-}
-
-function Update-SessionPath {
-    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 }
 
 function Find-ServiceExe {
@@ -99,56 +95,33 @@ function Install-Pc {
     }
 }
 
-function Confirm-Yes([string]$Question) {
-    (Read-Host "$Question [Y/n]") -notmatch '^\s*n'
-}
-
-function Assert-Ares {
-    if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-        if ((Get-Command winget -ErrorAction SilentlyContinue) -and (Confirm-Yes 'Node.js is needed to deploy the TV app. Install Node.js LTS with winget now?')) {
-            & winget install --exact --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements | Out-Host
-            Update-SessionPath
-        }
-        if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-            throw 'Install Node.js LTS from https://nodejs.org, then run this again.'
+function Select-Tv {
+    $tvs = @((Invoke-Api GET '/api/tvs').tvs)
+    if ($tvs.Count -gt 0) {
+        Write-Host 'Paired TVs:'
+        foreach ($tv in $tvs) { Write-Host ("  {0}  {1}{2}" -f $tv.name, $tv.ip, $(if ($tv.default) { '  (default)' } else { '' })) }
+        $name = (Read-Host 'TV to install on (Enter for the default, P to pair another)').Trim()
+        if (-not $name) { return }
+        if ($name -ne 'P') {
+            $null = Invoke-Api POST '/api/tvs/default' @{ name = $name }
+            return
         }
     }
-    if (-not (Get-Command ares-setup-device -ErrorAction SilentlyContinue)) {
-        if (Confirm-Yes 'The webOS TV CLI (@webos-tools/cli) is needed. Install it with npm now?') {
-            & npm install --global '@webos-tools/cli' | Out-Host
-            Update-SessionPath
-        }
-        if (-not (Get-Command ares-setup-device -ErrorAction SilentlyContinue)) {
-            throw 'Install the webOS TV CLI with: npm install --global @webos-tools/cli'
-        }
-    }
-}
-
-function Select-TvDevice {
-    $list = & ares-setup-device --list 2>&1 | Out-String
-    Write-Host $list
-    # The emulator entries point at 127.0.0.1; a real TV has a LAN address
-    if ($list -notmatch '@(?!127\.)\d{1,3}(\.\d{1,3}){3}:\d+') {
-        throw @'
-No TV is set up in the webOS CLI yet. On the TV, install and open the Developer Mode app, turn on
-Dev Mode Status and Key Server, then on this PC run:
-    ares-setup-device            (add a device: the TV's IP, port 9922, user prisoner)
-    ares-novacom --device <name> --getkey   (enter the passphrase the Developer Mode app shows)
-and run this installer again.
+    Write-Host @'
+To pair a TV: on the TV, install the Developer Mode app from the LG Content Store, sign in,
+and turn on Dev Mode Status and Key Server. The app shows the passphrase to enter here.
 '@
-    }
-    $name = (Read-Host 'TV to install on (Enter for the one marked default)').Trim()
-    if ($name) {
-        & ares-setup-device --default $name | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw "ares-setup-device does not know a TV named '$name'." }
-    }
+    $ip = (Read-Host 'TV IP address').Trim()
+    $passphrase = (Read-Host 'Passphrase').Trim()
+    $result = Invoke-Api POST '/api/tvs/pair' @{ ip = $ip; passphrase = $passphrase }
+    if (-not $result.success) { throw $result.message }
+    Write-Host $result.message -ForegroundColor Green
 }
 
 function Install-Tv {
     Write-Step 'Deploying the TV app'
-    Assert-Ares
     $null = Wait-Service
-    Select-TvDevice
+    Select-Tv
 
     $pc = Invoke-Api GET '/api/pcinfo'
     $saved = Invoke-Api GET '/api/config'

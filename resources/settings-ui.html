@@ -89,6 +89,9 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .map-row{display:flex;align-items:center;gap:10px;padding:6px 0}
 .map-row .tv{flex:0 0 150px;font-size:13px;color:#e0e0e0}
 .map-row .tv small{display:block;color:#7d8590;font-size:11px}
+.map-row .tv-actions{flex:1;display:flex;gap:8px;justify-content:flex-end}
+.map-row .tv-actions button{background:transparent;color:#4ecca3;border:1px solid #4ecca344;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
+.map-row .tv-actions button.danger{color:#f87171;border-color:#f8717144}
 .map-row select{flex:1;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:13px}
 .log{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;max-height:260px;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}
 .log div{white-space:pre-wrap;word-break:break-word}
@@ -282,6 +285,21 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 </div>
 </div>
 
+<div class="cfg-section" id="tvs-section" style="display:none">
+<div class="cfg-panel">
+  <h2>TVs</h2>
+  <div class="note" style="margin-top:0;margin-bottom:12px">Reinstall TV App installs on the default TV.</div>
+  <div id="tvs-list"></div>
+  <div class="cfg-grid" style="margin-top:12px">
+    <div class="field"><label for="pair-ip">TV IP</label><input type="text" id="pair-ip" placeholder="192.168.1.20" inputmode="decimal" autocomplete="off"></div>
+    <div class="field"><label for="pair-pass">Passphrase</label><input type="text" id="pair-pass" placeholder="As the Developer Mode app shows it" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="pair-name">Name (optional)</label><input type="text" id="pair-name" placeholder="TV" maxlength="32" autocomplete="off"></div>
+  </div>
+  <div class="cfg-actions"><button class="btn-apply" id="btn-pair" onclick="pairTv()">Pair TV</button></div>
+  <div class="note" id="pair-status">On the TV, install the Developer Mode app from the LG Content Store, sign in, and turn on Dev Mode Status and Key Server. Then enter the TV's IP and the passphrase the app shows.</div>
+</div>
+</div>
+
 <div class="cfg-section">
 <div class="cfg-panel">
   <h2>TV App Configuration</h2>
@@ -342,7 +360,7 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 <div class="cfg-panel">
   <h2>Pointer Display</h2>
   <div class="note" style="margin-top:0;margin-bottom:12px">With several monitors, pick the one each TV shows, so its pointer lands there.</div>
-  <div id="disp-list" class="note">Loading TVs from ares-cli...</div>
+  <div id="disp-list" class="note">Loading TVs...</div>
 </div>
 </div>
 
@@ -820,8 +838,8 @@ function reinstallTV() {
   fetch("/api/reinstall", { method: "POST", headers: fetchHeaders })
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      showToast(d.success ? "TV app reinstalled!" : "Failed: " + (d.error || d.message || "unknown"), d.success ? "ok" : "err");
-      document.getElementById("cfg-status").textContent = d.success ? "Done!" : "Failed";
+      showToast(d.success ? "TV app reinstalled!" : "Reinstall failed", d.success ? "ok" : "err");
+      document.getElementById("cfg-status").textContent = d.message || (d.success ? "Done!" : "Failed");
       setLoading("btn-cfg-reinstall", false);
     })
     .catch(function(e) { showToast("Error: " + e, "err"); document.getElementById("cfg-status").textContent = ""; setLoading("btn-cfg-reinstall", false); });
@@ -1006,6 +1024,84 @@ function restartService() {
   }).catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-pc-restart", false); });
 }
 
+/* ========================================
+   Paired TVs
+   ======================================== */
+function renderTvs(tvs) {
+  document.getElementById("tvs-section").style.display = "";
+  var list = document.getElementById("tvs-list");
+  list.innerHTML = "";
+  list.className = tvs.length ? "" : "note";
+  if (!tvs.length) {
+    list.textContent = "No TV paired yet.";
+    return;
+  }
+  tvs.forEach(function(t) {
+    var row = document.createElement("div");
+    row.className = "map-row";
+    var tv = document.createElement("div");
+    tv.className = "tv";
+    tv.textContent = t.name;
+    var ip = document.createElement("small");
+    ip.textContent = t.ip + (t.default ? " \u00b7 default" : "");
+    tv.appendChild(ip);
+    var actions = document.createElement("div");
+    actions.className = "tv-actions";
+    if (!t.default) {
+      actions.appendChild(tvButton("Make default", false, function() { tvAction("/api/tvs/default", t.name, t.name + " is now the default TV."); }));
+    }
+    actions.appendChild(tvButton("Unpair", true, function() {
+      if (confirm("Unpair " + t.name + "? This PC deletes its key; pair it again to install on it.")) tvAction("/api/tvs/remove", t.name, t.name + " unpaired.");
+    }));
+    row.appendChild(tv);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function tvButton(text, danger, onclick) {
+  var b = document.createElement("button");
+  b.textContent = text;
+  if (danger) b.className = "danger";
+  b.onclick = onclick;
+  return b;
+}
+
+function tvAction(url, name, done) {
+  postJson(url, { name: name })
+    .then(function(d) { renderTvs(d.tvs); loadDisplays(); showToast(done, "ok"); })
+    .catch(function(e) { showToast("Error: " + e.message, "err"); });
+}
+
+function loadTvs() {
+  getJson("/api/tvs").then(function(d) { renderTvs(d.tvs); }).catch(function() {});
+}
+
+function pairTv() {
+  var ip = document.getElementById("pair-ip").value.trim();
+  var pass = document.getElementById("pair-pass").value.trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) { showToast("Enter the TV's IP address", "err"); return; }
+  if (!pass) { showToast("Enter the passphrase the Developer Mode app shows", "err"); return; }
+  var btn = document.getElementById("btn-pair");
+  var status = document.getElementById("pair-status");
+  setLoading("btn-pair", true);
+  btn.textContent = "Pairing...";
+  status.style.color = "";
+  postJson("/api/tvs/pair", { ip: ip, passphrase: pass, name: document.getElementById("pair-name").value.trim() })
+    .then(function(d) {
+      status.textContent = d.message;
+      status.style.color = d.success ? "#4ecca3" : "#f87171";
+      showToast(d.success ? "TV paired" : "Pairing failed", d.success ? "ok" : "err");
+      if (d.success) {
+        document.getElementById("pair-pass").value = "";
+        renderTvs(d.tvs);
+        loadDisplays();
+      }
+    })
+    .catch(function(e) { showToast("Error: " + e.message, "err"); })
+    .then(function() { setLoading("btn-pair", false); btn.textContent = "Pair TV"; });
+}
+
 function loadDisplays() {
   getJson("/api/displays").then(function(d) {
     document.getElementById("disp-section").style.display = "";
@@ -1014,7 +1110,7 @@ function loadDisplays() {
     list.innerHTML = "";
     if (!d.devices.length) {
       list.className = "note";
-      list.textContent = d.error ? "ares-cli: " + d.error : "No TVs set up in ares-cli.";
+      list.textContent = "No TV paired yet. Pair one under TVs.";
       return;
     }
     d.devices.forEach(function(dev) {
@@ -1172,6 +1268,7 @@ fetch("/api/settings")
   });
 
 loadPc();
+loadTvs();
 loadDisplays();
 loadLogs();
 

@@ -18,6 +18,9 @@ pub trait Host: Send + Sync {
     fn mode(&self) -> &'static str;
     fn pc_info(&self) -> Value;
     fn reinstall_tv(&self) -> Result<String, String>;
+    /// The paired TVs as the API shows them (never a passphrase).
+    fn tvs(&self) -> Value;
+    fn pair_tv(&self, name: &str, ip: Ipv4Addr, passphrase: &str) -> Result<String, String>;
     /// Restart after the response is sent, loading the exe from disk again.
     fn restart(&self);
     fn startup(&self) -> Option<bool>;
@@ -262,6 +265,37 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 }
             };
             ok(json!({ "success": success, "message": message }))
+        }
+        ("GET", "/api/tvs") => ok(json!({ "tvs": ctx.host.tvs() })),
+        ("POST", "/api/tvs/pair") => {
+            let doc = match parse_object(req.body) {
+                Ok(o) => o,
+                Err(r) => return r,
+            };
+            let text = |k: &str| doc.get(k).and_then(Value::as_str).unwrap_or_default();
+            let Ok(ip) = text("ip").trim().parse::<Ipv4Addr>() else {
+                return error(400, "ip must be the TV's IPv4 address");
+            };
+            let (success, message) = match ctx.host.pair_tv(text("name"), ip, text("passphrase")) {
+                Ok(m) => (true, m),
+                Err(m) => {
+                    log::warn(format!("Pairing the TV at {ip} failed: {m}"));
+                    (false, m)
+                }
+            };
+            ok(json!({ "success": success, "message": message, "tvs": ctx.host.tvs() }))
+        }
+        ("POST", "/api/tvs/default") | ("POST", "/api/tvs/remove") => {
+            let doc = match parse_object(req.body) {
+                Ok(o) => o,
+                Err(r) => return r,
+            };
+            let name = doc.get("name").and_then(Value::as_str).unwrap_or_default();
+            let done = if path.ends_with("default") { crate::tv::set_default(&shared.files, name) } else { crate::tv::remove(&shared.files, name) };
+            match done {
+                Ok(()) => ok(json!({ "saved": true, "tvs": ctx.host.tvs() })),
+                Err(e) => error(400, &e),
+            }
         }
         ("POST", "/api/restart") => {
             log::info("Restart requested from the web UI");

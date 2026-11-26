@@ -335,7 +335,7 @@ pub fn uninstall() -> Result<String, String> {
     svc.delete().map_err(|e| format!("Cannot delete the service: {e}"))?;
     let exe = std::env::current_exe().unwrap_or_default();
     firewall(&exe, false);
-    Ok("Service removed. bindings.json and tv-config.json were left in place.".into())
+    Ok("Service removed. bindings.json, tv-config.json and the paired TVs (tvs.json, tv-*.key) were left in place.".into())
 }
 
 /// Whether the service starts with Windows.

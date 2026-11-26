@@ -60,6 +60,12 @@ fn status() -> Result<String, String> {
 }
 
 fn main() {
+    // ssh runs this exe to ask for a paired TV's key passphrase (see `tv`): answer and stop
+    if let Some(passphrase) = std::env::var_os(mrs::tv::ASKPASS_ENV) {
+        use std::io::Write;
+        let _ = writeln!(std::io::stdout(), "{}", passphrase.to_string_lossy());
+        return;
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
         Some("install") => {
