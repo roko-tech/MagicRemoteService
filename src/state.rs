@@ -76,10 +76,11 @@ impl Shared {
             Some(d) => bindings::from_file(d),
             None => (bindings::defaults(), Vec::new()),
         };
-        for p in &problems {
+        let (profiles, profile_problems) = doc.as_ref().map(bindings::profiles_from_file).unwrap_or_default();
+        for p in problems.iter().chain(&profile_problems) {
             log::warn(format!("bindings.json: {p}"));
         }
-        *self.bindings.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(Compiled::new(&map));
+        *self.bindings.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(Compiled::with_profiles(&map, &profiles));
         *self.scroll_exclude.write().unwrap_or_else(|e| e.into_inner()) = settings::scroll_exclude(doc.as_ref());
     }
 

@@ -56,6 +56,10 @@ impl Effects for RealEffects {
     fn idle_ms(&self) -> Option<u32> {
         input::idle_ms()
     }
+
+    fn foreground_app(&self) -> Option<String> {
+        proc::foreground_process_name()
+    }
 }
 
 pub struct RealPlatform {

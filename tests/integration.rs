@@ -351,6 +351,17 @@ fn http_api_keeps_the_c_sharp_contract_and_guards_requests() {
     assert!(matches!(shared.bindings().plans.get(&0x0030), Some(mrs::bindings::Plan::Inputs { .. })));
     assert_eq!(api(&shared, &host, "GET", "/api/settings", "", false).1["bindings"]["bindings"]["0x0030"][0]["value"], "right");
 
+    // Profiles: saved, applied, and kept by a save that doesn't mention them
+    let with_profile = r#"{"bindings":{},"profiles":[{"name":"Media","apps":["vlc"],"bindings":{"0x0193":[]}}]}"#;
+    assert_eq!(api(&shared, &host, "POST", "/api/bindings", with_profile, true).0, 200);
+    assert!(shared.bindings().has_profiles());
+    assert_eq!(api(&shared, &host, "POST", "/api/bindings", r#"{"bindings":{"0x0031":[]}}"#, true).0, 200);
+    assert!(shared.bindings().has_profiles(), "an older page's save must not wipe profiles");
+    assert_eq!(api(&shared, &host, "GET", "/api/settings", "", false).1["bindings"]["profiles"][0]["name"], "Media");
+    assert_eq!(api(&shared, &host, "POST", "/api/bindings", r#"{"profiles":{}}"#, true).0, 400);
+    assert_eq!(api(&shared, &host, "POST", "/api/bindings", r#"{"bindings":{},"profiles":[]}"#, true).0, 200);
+    assert!(!shared.bindings().has_profiles(), "an explicit empty list removes them");
+
     // TV config: the token applies at once
     assert_eq!(api(&shared, &host, "POST", "/api/config", r#"{"token":"abc","appId":"com.cathwyler.magicremoteservice.hdmi1"}"#, true).0, 200);
     assert_eq!(shared.token(), "abc");

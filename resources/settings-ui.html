@@ -95,6 +95,12 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .token-row{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:#aaa}
 .token-row span{flex:1}
 .token-row .on{color:#4ecca3}.token-row .off{color:#f87171}
+.profile-bar{display:none;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:6px;font-size:13px;color:#aaa}
+.profile-bar select,.profile-bar input{background:#161b22;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit}
+.profile-bar input{width:260px}
+.profile-bar button{background:transparent;color:#4ecca3;border:1px solid #4ecca344;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
+.profile-bar button.danger{color:#f87171;border-color:#f8717144}
+#profile-note{text-align:center;margin:0 0 14px;max-width:660px}
 .diag{width:100%;border-collapse:collapse;font-size:13px}
 .diag th{color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:500;text-align:left;padding:4px 8px 6px 0}
 .diag td{padding:6px 8px 6px 0;border-top:1px solid #30363d;color:#e0e0e0}
@@ -109,6 +115,14 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 <h1>MagicRemoteService</h1>
 <div class="subtitle">Click any button to configure its action</div>
 <div class="status-bar" id="sb"></div>
+<div class="profile-bar" id="profile-bar">
+  <label for="profile">Bindings for</label>
+  <select id="profile" onchange="selectProfile(parseInt(this.value, 10))"></select>
+  <input type="text" id="profile-apps" aria-label="Apps this profile applies to" placeholder="Apps, e.g. vlc, PotPlayerMini64" onchange="setProfileApps(this.value)" style="display:none">
+  <button onclick="newProfile()">New profile</button>
+  <button class="danger" id="btn-profile-del" onclick="deleteProfile()" style="display:none">Delete profile</button>
+</div>
+<div class="note" id="profile-note"></div>
 <div class="main">
 <div class="remote">
   <div class="power tv-only" title="Power (TV only)">&#9211;</div>
@@ -390,6 +404,9 @@ var BUTTONS = {
    ======================================== */
 var defaults = {};
 var bindings = {};
+// Per-app profiles from bindings.json: [{ name, apps: [...], bindings: {...} }]
+var profiles = [];
+var activeProfile = -1;
 var selectedButton = null;
 var scrollExclude = [];
 var pcInterfaces = [];
@@ -465,7 +482,7 @@ function selectButton(id) {
   document.getElementById("pc").style.display = "block";
   document.getElementById("bn").textContent = info.name;
 
-  var b = bindings[id] || defaults[id];
+  var b = effective(id);
   document.getElementById("bd").textContent = describeBinding(b);
   if (!b || !b.length) { typeChanged(); return; }
   var d = editable(b);
@@ -529,7 +546,7 @@ function applyBinding() {
     b = { type: "keyboard", virtualKey: parseInt(document.getElementById("ks").value), scanCode: 0, extended: false };
   }
 
-  bindings[selectedButton] = [b];
+  editMap()[selectedButton] = [b];
   setLoading("btn-save", true);
   saveBindings(function() {
     setLoading("btn-save", false);
@@ -540,7 +557,7 @@ function applyBinding() {
 
 function resetBinding() {
   if (!selectedButton) return;
-  delete bindings[selectedButton];
+  delete editMap()[selectedButton];
   setLoading("btn-save", true);
   saveBindings(function(d) {
     setLoading("btn-save", false);
@@ -551,8 +568,13 @@ function resetBinding() {
 }
 
 function resetAll() {
-  if (!confirm("Reset all button bindings to defaults?")) return;
-  bindings = {};
+  if (activeProfile >= 0) {
+    if (!confirm("Remove all of the \"" + profiles[activeProfile].name + "\" profile's bindings? Those buttons go back to their normal bindings.")) return;
+    profiles[activeProfile].bindings = {};
+  } else {
+    if (!confirm("Reset all normal button bindings to the defaults? Profiles are kept.")) return;
+    bindings = {};
+  }
   saveBindings(function(d) {
     markCustomButtons();
     if (selectedButton) selectButton(selectedButton);
@@ -583,11 +605,86 @@ function saveAndRestart() {
 }
 
 function saveBindings(callback) {
-  var payload = { bindings: {}, scrollExclude: scrollExclude };
+  var payload = { bindings: {}, scrollExclude: scrollExclude, profiles: profiles };
   for (var k in bindings) payload.bindings[k] = bindings[k];
   postJson("/api/bindings", payload)
     .then(function(d) { showToast(d.applied ? "Saved and applied." : "Saved! Restart the service (Save & Restart) to apply.", "ok"); if (callback) callback(d); })
     .catch(function(e) { showToast("Error: " + e.message, "err"); if (callback) callback(null); });
+}
+
+/* ========================================
+   Per-app profiles
+   ======================================== */
+// The bindings being edited: the selected profile's, or the normal ones
+function editMap() {
+  return activeProfile >= 0 ? profiles[activeProfile].bindings : bindings;
+}
+
+// What a button does with the selected profile: its override, else the normal binding
+function effective(id) {
+  if (activeProfile >= 0 && profiles[activeProfile].bindings[id]) return profiles[activeProfile].bindings[id];
+  return bindings[id] || defaults[id];
+}
+
+function parseApps(text) {
+  return text.split(/[,;\s]+/).map(function(a) { return a.trim().replace(/\.exe$/i, ""); }).filter(function(a) { return a; });
+}
+
+function renderProfiles() {
+  document.getElementById("profile-bar").style.display = "flex";
+  var sel = document.getElementById("profile");
+  sel.innerHTML = "";
+  var all = document.createElement("option");
+  all.value = "-1";
+  all.textContent = "All apps";
+  sel.appendChild(all);
+  profiles.forEach(function(p, i) {
+    var o = document.createElement("option");
+    o.value = String(i);
+    o.textContent = p.name + (p.apps.length ? " (" + p.apps.join(", ") + ")" : " (no app yet)");
+    sel.appendChild(o);
+  });
+  sel.value = String(activeProfile);
+  var apps = document.getElementById("profile-apps");
+  apps.style.display = activeProfile >= 0 ? "" : "none";
+  apps.value = activeProfile >= 0 ? profiles[activeProfile].apps.join(", ") : "";
+  document.getElementById("btn-profile-del").style.display = activeProfile >= 0 ? "" : "none";
+  document.getElementById("profile-note").textContent = activeProfile >= 0
+    ? "Buttons you change here act differently while one of these apps is in front. The others keep their normal binding."
+    : "";
+  markCustomButtons();
+  if (selectedButton) selectButton(selectedButton);
+}
+
+function selectProfile(i) {
+  activeProfile = i;
+  renderProfiles();
+}
+
+function newProfile() {
+  var name = prompt("Name for the new profile:", "Media players");
+  if (!name || !name.trim()) return;
+  var apps = parseApps(prompt("Apps it applies to (process names, as in Task Manager's Details tab, separated by commas):", "vlc, PotPlayerMini64") || "");
+  profiles.push({ name: name.trim(), apps: apps, bindings: {} });
+  activeProfile = profiles.length - 1;
+  renderProfiles();
+  saveBindings();
+}
+
+function setProfileApps(text) {
+  if (activeProfile < 0) return;
+  profiles[activeProfile].apps = parseApps(text);
+  renderProfiles();
+  saveBindings();
+}
+
+function deleteProfile() {
+  if (activeProfile < 0) return;
+  if (!confirm("Delete the \"" + profiles[activeProfile].name + "\" profile?")) return;
+  profiles.splice(activeProfile, 1);
+  activeProfile = -1;
+  renderProfiles();
+  saveBindings();
 }
 
 /* ========================================
@@ -735,11 +832,11 @@ function setLoading(btnId, loading) {
 function markCustomButtons() {
   document.querySelectorAll(".btn[data-id]").forEach(function(e) {
     var id = e.dataset.id;
-    var hasCustom = !!bindings[id];
+    var hasCustom = !!editMap()[id];
     e.classList.toggle("custom", hasCustom);
     var info = BUTTONS[id];
     if (info) {
-      var b = bindings[id] || defaults[id];
+      var b = effective(id);
       e.title = info.name + " → " + describeBinding(b);
     }
   });
@@ -1037,6 +1134,12 @@ fetch("/api/settings")
       for (var k in d.bindings) {
         if (Array.isArray(d.bindings[k])) bindings[k] = d.bindings[k];
       }
+    }
+    if (d.version) {
+      profiles = (d.bindings && Array.isArray(d.bindings.profiles) ? d.bindings.profiles : []).map(function(p) {
+        return { name: p.name || "Profile", apps: Array.isArray(p.apps) ? p.apps : [], bindings: p.bindings || {} };
+      });
+      renderProfiles();
     }
     markCustomButtons();
 

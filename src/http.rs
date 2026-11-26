@@ -152,8 +152,18 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 Ok(o) => o,
                 Err(r) => return r,
             };
-            if doc.get("bindings").is_some_and(|b| !b.is_object()) || doc.get("scrollExclude").is_some_and(|b| !b.is_array()) {
-                return error(400, "bindings must be an object and scrollExclude an array");
+            let mut doc = doc;
+            if doc.get("bindings").is_some_and(|b| !b.is_object())
+                || doc.get("scrollExclude").is_some_and(|b| !b.is_array())
+                || doc.get("profiles").is_some_and(|b| !b.is_array())
+            {
+                return error(400, "bindings must be an object, scrollExclude and profiles arrays");
+            }
+            // A save that doesn't mention profiles (an older page, a script) keeps the saved ones
+            if !doc.contains_key("profiles") {
+                if let Some(saved) = shared.bindings_doc().get("profiles").cloned() {
+                    doc.insert("profiles".into(), saved);
+                }
             }
             if let Err(e) = settings::write_atomic(&shared.files.bindings(), &serde_json::to_vec_pretty(&doc).unwrap_or_default()) {
                 return error(500, &format!("cannot save bindings.json: {e}"));

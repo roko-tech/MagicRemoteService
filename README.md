@@ -69,6 +69,7 @@ When the PC is off, opening the TV app (or switching back to the PC's input) sen
 Open **http://localhost:41231** on the PC. It is only reachable from the PC itself.
 
 - **Remote configurator** — click any button on the visual remote to map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a shell command, or a special action (shut down the PC, toggle the TV keyboard). Bindings apply as soon as they're saved. Hover a button to see what it does; green dots mark custom bindings. "Reset All Bindings" restores the defaults.
+- **Per-app profiles** — under "Bindings for", create a profile for some apps (their process names, as in Task Manager's Details tab, such as `vlc`). Buttons you change in it act differently while one of those apps is in front; the others keep their normal binding.
 - **Smooth scroll exclusions** — apps (such as media players) that use the wheel for volume get single scroll steps instead of momentum. Add their process names.
 - **TV app configuration** — the HDMI input the PC is on, the PC's IP, MAC (for Wake-on-LAN) and subnet, the port and the cursor speed. **Reinstall TV App** packages the TV app built into the service with this configuration, then installs and launches it on the webOS CLI's default TV. The CLI runs as the user signed in at the PC.
 - **PC** — the TV port, start with Windows, and the shutdown timeouts:

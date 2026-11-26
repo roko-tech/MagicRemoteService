@@ -62,6 +62,10 @@ pub trait Effects {
     fn shutdown(&self, kind: ShutdownKind);
     /// Milliseconds since the last keyboard or mouse input in this session.
     fn idle_ms(&self) -> Option<u32>;
+    /// Process name of the app in front (without `.exe`), for per-app profiles.
+    fn foreground_app(&self) -> Option<String> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -284,7 +288,9 @@ impl<E: Effects> Session<E> {
     }
 
     fn on_key_down(&mut self, code: u16, binds: &Compiled) {
-        match binds.plans.get(&code) {
+        // Only ask Windows which app is in front when some profile could apply
+        let app = if binds.has_profiles() { self.fx.foreground_app() } else { None };
+        match binds.plan_for(code, app.as_deref()) {
             Some(Plan::Inputs { down, up }) => {
                 self.fx.send_input(down);
                 self.held.insert(code, up.clone());
@@ -431,6 +437,7 @@ mod tests {
         excluded: bool,
         local_audio: bool,
         idle: std::cell::Cell<u32>,
+        app: Option<&'static str>,
     }
 
     impl Effects for &Fake {
@@ -458,6 +465,9 @@ mod tests {
         }
         fn idle_ms(&self) -> Option<u32> {
             Some(self.idle.get())
+        }
+        fn foreground_app(&self) -> Option<String> {
+            self.app.map(str::to_string)
         }
     }
 
@@ -714,6 +724,24 @@ mod tests {
         bin(&mut s, &[0x00, 1, 0, 1, 0], &b, t0 + Duration::from_secs(5));
         s.tick(t0 + Duration::from_secs(11));
         assert_eq!(s.out, [0x89, 0x01, 0x02]);
+    }
+
+    #[test]
+    fn a_profile_decides_while_its_app_is_in_front() {
+        let doc = serde_json::json!({"profiles": [{"apps": ["vlc"], "bindings": {"0x0196": [{"type": "command", "command": "vlc-tool"}]}}]});
+        let (profiles, _) = crate::bindings::profiles_from_file(&doc);
+        let b = Compiled::with_profiles(&defaults(), &profiles);
+        let t0 = Instant::now();
+        let vlc = Fake { app: Some("VLC"), ..Default::default() };
+        let mut s = session(&vlc, SessionConfig::default(), t0);
+        bin(&mut s, &[0x04, 0x96, 0x01, 0x01], &b, t0);
+        assert_eq!(take(&vlc), vec![Call::Command("vlc-tool".into())]);
+        assert!(s.out.is_empty(), "the TV keyboard toggle is replaced");
+        let other = Fake { app: Some("notepad"), ..Default::default() };
+        let mut s = session(&other, SessionConfig::default(), t0);
+        bin(&mut s, &[0x04, 0x96, 0x01, 0x01], &b, t0);
+        assert!(take(&other).is_empty());
+        assert_eq!(s.out, [0x82, 0x01, 0x02], "elsewhere Blue still toggles the TV keyboard");
     }
 
     #[test]

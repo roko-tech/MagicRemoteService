@@ -138,6 +138,55 @@ pub fn from_file(doc: &Value) -> (BindMap, Vec<String>) {
     (map, problems)
 }
 
+/// Buttons that act differently while one of some apps is in front.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Profile {
+    pub name: String,
+    /// Process names without `.exe`, such as `vlc` or `PotPlayerMini64`.
+    pub apps: Vec<String>,
+    /// Only the buttons this profile changes; an empty list makes a button do nothing.
+    pub map: BindMap,
+}
+
+/// The `profiles` of a `bindings.json` document. Entries that can't be read are reported.
+pub fn profiles_from_file(doc: &Value) -> (Vec<Profile>, Vec<String>) {
+    let mut profiles = Vec::new();
+    let mut problems = Vec::new();
+    for (i, p) in doc.get("profiles").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
+        let name = p.get("name").and_then(Value::as_str).filter(|n| !n.trim().is_empty()).map_or_else(|| format!("Profile {}", i + 1), str::to_string);
+        let apps: Vec<String> = p
+            .get("apps")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|a| !a.is_empty())
+            .map(str::to_string)
+            .collect();
+        let mut map = BindMap::new();
+        for (key, entries) in p.get("bindings").and_then(Value::as_object).into_iter().flatten() {
+            let Some(code) = parse_code(key) else {
+                problems.push(format!("profile {name}: {key}: not a key code"));
+                continue;
+            };
+            let mut binds = Vec::new();
+            for e in entries.as_array().map(Vec::as_slice).unwrap_or_default() {
+                if let Err(why) = parse_entry(e, &mut binds) {
+                    problems.push(format!("profile {name}: {key}: {why}"));
+                }
+            }
+            map.insert(code, binds);
+        }
+        if apps.is_empty() {
+            problems.push(format!("profile {name}: lists no app, so it never applies"));
+        }
+        profiles.push(Profile { name, apps, map });
+    }
+    (profiles, problems)
+}
+
 /// The `/api/defaults` and `bindings.json` form of a bind list.
 pub fn to_json(map: &BindMap) -> Value {
     let mut obj = Map::new();
@@ -234,15 +283,53 @@ pub fn plan(binds: &[Bind]) -> Option<Plan> {
     }
 }
 
+/// A profile ready for the connection loop.
+#[derive(Debug, Default)]
+pub struct CompiledProfile {
+    /// Lowercase process names.
+    pub apps: Vec<String>,
+    /// `None`: the profile makes this button do nothing.
+    pub plans: HashMap<u16, Option<Plan>>,
+}
+
 /// Bindings ready for the connection loop.
 #[derive(Debug, Default)]
 pub struct Compiled {
     pub plans: HashMap<u16, Plan>,
+    pub profiles: Vec<CompiledProfile>,
 }
 
 impl Compiled {
     pub fn new(map: &BindMap) -> Self {
-        Compiled { plans: map.iter().filter_map(|(code, binds)| Some((*code, plan(binds)?))).collect() }
+        Compiled { plans: map.iter().filter_map(|(code, binds)| Some((*code, plan(binds)?))).collect(), profiles: Vec::new() }
+    }
+
+    pub fn with_profiles(map: &BindMap, profiles: &[Profile]) -> Self {
+        let profiles = profiles
+            .iter()
+            .filter(|p| !p.apps.is_empty())
+            .map(|p| CompiledProfile {
+                apps: p.apps.iter().map(|a| a.to_ascii_lowercase()).collect(),
+                plans: p.map.iter().map(|(code, binds)| (*code, plan(binds))).collect(),
+            })
+            .collect();
+        Compiled { profiles, ..Compiled::new(map) }
+    }
+
+    pub fn has_profiles(&self) -> bool {
+        !self.profiles.is_empty()
+    }
+
+    /// What `code` does with `app` in front: the first profile listing the app and changing the
+    /// button decides, otherwise the normal bindings.
+    pub fn plan_for(&self, code: u16, app: Option<&str>) -> Option<&Plan> {
+        if let Some(app) = app {
+            let app = app.to_ascii_lowercase();
+            if let Some(p) = self.profiles.iter().find(|p| p.apps.contains(&app) && p.plans.contains_key(&code)) {
+                return p.plans[&code].as_ref();
+            }
+        }
+        self.plans.get(&code)
     }
 }
 
@@ -315,6 +402,42 @@ mod tests {
         assert_eq!(plan(&[Bind::Command("a".into()), Bind::Action(Action::Shutdown)]), Some(Plan::Actions(vec![Action::Shutdown])));
         assert_eq!(plan(&[]), None);
         assert_eq!(Compiled::new(&defaults()).plans.len(), 30);
+    }
+
+    #[test]
+    fn profiles_override_only_their_buttons_for_their_apps() {
+        let doc = json!({
+            "bindings": {"0x0193": [{"type": "command", "command": "calc.exe"}]},
+            "profiles": [
+                {"name": "Media", "apps": ["VLC", "PotPlayerMini64"], "bindings": {
+                    "0x0193": [{"type": "keyboard", "virtualKey": 32, "scanCode": 57, "extended": false}],
+                    "0x0194": []
+                }},
+                {"name": "Nothing", "apps": [], "bindings": {"0x0001": []}},
+                {"apps": ["vlc"], "bindings": {"0x0195": [{"type": "mouse", "value": "left"}], "zz": []}}
+            ]
+        });
+        let (map, _) = from_file(&doc);
+        let (profiles, problems) = profiles_from_file(&doc);
+        assert_eq!(profiles.len(), 3);
+        assert_eq!(profiles[2].name, "Profile 3");
+        assert_eq!(problems.len(), 2, "{problems:?}"); // the app-less profile and the bad key
+        let c = Compiled::with_profiles(&map, &profiles);
+        assert!(c.has_profiles());
+        let space = Some(&Plan::Inputs {
+            down: vec![InputEvent::Key { vk: 32, scan: 57, extended: false, down: true }],
+            up: vec![InputEvent::Key { vk: 32, scan: 57, extended: false, down: false }],
+        });
+        // Red: space in VLC (any case), the normal command elsewhere or with no app known
+        assert_eq!(c.plan_for(0x0193, Some("VLC")), space);
+        assert_eq!(c.plan_for(0x0193, Some("notepad")), Some(&Plan::Commands(vec!["calc.exe".into()])));
+        assert_eq!(c.plan_for(0x0193, None), Some(&Plan::Commands(vec!["calc.exe".into()])));
+        // Green does nothing in VLC; buttons a profile leaves alone keep their binding
+        assert_eq!(c.plan_for(0x0194, Some("VLC")), None);
+        assert!(c.plan_for(0x0001, Some("vlc")).is_some(), "the app-less profile never applies");
+        // A later profile for the same app still contributes buttons the first leaves alone
+        assert!(matches!(c.plan_for(0x0195, Some("vlc")), Some(Plan::Inputs { .. })));
+        assert!(!Compiled::new(&map).has_profiles());
     }
 
     #[test]

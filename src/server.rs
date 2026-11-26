@@ -53,6 +53,9 @@ impl<T: Effects + ?Sized> Effects for Box<T> {
     fn idle_ms(&self) -> Option<u32> {
         (**self).idle_ms()
     }
+    fn foreground_app(&self) -> Option<String> {
+        (**self).foreground_app()
+    }
 }
 
 pub struct Server {
