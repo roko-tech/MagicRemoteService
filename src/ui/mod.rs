@@ -2,6 +2,7 @@
 //! as the signed-in user) that talks to the service through the local API the web UI also uses.
 
 mod model;
+mod setup;
 
 slint::include_modules!();
 
@@ -28,14 +29,16 @@ struct State {
     profile: Option<usize>,
     /// `GET /api/config`, the base for saving the TV app settings.
     config: Value,
-    /// The networks the combo box lists: (ip, mask, mac).
+    /// The networks the combo box lists: (ip, mask, mac), and how it names them.
     networks: Vec<(String, String, String)>,
+    network_labels: Vec<String>,
     /// Display ids in combo box order (0 = primary).
     displays: Vec<u32>,
     pending: Option<Confirm>,
     toast_serial: u64,
     /// Saves the profile's apps a moment after typing stops.
     apps_timer: Option<Timer>,
+    setup: setup::Setup,
 }
 
 enum Confirm {
@@ -150,7 +153,10 @@ fn load_all(ui: &MainWindow) {
         move || fetch_all(port),
         |ui, result| match result {
             Ok(snap) => apply_snapshot(&ui, snap),
-            Err(_) => set_connected(&ui, false),
+            Err(_) => {
+                set_connected(&ui, false);
+                setup::choose_first_page(&ui);
+            }
         },
     );
 }
@@ -162,6 +168,8 @@ fn set_connected(ui: &MainWindow, connected: bool) {
         app.set_status_text("Service not answering".into());
         app.set_status_kind(2);
     }
+    with(|s| s.setup.connected = connected);
+    setup::refresh(ui);
 }
 
 fn apply_snapshot(ui: &MainWindow, snap: Snapshot) {
@@ -204,12 +212,19 @@ fn apply_snapshot(ui: &MainWindow, snap: Snapshot) {
         .into(),
     );
     render_displays(ui, &snap.displays);
+    setup::refresh(ui);
+    setup::choose_first_page(ui);
 }
 
 /// The status bar, the Overview counts and the event log, refreshed every few seconds.
 fn apply_status(ui: &MainWindow, settings: &Value, logs: &Value) {
     let app = ui.global::<App>();
     app.set_connected(true);
+    with(|s| {
+        s.setup.connected = true;
+        s.setup.version = settings["version"].as_str().unwrap_or_default().to_string();
+        s.setup.mode = settings["mode"].as_str().unwrap_or_default().to_string();
+    });
     app.set_version(settings["version"].as_str().unwrap_or_default().into());
     app.set_mode(if settings["mode"] == "service" { "Windows service" } else { "Standalone" }.into());
     app.set_has_token(settings["hasToken"].as_bool().unwrap_or(false));
@@ -430,7 +445,9 @@ fn render_tvs(ui: &MainWindow, tvs: &Value) {
             is_default: t["default"] == true,
         })
         .collect();
+    with(|s| s.setup.tvs = rows.iter().map(|r| (r.name.to_string(), r.ip.to_string(), r.is_default)).collect());
     ui.global::<App>().set_tvs(ModelRc::new(VecModel::from(rows)));
+    setup::refresh(ui);
 }
 
 fn apply_config(ui: &MainWindow, config: Value, pcinfo: &Value) {
@@ -448,6 +465,7 @@ fn apply_config(ui: &MainWindow, config: Value, pcinfo: &Value) {
         networks.insert(0, (saved_ip.clone(), config["mask"].as_str().unwrap_or_default().into(), config["mac"].as_str().unwrap_or_default().into()));
     }
     let network = networks.iter().position(|n| n.0 == saved_ip).unwrap_or(0);
+    let labels_kept = labels.clone();
     app.set_networks(strings(labels));
     app.set_network_index(network as i32);
     let hdmi = config["inputId"].as_str().and_then(|s| s.strip_prefix("HDMI_")).and_then(|n| n.parse::<i32>().ok()).unwrap_or(1);
@@ -461,6 +479,7 @@ fn apply_config(ui: &MainWindow, config: Value, pcinfo: &Value) {
     with(|s| {
         s.config = config;
         s.networks = networks;
+        s.network_labels = labels_kept;
     });
 }
 
@@ -524,6 +543,7 @@ fn reload(ui: &MainWindow, path: &'static str, apply: fn(&MainWindow, &Value)) {
 // ----- Wiring -----
 
 fn wire(ui: &MainWindow) {
+    setup::wire(ui);
     let app = ui.global::<App>();
     let w = ui.as_weak();
 
@@ -665,6 +685,7 @@ fn wire(ui: &MainWindow) {
                 app.set_pair_status(message.clone().into());
                 app.set_pair_failed(!ok);
                 if ok {
+                    with(|s| s.setup.pair_again = false);
                     reload(&ui, "/api/tvs", render_tvs);
                     reload(&ui, "/api/displays", render_displays);
                     toast(&ui, &message, false);

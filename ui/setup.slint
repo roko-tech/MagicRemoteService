@@ -1,0 +1,442 @@
+import { ScrollView, LineEdit, Spinner } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, ButtonKind, Card, Field, PageHeader } from "widgets.slint";
+import { App, FoundTv } from "state.slint";
+
+// One step: a numbered circle (a tick once done), a title, and what to do or what was done.
+component Step inherits Rectangle {
+    in property <string> number;
+    in property <string> title;
+    in property <string> summary;
+    // 0 waiting for an earlier step, 1 to do now, 2 done
+    in property <int> state;
+    background: Theme.surface;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: root.state == 1 ? #4ecca355 : Theme.border;
+    HorizontalLayout {
+        padding: 22px;
+        spacing: 18px;
+        VerticalLayout {
+            alignment: start;
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: 16px;
+                background: root.state == 2 ? Theme.accent : root.state == 1 ? Theme.accent-soft : Theme.surface-2;
+                border-width: root.state == 1 ? 1.5px : 0px;
+                border-color: Theme.accent;
+                Text {
+                    text: root.state == 2 ? "\u{E73E}" : root.number;
+                    font-family: root.state == 2 ? Theme.icons : "Segoe UI";
+                    accessible-role: none;
+                    font-size: root.state == 2 ? 13px : 14px;
+                    font-weight: 700;
+                    color: root.state == 2 ? Theme.on-accent : root.state == 1 ? Theme.accent : Theme.faint;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 12px;
+            Text {
+                text: root.title;
+                font-size: 16px;
+                font-weight: 600;
+                color: root.state == 0 ? Theme.faint : Theme.text;
+                vertical-alignment: center;
+                min-height: 32px;
+            }
+
+            if root.state == 2 && root.summary != "": Text {
+                text: root.summary;
+                font-size: 13px;
+                color: Theme.muted;
+                wrap: word-wrap;
+            }
+            @children
+        }
+    }
+}
+
+// A TV found on the network, picked like a radio button.
+component FoundTvItem inherits Rectangle {
+    in property <FoundTv> tv;
+    in property <bool> selected;
+    callback picked;
+    height: 52px;
+    border-radius: 10px;
+    background: root.selected ? Theme.accent-soft : touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+    border-width: 1px;
+    border-color: root.selected ? #4ecca380 : Theme.border;
+    accessible-role: button;
+    accessible-label: root.tv.name + ", " + root.tv.ip;
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => {
+        root.picked();
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                border-width: root.selected ? 5px : 1.5px;
+                border-color: root.selected ? Theme.accent : Theme.border-strong;
+            }
+        }
+
+        Text {
+            text: "\u{E7F4}";
+            font-family: Theme.icons;
+            accessible-role: none;
+            font-size: 16px;
+            color: root.selected ? Theme.accent : Theme.muted;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.tv.name;
+            font-size: 14px;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            accessible-role: none;
+        }
+
+        Text {
+            text: root.tv.ip;
+            font-size: 13px;
+            color: Theme.muted;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.picked();
+        }
+    }
+}
+
+// One of the four HDMI inputs, in a row like segments.
+component HdmiChoice inherits Rectangle {
+    in property <int> input;
+    property <bool> selected: App.setup-hdmi == root.input - 1;
+    height: 40px;
+    min-width: 92px;
+    border-radius: 8px;
+    background: root.selected ? Theme.accent : touch.has-hover ? Theme.surface-3 : Theme.surface-2;
+    border-width: root.selected ? 0px : 1px;
+    border-color: Theme.border-strong;
+    accessible-role: button;
+    accessible-label: "HDMI " + root.input;
+    accessible-checkable: true;
+    accessible-checked: root.selected;
+    accessible-action-default => {
+        App.setup-hdmi = root.input - 1;
+    }
+    Text {
+        text: "HDMI " + root.input;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: root.selected ? Theme.on-accent : Theme.text;
+        accessible-role: none;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            App.setup-hdmi = root.input - 1;
+        }
+    }
+}
+
+export component SetupPage {
+    ScrollView {
+        VerticalLayout {
+            padding: 32px;
+            padding-top: 28px;
+            spacing: 18px;
+            alignment: start;
+            PageHeader {
+                title: "Get started";
+                subtitle: "Three steps, and your Magic Remote drives this PC.";
+            }
+
+            if App.setup-complete: Rectangle {
+                border-radius: Theme.radius;
+                background: @linear-gradient(120deg, #4ecca326 0%, #4ecca30d 100%);
+                border-width: 1px;
+                border-color: #4ecca355;
+                HorizontalLayout {
+                    padding: 20px;
+                    spacing: 16px;
+                    Text {
+                        text: "\u{E73E}";
+                        font-family: Theme.icons;
+                        accessible-role: none;
+                        font-size: 20px;
+                        color: Theme.accent;
+                        vertical-alignment: center;
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        horizontal-stretch: 1;
+                        Text {
+                            text: "You're all set";
+                            font-size: 16px;
+                            font-weight: 600;
+                            color: Theme.text;
+                        }
+
+                        Text {
+                            text: "Open MagicRemoteService on the TV, or switch the TV to the PC's input, and point the remote.";
+                            font-size: 13px;
+                            color: Theme.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        AppButton {
+                            text: "Go to Overview";
+                            kind: ButtonKind.primary;
+                            clicked => {
+                                App.page = 0;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 1. The service
+            Step {
+                number: "1";
+                title: "Install on this PC";
+                summary: App.install-summary;
+                state: App.step-install;
+                if App.step-install == 1: VerticalLayout {
+                    spacing: 12px;
+                    Text {
+                        text: App.install-text;
+                        font-size: 13px;
+                        color: Theme.muted;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 14px;
+                        AppButton {
+                            text: App.installing ? "Waiting for Windows…" : App.install-button;
+                            icon: "\u{E7EF}";
+                            kind: ButtonKind.primary;
+                            busy: App.installing;
+                            clicked => {
+                                App.install-service();
+                            }
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: App.install-error;
+                            font-size: 12.5px;
+                            color: Theme.danger;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            // 2. The TV
+            Step {
+                number: "2";
+                title: "Pair your TV";
+                summary: App.pair-summary;
+                state: App.step-pair;
+                if App.step-pair == 2: HorizontalLayout {
+                    alignment: start;
+                    AppButton {
+                        text: "Pair another TV";
+                        kind: ButtonKind.ghost;
+                        clicked => {
+                            App.pair-again();
+                        }
+                    }
+                }
+                if App.step-pair == 1: VerticalLayout {
+                    spacing: 14px;
+                    Text {
+                        text: "On the TV, install the Developer Mode app from the LG Content Store, sign in, and turn on Dev Mode Status and Key Server. Then pick the TV below and type the passphrase the app shows.";
+                        font-size: 13px;
+                        color: Theme.muted;
+                        wrap: word-wrap;
+                    }
+
+                    if App.searching: HorizontalLayout {
+                        spacing: 10px;
+                        Spinner {
+                            width: 18px;
+                            height: 18px;
+                            indeterminate: true;
+                        }
+
+                        Text {
+                            text: "Looking for TVs on your network…";
+                            font-size: 13px;
+                            color: Theme.text-2;
+                            vertical-alignment: center;
+                        }
+                    }
+                    if !App.searching && App.found-tvs.length == 0: Text {
+                        text: "No TV answered. Check that it's on and on the same network, or type its IP address below.";
+                        font-size: 13px;
+                        color: Theme.warning;
+                        wrap: word-wrap;
+                    }
+                    for tv[index] in App.found-tvs: FoundTvItem {
+                        tv: tv;
+                        selected: App.found-index == index && manual-ip.text == "";
+                        picked => {
+                            App.found-index = index;
+                            manual-ip.text = "";
+                        }
+                    }
+                    HorizontalLayout {
+                        spacing: 12px;
+                        Field {
+                            label: "Or its IP address";
+                            manual-ip := LineEdit {
+                                placeholder-text: "192.168.1.20";
+                                input-type: decimal;
+                            }
+                        }
+
+                        Field {
+                            label: "Passphrase";
+                            passphrase := LineEdit {
+                                placeholder-text: "As the Developer Mode app shows it";
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+                        AppButton {
+                            text: App.pairing ? "Pairing…" : "Pair";
+                            icon: "\u{E71B}";
+                            kind: ButtonKind.primary;
+                            busy: App.pairing;
+                            clicked => {
+                                App.pair(manual-ip.text != "" ? manual-ip.text : App.found-index >= 0 && App.found-index < App.found-tvs.length ? App.found-tvs[App.found-index].ip : "", passphrase.text, "");
+                            }
+                        }
+
+                        AppButton {
+                            text: "Search again";
+                            icon: "\u{E72C}";
+                            kind: ButtonKind.ghost;
+                            enabled: !App.searching;
+                            clicked => {
+                                App.search-tvs();
+                            }
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: App.pair-status;
+                            font-size: 12.5px;
+                            color: App.pair-failed ? Theme.danger : Theme.accent;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            // 3. The TV app
+            Step {
+                number: "3";
+                title: "Install the TV app";
+                summary: App.tv-app-summary;
+                state: App.step-tv-app;
+                if App.step-tv-app == 2: HorizontalLayout {
+                    alignment: start;
+                    AppButton {
+                        text: "Install it again";
+                        kind: ButtonKind.ghost;
+                        clicked => {
+                            App.tv-app-again();
+                        }
+                    }
+                }
+                if App.step-tv-app == 1: VerticalLayout {
+                    spacing: 14px;
+                    Field {
+                        label: "Which HDMI input on the TV is this PC plugged into?";
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            HdmiChoice {
+                                input: 1;
+                            }
+
+                            HdmiChoice {
+                                input: 2;
+                            }
+
+                            HdmiChoice {
+                                input: 3;
+                            }
+
+                            HdmiChoice {
+                                input: 4;
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: App.setup-network;
+                        font-size: 12.5px;
+                        color: Theme.faint;
+                        wrap: word-wrap;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 14px;
+                        AppButton {
+                            text: App.setup-installing ? "Installing on the TV…" : "Install on the TV";
+                            icon: "\u{E896}";
+                            kind: ButtonKind.primary;
+                            busy: App.setup-installing;
+                            clicked => {
+                                App.setup-tv-app();
+                            }
+                        }
+
+                        Text {
+                            horizontal-stretch: 1;
+                            text: App.setup-status;
+                            font-size: 12.5px;
+                            color: App.setup-failed ? Theme.danger : Theme.muted;
+                            vertical-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

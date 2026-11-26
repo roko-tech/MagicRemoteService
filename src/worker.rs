@@ -101,7 +101,7 @@ impl Host for WorkerHost {
         let key = registry::open_native(CURRENT_USER, RUN_KEY, true).map_err(|e| e.to_string())?;
         if on {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            key.set_string(service::NAME, &proc::quote(&exe.to_string_lossy())).map_err(|e| e.to_string())
+            key.set_string(service::NAME, &format!("{} --standalone", proc::quote(&exe.to_string_lossy()))).map_err(|e| e.to_string())
         } else {
             let _ = key.delete_value(service::NAME);
             Ok(())
@@ -130,6 +130,23 @@ impl Host for WorkerHost {
     fn set_display(&self, device: &str, display: u32) -> Result<(), String> {
         self.scope.set_display(device, display).map_err(|e| format!("Cannot save the display: {e}"))
     }
+}
+
+/// Whether "Start with Windows" was set, without the service, by a version that registered the
+/// bare exe: then a bare start means "run on its own", as it did. The entry gets `--standalone`.
+pub fn legacy_standalone_startup() -> bool {
+    if service::state().is_some() {
+        return false;
+    }
+    let Ok(key) = registry::open_native(CURRENT_USER, RUN_KEY, true) else { return false };
+    let Some(command) = key.get_string(service::NAME) else { return false };
+    if command.contains("--standalone") {
+        return false;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = key.set_string(service::NAME, &format!("{} --standalone", proc::quote(&exe.to_string_lossy())));
+    }
+    true
 }
 
 /// Creates the single-instance mutex; `None` when another worker holds it.

@@ -8,15 +8,17 @@ use mrs::worker::{self, Options};
 const HELP: &str = "MagicRemoteService - control this PC with the LG Magic Remote
 
 Usage:
-  MagicRemoteService.exe              Run (as the service when Windows starts it, else on its own with a tray icon)
+  MagicRemoteService.exe              Open the settings, which set everything up the first time
+                                      (Windows starts it as the service)
   MagicRemoteService.exe install      Install or update the service from this exe and start it (admin)
   MagicRemoteService.exe uninstall    Stop and remove the service (admin)
   MagicRemoteService.exe ui           Open the settings window
   MagicRemoteService.exe status       Show the service state and connected TVs
   MagicRemoteService.exe --version
 
-Options when running on its own (to try a build beside an installed one):
-  --port <n>     Listen for TVs on <n> and serve the settings on <n+1>
+Running without the service:
+  --standalone   Run on its own with a tray icon
+  --port <n>     Listen for TVs on <n> and serve the settings on <n+1> (to try a build beside the service)
   --no-ssdp      Don't answer the TV's network discovery";
 
 /// The settings API the window talks to: `--http-port`, else the service's (or, with no service
@@ -81,7 +83,12 @@ fn main() {
     let code = match args.first().map(String::as_str) {
         Some("install") => {
             attach_console();
-            print_result(service::install())
+            let result = service::install();
+            // The settings window runs this elevated and shows what happened
+            if let Some(path) = args.iter().position(|a| a == "--result-file").and_then(|i| args.get(i + 1)) {
+                let _ = std::fs::write(path, result.as_ref().unwrap_or_else(|e| e));
+            }
+            print_result(result)
         }
         Some("uninstall") => {
             attach_console();
@@ -135,9 +142,11 @@ fn run(args: Vec<String>) -> i32 {
         if service::run().is_ok() {
             return 0;
         }
-        // Started by hand while the service runs: just show its settings
-        if service::state() == Some(true) && !proc::is_system() {
-            return mrs::ui::run(Scope::Machine.load().port + 1);
+        // Started by hand: show the settings, which also install the service the first time. An
+        // earlier version's "Start with Windows" (without the service) ran the bare exe: keep
+        // running on its own for that.
+        if !proc::is_system() && !worker::legacy_standalone_startup() {
+            return mrs::ui::run(ui_port(&[]));
         }
     }
     worker::run(opts)

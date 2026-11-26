@@ -28,6 +28,11 @@ export struct DisplayRow {
     choice: int,
 }
 
+export struct FoundTv {
+    name: string,
+    ip: string,
+}
+
 export struct RemoteKey {
     code: string,
     name: string,
@@ -44,6 +49,35 @@ export struct RemoteKey {
 }
 
 export global App {
+    // The page shown: 0 Overview, 1 Remote, 2 TVs, 3 PC, 4 Setup
+    in-out property <int> page;
+
+    // Setup: each step 0 waiting, 1 to do, 2 done
+    in property <bool> setup-complete;
+    in property <int> step-install: 1;
+    in property <int> step-pair;
+    in property <int> step-tv-app;
+    in property <string> install-text;
+    in property <string> install-button: "Install";
+    in property <string> install-summary;
+    in property <bool> installing;
+    in property <string> install-error;
+    in property <[FoundTv]> found-tvs;
+    in-out property <int> found-index: -1;
+    in property <bool> searching;
+    in property <string> pair-summary;
+    in property <string> tv-app-summary;
+    in-out property <int> setup-hdmi;
+    in property <string> setup-network;
+    in property <bool> setup-installing;
+    in property <string> setup-status;
+    in property <bool> setup-failed;
+    callback install-service();
+    callback search-tvs();
+    callback pair-again();
+    callback setup-tv-app();
+    callback tv-app-again();
+
     // Service and connection
     in property <bool> connected: true;
     in property <bool> loaded;

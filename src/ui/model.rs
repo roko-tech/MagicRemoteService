@@ -372,6 +372,22 @@ pub const REMOTE: &[KeySpot] = &[
     k(0x0008, "\u{E750}", true, [164.0, 710.0, 56.0, 32.0], false),
 ];
 
+/// Whether version `a` (such as "3.2.0") is newer than `b`.
+pub fn newer(a: &str, b: &str) -> bool {
+    let parse = |v: &str| v.split('.').map(|n| n.trim().parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
+    parse(a) > parse(b)
+}
+
+/// The network the TV is on: the first whose subnet holds `tv`. `networks` are (ip, mask, mac).
+pub fn network_for(tv: std::net::Ipv4Addr, networks: &[(String, String, String)]) -> Option<usize> {
+    let tv = u32::from(tv);
+    networks.iter().position(|(ip, mask, _)| {
+        let (Ok(ip), Ok(mask)) = (ip.parse::<std::net::Ipv4Addr>(), mask.parse::<std::net::Ipv4Addr>()) else { return false };
+        let (ip, mask) = (u32::from(ip), u32::from(mask));
+        mask != u32::MAX && ip & mask == tv & mask
+    })
+}
+
 /// "12 s", "4 min", "2 h 5 min".
 pub fn ago(ms: u64) -> String {
     let s = ms / 1000;
@@ -533,6 +549,21 @@ mod tests {
         assert!(post.get("hasToken").is_none());
         assert!(config_post(&saved, &TvApp { hdmi: 2, ..form.clone() }).1);
         assert!(config_post(&saved, &TvApp { port: 41240, ..form }).1);
+    }
+
+    #[test]
+    fn versions_compare_by_number() {
+        assert!(newer("3.2.0", "3.1.0") && newer("3.10.0", "3.9.9") && newer("4.0", "3.99.1"));
+        assert!(!newer("3.1.0", "3.1.0") && !newer("3.0.9", "3.1.0") && !newer("", "3.1.0"));
+    }
+
+    #[test]
+    fn the_tv_s_network_is_the_one_on_its_subnet() {
+        let n = |ip: &str, mask: &str| (ip.to_string(), mask.to_string(), String::new());
+        // As on a PC with a VPN and Hyper-V switches listed before the Wi-Fi
+        let networks = [n("100.90.180.85", "255.255.255.255"), n("172.20.192.1", "255.255.240.0"), n("192.168.8.150", "255.255.255.0")];
+        assert_eq!(network_for("192.168.8.145".parse().unwrap(), &networks), Some(2));
+        assert_eq!(network_for("10.1.2.3".parse().unwrap(), &networks), None);
     }
 
     #[test]

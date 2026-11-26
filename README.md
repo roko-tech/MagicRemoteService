@@ -35,12 +35,18 @@ Point, click, scroll and type from the couch. Written in Rust.
 | **A TV** | An LG TV with webOS (tested on the C2 and C1) and the free [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app), which needs an LG developer account |
 | **A network** | The PC and the TV on the same local network |
 
-1. **Prepare the TV.** Install the Developer Mode app from the LG Content Store, sign in, and turn on **Dev Mode Status** and **Key Server**. Note the TV's IP address and the passphrase the app shows.
-2. **Install on the PC.** Download `MagicRemoteService-<version>.zip` from the [latest release](https://github.com/roko-tech/MagicRemoteService-Rust/releases/latest), extract it, and double-click `install.bat`. Accept the administrator prompt.
-3. **Answer the installer.** It installs the service, pairs the TV (its IP and the passphrase), asks which network the TV is on and which HDMI input the PC uses, then installs and opens the TV app.
+1. **Prepare the TV.** Install the Developer Mode app from the LG Content Store, sign in, and turn on **Dev Mode Status** and **Key Server**. The app shows a passphrase: keep it on screen.
+2. **Run the app on the PC.** Download `MagicRemoteService.exe` from the [latest release](https://github.com/roko-tech/MagicRemoteService-Rust/releases/latest) and double-click it. The settings open on **Setup**.
+3. **Follow the three steps.**
+   - **Install** — click it and approve the Windows prompt. It installs a Windows service, so the remote works from the moment Windows starts.
+   - **Pair your TV** — your TV is found on the network by itself: pick it and type the passphrase.
+   - **Install the TV app** — pick the HDMI input the PC is plugged into, and click **Install on the TV**.
 4. **Turn Key Server off** in the Developer Mode app. It's only needed while pairing.
 
 Then open the app on the TV, or switch the TV to the PC's input, and point.
+
+> [!NOTE]
+> The exe isn't code-signed, so Windows may say it protected your PC the first time you run it. Choose **More info**, then **Run anyway**.
 
 > [!TIP]
 > Already set up the TV with the webOS CLI (`ares-setup-device`)? The service picks it up by itself, so there's nothing to pair.
@@ -48,9 +54,9 @@ Then open the app on the TV, or switch the TV to the PC's input, and point.
 <details>
 <summary><b>Updating, uninstalling and installer options</b></summary>
 
-- **Update:** run `install.bat` from the new release. Your bindings, TV settings and registry settings are kept. Then click **Reinstall TV App** in the settings so the TV gets the matching app.
+- **Update:** run the new release's `MagicRemoteService.exe`. Setup offers **Update**; your bindings, TV settings and registry settings are kept. Then click **Install it again** in step 3 so the TV gets the matching app.
 - **Uninstall:** run `"C:\Program Files\MagicRemoteService\MagicRemoteService.exe" uninstall` from an administrator prompt, then remove the app from the TV's app list.
-- **Options:** choose "PC service only" or "TV app only" in the installer's menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4`, for example `install.bat -Part Tv -Hdmi 4`.
+- **Installing from a console:** the release zip has `install.bat`, which does the same steps by asking questions. Choose "PC service only" or "TV app only" in its menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4`, for example `install.bat -Part Tv -Hdmi 4`.
 - **From source:** install [Rust](https://rustup.rs) (MSVC toolchain), clone the repository and run `install.bat`; it builds the exe with `cargo` if there isn't one yet.
 
 </details>
@@ -85,6 +91,7 @@ Double-click the tray icon to open the settings. The window runs as you, never w
 
 | Page | What you can do |
 |---|---|
+| **Setup** | Install or update the service, find and pair your TV, and install the TV app, in three steps. It opens first until they're done. |
 | **Overview** | See whether the service is running, each connected TV (connected for, last input, latency, activity counts, never which keys or text) and recent events. |
 | **Remote** | Pick a button on the drawn remote and map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a command, or a TV action. Create **profiles** so buttons act differently while particular apps are in front, and list apps that should scroll one step at a time. |
 | **TVs** | Pair a TV, choose the default one, or unpair it. Set up the TV app: the HDMI input, the network, the port, and the cursor speed, scroll speed and long-press time, which apply at once. **Reinstall TV App** builds and installs it on the default TV. |
@@ -153,7 +160,8 @@ flowchart LR
 | `MagicRemoteService.exe install` | Copy the exe to `C:\Program Files\MagicRemoteService` and install or update the service from there (administrator) |
 | `MagicRemoteService.exe uninstall` | Stop and remove the service (administrator) |
 | `MagicRemoteService.exe status` | Show the service's state, port and connected TVs |
-| `MagicRemoteService.exe ui` | Open the settings window |
+| `MagicRemoteService.exe` | Open the settings (which set everything up the first time) |
+| `MagicRemoteService.exe --standalone` | Run on its own with a tray icon, without the service |
 | `MagicRemoteService.exe --port 41330 --no-ssdp` | Run a second copy beside the service, to try a build |
 
 The exe has no console window: in PowerShell, pipe it (`… status | Out-Host`) to see the output.
@@ -184,6 +192,7 @@ Every push runs formatting, lint and tests in CI. Pushing a `v*` tag publishes a
 
 ## Release history
 
+- **3.2** — guided setup: run the exe and the settings install the service, find your TV on the network, pair it and install the TV app in three steps, and offer updates; one click is enough everywhere in the settings window.
 - **3.1** — a native settings window; the TV app installed without Node.js, with pairing in the settings and the installer; cursor speed, scroll speed and long press applied live; per-app profiles; per-TV diagnostics; a heartbeat so the TV notices a PC that went quiet; the device token kept inside the service.
 - **3.0** — the PC side rebuilt in Rust: one exe with no .NET, a supervisor that restarts its worker, and settings that apply without a restart.
 - **2.x** — the C# version: discovery, the web settings page, smooth scrolling and device token auth.

@@ -4,6 +4,7 @@
 
 pub mod bindings;
 pub mod client;
+pub mod discover;
 pub mod http;
 pub mod ipk;
 pub mod log;
