@@ -6,8 +6,8 @@ Installs or updates MagicRemoteService on this PC and deploys its app to an LG w
 Uses MagicRemoteService.exe from next to this script (a release download) or from
 target\release (a source checkout, built with cargo when missing). The exe copies itself to
 C:\Program Files\MagicRemoteService and registers the Windows service. The TV is then paired
-and the TV app configured and installed through the service's local API, which uses Windows'
-own OpenSSH client (no Node.js or webOS CLI needed).
+and the TV app configured and installed through the service's local API, which has its own
+SSH client built in (no Node.js, webOS CLI or OpenSSH needed).
 
 .PARAMETER Part
 Both (default), Pc (service only) or Tv (TV app only).

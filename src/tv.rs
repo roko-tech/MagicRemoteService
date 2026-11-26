@@ -1,19 +1,17 @@
 //! The TV app built into the exe, the TVs this PC deploys it to, and deploying it. The package is
-//! built here and installed over the TV's Developer Mode SSH with Windows' own OpenSSH client,
-//! so no Node.js or webOS CLI is needed.
+//! built here and installed over the TV's Developer Mode SSH with the SSH client built into the
+//! exe (`tvssh`), so nothing else is needed: no Node.js, no webOS CLI, no OpenSSH.
 
 use crate::settings::{self, Files};
+use crate::tvssh::{self, Session, SshError};
 use crate::win::{acl, proc};
 use crate::{ipk, log};
 use serde_json::{json, Value};
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Mutex, MutexGuard};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 macro_rules! tv_files {
     ($($path:literal),* $(,)?) => {
@@ -48,8 +46,6 @@ const TEMPLATE_APP_ID: &str = "com.cathwyler.magicremoteservice";
 const KEY_SERVER_PORT: u16 = 9991;
 const DEV_SSH_PORT: u16 = 9922;
 const DEV_SSH_USER: &str = "prisoner";
-/// Carries a TV key's passphrase to this exe when ssh runs it as `SSH_ASKPASS`.
-pub const ASKPASS_ENV: &str = "MRS_ASKPASS";
 
 /// One TV pairing or install at a time.
 static TV_WORK: Mutex<()> = Mutex::new(());
@@ -149,7 +145,7 @@ fn save(files: &Files, tvs: &[Tv]) -> io::Result<()> {
 }
 
 /// Writes a file only SYSTEM, administrators and this process's account can open (as the
-/// service, just SYSTEM and administrators). Windows' SSH client refuses a key file others can read.
+/// service, just SYSTEM and administrators): the keys and passphrases are secrets.
 fn write_secret(path: &Path, data: &[u8]) -> io::Result<()> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, data)?;
@@ -267,199 +263,85 @@ fn forget_host(files: &Files, host: Ipv4Addr, port: u16) {
     let _ = std::fs::write(&path, kept);
 }
 
-struct SshOutput {
-    stdout: String,
-    stderr: String,
-    success: bool,
+/// The host key remembered for the TV at `host:port`, as `ssh-rsa AAAA…`. The file is the
+/// `known_hosts` OpenSSH kept for earlier versions, so the TVs they trusted stay pinned.
+fn pinned_host_key(files: &Files, host: Ipv4Addr, port: u16) -> Option<String> {
+    let text = std::fs::read_to_string(files.tv_known_hosts()).ok()?;
+    let prefix = format!("[{host}]:{port} ");
+    text.lines().find_map(|l| l.strip_prefix(&prefix)).map(|key| key.split_whitespace().take(2).collect::<Vec<_>>().join(" "))
 }
 
-/// Runs commands on a TV with Windows' OpenSSH client. The key stays encrypted on disk: ssh asks
-/// this exe for its passphrase (`SSH_ASKPASS`).
-struct Ssh<'a> {
-    tv: &'a Tv,
-    key: PathBuf,
-    known_hosts: PathBuf,
-    /// The program ssh runs for the passphrase: this exe.
-    askpass: PathBuf,
+/// Remembers the TV's host key; later sessions refuse a TV that shows another.
+fn remember_host_key(files: &Files, host: Ipv4Addr, port: u16, key: &str) {
+    if key.is_empty() {
+        return;
+    }
+    forget_host(files, host, port);
+    let path = files.tv_known_hosts();
+    let mut text = std::fs::read_to_string(&path).unwrap_or_default();
+    text.push_str(&format!("[{host}]:{port} {key}\n"));
+    let _ = std::fs::write(&path, text);
 }
 
-impl Ssh<'_> {
-    fn new<'a>(files: &Files, tv: &'a Tv, key: PathBuf) -> Ssh<'a> {
-        Ssh { tv, key, known_hosts: files.tv_known_hosts(), askpass: std::env::current_exe().unwrap_or_default() }
+/// Signs in to `tv` with the key at `key_path`, holding it to its remembered host key (and
+/// remembering it the first time).
+fn sign_in(files: &Files, tv: &Tv, key_path: &Path) -> Result<Session, String> {
+    let key = std::fs::read_to_string(key_path).map_err(|_| format!("{}'s key is missing. Pair the TV again.", tv.name))?;
+    let pinned = pinned_host_key(files, tv.host, tv.port);
+    let session = tvssh::connect(tv.host, tv.port, &tv.username, &key, &tv.passphrase, pinned.as_deref()).map_err(|e| ssh_error(tv, &e))?;
+    if pinned.is_none() {
+        remember_host_key(files, tv.host, tv.port, &session.host_key);
     }
+    Ok(session)
+}
 
-    fn command(&self, remote: &str) -> io::Result<Command> {
-        let ssh = proc::system_dir().join("OpenSSH\\ssh.exe");
-        if !ssh.is_file() {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "ssh.exe"));
-        }
-        let mut c = Command::new(ssh);
-        c.args(["-F", "none", "-T", "-i"]).arg(&self.key);
-        c.args(["-p", &self.tv.port.to_string(), "-l", &self.tv.username]);
-        for option in [
-            "IdentitiesOnly=yes",
-            "PreferredAuthentications=publickey",
-            "NumberOfPasswordPrompts=1",
-            "ConnectTimeout=10",
-            "ServerAliveInterval=10",
-            // The TV's SSH server only knows the older RSA signatures
-            "HostKeyAlgorithms=+ssh-rsa",
-            "PubkeyAcceptedAlgorithms=+ssh-rsa",
-            // Trusts the TV's host key the first time, then holds it to that
-            "StrictHostKeyChecking=accept-new",
-        ] {
-            c.args(["-o", option]);
-        }
-        c.arg("-o").arg(format!("UserKnownHostsFile=\"{}\"", self.known_hosts.display()));
-        c.arg(self.tv.host.to_string()).arg(remote);
-        self.hidden_with_askpass(&mut c);
-        Ok(c)
+/// Runs a short command on the TV and returns its output; a failure becomes a readable error.
+fn exec(session: &Session, tv: &Tv, command: &str, input: &[u8], timeout: Duration) -> Result<String, String> {
+    let out = session.exec(command, input, false, timeout, |_| false).map_err(|e| ssh_error(tv, &e))?;
+    if out.success() {
+        return Ok(out.stdout);
     }
+    let why = out.stderr.lines().map(str::trim).rfind(|l| !l.is_empty()).map(str::to_string);
+    Err(format!("{}: {}", tv.name, why.unwrap_or_else(|| format!("the command ended with code {}", out.exit.map_or("?".into(), |c| c.to_string())))))
+}
 
-    /// No window, pipes for all three streams, and this exe answering the passphrase prompt.
-    fn hidden_with_askpass(&self, c: &mut Command) {
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        c.env("SSH_ASKPASS", &self.askpass).env("SSH_ASKPASS_REQUIRE", "force").env(ASKPASS_ENV, &self.tv.passphrase);
-        c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).creation_flags(CREATE_NO_WINDOW);
-    }
-
-    /// Whether the passphrase unlocks the key (`None` when ssh-keygen can't run). ssh itself says
-    /// "permission denied" for a wrong passphrase, the same as for a key the TV refuses.
-    fn unlocks_key(&self) -> Option<bool> {
-        let mut c = Command::new(proc::system_dir().join("OpenSSH\\ssh-keygen.exe"));
-        c.arg("-y").arg("-f").arg(&self.key);
-        self.hidden_with_askpass(&mut c);
-        Some(c.output().ok()?.status.success())
-    }
-
-    /// Runs `remote` with `input` on its stdin, handing each output line to `stop`. When `stop`
-    /// says so, or the output ends, stdin is closed (which ends `luna-send -i`) and ssh gets a
-    /// moment to finish. Fails only when ssh can't start or the TV doesn't answer in time.
-    fn run(&self, remote: &str, input: Vec<u8>, timeout: Duration, mut stop: impl FnMut(&str) -> bool) -> Result<SshOutput, String> {
-        let mut child = self.command(remote).and_then(|mut c| c.spawn()).map_err(|e| {
-            if e.kind() == io::ErrorKind::NotFound {
-                "Windows' OpenSSH Client isn't installed. Add it under Settings > System > Optional features, then try again.".into()
-            } else {
-                format!("Cannot start ssh: {e}")
-            }
-        })?;
-        let (Some(mut stdin), Some(stdout), Some(stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take()) else {
-            let _ = child.kill();
-            return Err("Cannot talk to ssh.".into());
-        };
-        let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                if tx.send(line).is_err() {
-                    break;
-                }
-            }
-        });
-        let errors = std::thread::spawn(move || {
-            let mut text = String::new();
-            let _ = BufReader::new(stderr).read_to_string(&mut text);
-            text
-        });
-        // A long input is written while the output is read, and its end closes stdin
-        let mut held = None;
-        if input.is_empty() {
-            held = Some(stdin);
-        } else {
-            std::thread::spawn(move || {
-                let _ = stdin.write_all(&input);
-            });
-        }
-        let deadline = Instant::now() + timeout;
-        let mut stdout = String::new();
-        let mut timed_out = false;
-        loop {
-            match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(line) => {
-                    stdout.push_str(&line);
-                    stdout.push('\n');
-                    if stop(&line) {
-                        break;
-                    }
-                }
-                Err(RecvTimeoutError::Timeout) => {
-                    timed_out = true;
-                    break;
-                }
-                Err(RecvTimeoutError::Disconnected) => break,
-            }
-        }
-        drop(held);
-        let grace = Instant::now() + Duration::from_secs(5);
-        let status = loop {
-            match child.try_wait() {
-                Ok(Some(status)) => break Some(status),
-                Ok(None) if !timed_out && Instant::now() < grace => std::thread::sleep(Duration::from_millis(50)),
-                _ => {
-                    let _ = child.kill();
-                    break child.wait().ok();
-                }
-            }
-        };
-        let stderr = errors.join().unwrap_or_default();
-        if timed_out {
-            return Err(format!("{} ({}) stopped answering.", self.tv.name, self.tv.host));
-        }
-        Ok(SshOutput { stdout, stderr, success: status.is_some_and(|s| s.success()) })
-    }
-
-    /// Calls an appInstallService method and follows its replies until it reports `done` or a
-    /// failure.
-    fn follow(&self, method: &str, param: Value, done: &str) -> Result<(), String> {
-        let mut reply = String::new();
-        let mut outcome = None;
-        let out = self.run(
-            &format!("/usr/bin/luna-send-pub -i luna://com.webos.appInstallService/dev/{method} '{param}'"),
-            Vec::new(),
-            Duration::from_secs(180),
-            |line| {
-                // A reply may span several lines
-                reply.push_str(line);
-                let Ok(v) = serde_json::from_str::<Value>(&reply) else { return false };
-                reply.clear();
-                outcome = luna_progress(&v, done);
-                outcome.is_some()
-            },
-        )?;
-        match outcome {
-            Some(Ok(())) => Ok(()),
-            Some(Err(why)) => Err(format!("{} said: {why}", self.tv.name)),
-            None if !out.success && !out.stderr.trim().is_empty() => Err(ssh_error(self.tv, &out.stderr)),
-            None => Err(format!("{} didn't say how it went.", self.tv.name)),
-        }
-    }
-
-    /// Runs a short command and returns its output; ssh's own failures become a readable error.
-    fn exec(&self, remote: &str, input: Vec<u8>, timeout: Duration) -> Result<String, String> {
-        let out = self.run(remote, input, timeout, |_| false)?;
-        if out.success {
-            Ok(out.stdout)
-        } else {
-            Err(ssh_error(self.tv, &out.stderr))
-        }
+/// Calls an appInstallService method and follows its replies until it reports `done` or a
+/// failure. Closing stdin then ends `luna-send -i`.
+fn follow(session: &Session, tv: &Tv, method: &str, param: Value, done: &str) -> Result<(), String> {
+    let mut reply = String::new();
+    let mut outcome = None;
+    let command = format!("/usr/bin/luna-send-pub -i luna://com.webos.appInstallService/dev/{method} '{param}'");
+    let out = session
+        .exec(&command, &[], true, Duration::from_secs(180), |line| {
+            // A reply may span several lines
+            reply.push_str(line);
+            let Ok(v) = serde_json::from_str::<Value>(&reply) else { return false };
+            reply.clear();
+            outcome = luna_progress(&v, done);
+            outcome.is_some()
+        })
+        .map_err(|e| ssh_error(tv, &e))?;
+    match outcome {
+        Some(Ok(())) => Ok(()),
+        Some(Err(why)) => Err(format!("{} said: {why}", tv.name)),
+        None if !out.stderr.trim().is_empty() => Err(format!("{}: {}", tv.name, out.stderr.trim())),
+        None => Err(format!("{} didn't say how it went.", tv.name)),
     }
 }
 
-/// What went wrong, from ssh's error output.
-fn ssh_error(tv: &Tv, stderr: &str) -> String {
-    let s = stderr.to_ascii_lowercase();
+/// What went wrong, and what to do about it.
+fn ssh_error(tv: &Tv, e: &SshError) -> String {
     let name = &tv.name;
-    if ["connection refused", "timed out", "no route", "unreachable", "could not resolve"].iter().any(|m| s.contains(m)) {
-        format!(
+    match e {
+        SshError::WrongPassphrase => format!("The passphrase saved for {name} doesn't unlock its key. Pair the TV again."),
+        SshError::BadKey => format!("{name}'s saved key can't be read. Pair the TV again."),
+        SshError::Unreachable | SshError::TimedOut => format!(
             "Can't reach {name} at {}. Check the TV is on and its Developer Mode app shows Dev Mode Status on (it turns off when the session runs out).",
             tv.host
-        )
-    } else if s.contains("host key") || s.contains("identification has changed") {
-        format!("{name} isn't the TV that was paired at {} (was it reset?). Pair it again.", tv.host)
-    } else if s.contains("permission denied") {
-        format!("{name} refused this PC's key (reinstalling Developer Mode changes it). Pair the TV again.")
-    } else {
-        let last = stderr.lines().map(str::trim).rfind(|l| !l.is_empty()).unwrap_or("ssh failed");
-        format!("{name}: {last}")
+        ),
+        SshError::HostKeyChanged => format!("{name} isn't the TV that was paired at {} (was it reset?). Pair it again.", tv.host),
+        SshError::KeyRefused => format!("{name} refused this PC's key (reinstalling Developer Mode changes it). Pair the TV again."),
+        SshError::Other(m) => format!("{name}: {m}"),
     }
 }
 
@@ -481,8 +363,8 @@ pub fn luna_progress(reply: &Value, done: &str) -> Option<Result<(), String>> {
     }
 }
 
-/// Downloads the TV's key, checks it opens an SSH session with `passphrase`, and saves the TV as
-/// the default one.
+/// Downloads the TV's key, checks it unlocks with `passphrase` and opens an SSH session, and
+/// saves the TV as the default one.
 pub fn pair(files: &Files, name: &str, host: Ipv4Addr, passphrase: &str) -> Result<String, String> {
     let passphrase = passphrase.trim();
     if passphrase.is_empty() || passphrase.len() > 64 || passphrase.chars().any(char::is_control) {
@@ -502,23 +384,20 @@ pub fn pair(files: &Files, name: &str, host: Ipv4Addr, passphrase: &str) -> Resu
     };
     let key = fetch_key(host)?;
     let tv = Tv { name: name.clone(), host, port: DEV_SSH_PORT, username: DEV_SSH_USER.into(), default: true, passphrase: passphrase.to_string() };
-    let staged = files.tv_key(&name).with_extension("new");
-    write_secret(&staged, &key).map_err(|e| format!("Cannot save the TV's key: {e}"))?;
-    let ssh = Ssh::new(files, &tv, staged.clone());
-    if ssh.unlocks_key() == Some(false) {
-        let _ = std::fs::remove_file(&staged);
-        return Err("Wrong passphrase: enter the one the TV's Developer Mode app shows (it changes when Developer Mode is reinstalled).".into());
+    // A TV paired again (after a reset, say) gets its host key trusted afresh
+    let session = match tvssh::connect(host, tv.port, &tv.username, &String::from_utf8_lossy(&key), &tv.passphrase, None) {
+        Ok(session) => session,
+        Err(SshError::WrongPassphrase) => {
+            return Err("Wrong passphrase: enter the one the TV's Developer Mode app shows (it changes when Developer Mode is reinstalled).".into());
+        }
+        Err(e) => return Err(ssh_error(&tv, &e)),
+    };
+    if exec(&session, &tv, "echo paired", &[], Duration::from_secs(30))?.trim() != "paired" {
+        return Err(format!("{name} didn't answer as expected."));
     }
-    forget_host(files, host, tv.port);
-    let check = ssh.run("echo paired", Vec::new(), Duration::from_secs(30), |_| false);
-    if !matches!(&check, Ok(o) if o.stdout.trim() == "paired") {
-        let _ = std::fs::remove_file(&staged);
-        return Err(match check {
-            Ok(o) => ssh_error(&tv, &o.stderr),
-            Err(e) => e,
-        });
-    }
-    std::fs::rename(&staged, files.tv_key(&name)).map_err(|e| format!("Cannot save the TV's key: {e}"))?;
+    remember_host_key(files, host, tv.port, &session.host_key);
+    drop(session);
+    write_secret(&files.tv_key(&name), &key).map_err(|e| format!("Cannot save the TV's key: {e}"))?;
     for old in tvs.iter().filter(|t| t.host == host && t.name != name) {
         let _ = std::fs::remove_file(files.tv_key(&old.name));
     }
@@ -531,19 +410,18 @@ pub fn pair(files: &Files, name: &str, host: Ipv4Addr, passphrase: &str) -> Resu
 }
 
 /// Copies a package to the TV and installs it.
-fn install(ssh: &Ssh, app_id: &str, version: &str, package: Vec<u8>) -> Result<(), String> {
-    let name = &ssh.tv.name;
+fn install(session: &Session, tv: &Tv, app_id: &str, version: &str, package: &[u8]) -> Result<(), String> {
     let remote = format!("/media/developer/temp/{app_id}_{version}_all.ipk");
     // The byte count it reports back confirms the package arrived whole
     let size = package.len();
-    let copied = ssh.exec(&format!("mkdir -p /media/developer/temp && cat > {remote} && wc -c < {remote}"), package, Duration::from_secs(120))?;
+    let copied = exec(session, tv, &format!("mkdir -p /media/developer/temp && cat > {remote} && wc -c < {remote}"), package, Duration::from_secs(120))?;
     let result = if copied.trim() == size.to_string() {
-        ssh.follow("install", json!({ "id": "com.ares.defaultName", "ipkUrl": remote, "subscribe": true }), "installed")
+        follow(session, tv, "install", json!({ "id": "com.ares.defaultName", "ipkUrl": remote, "subscribe": true }), "installed")
     } else {
-        Err(format!("Copying the TV app to {name} failed ({} of {size} bytes arrived).", copied.trim()))
+        Err(format!("Copying the TV app to {} failed ({} of {size} bytes arrived).", tv.name, copied.trim()))
     };
     // The package holds the device token: remove it whatever happened
-    let _ = ssh.exec(&format!("rm -f {remote}"), Vec::new(), Duration::from_secs(30));
+    let _ = exec(session, tv, &format!("rm -f {remote}"), &[], Duration::from_secs(30));
     result
 }
 
@@ -559,12 +437,12 @@ pub fn reinstall(files: &Files, version: &str) -> Result<String, String> {
     let _one = one_at_a_time()?;
     let tvs = tvs(files);
     let tv = tvs.iter().find(|t| t.default).or(tvs.first()).ok_or("No TV is paired yet. Pair one under TVs first.")?;
-    let ssh = Ssh::new(files, tv, files.tv_key(&tv.name));
+    let session = sign_in(files, tv, &files.tv_key(&tv.name))?;
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-    install(&ssh, &app_id, version, ipk::build(&app_id, version, &render(&app_id, version, input_name, &config), now))?;
+    install(&session, tv, &app_id, version, &ipk::build(&app_id, version, &render(&app_id, version, input_name, &config), now))?;
     let name = &tv.name;
     let launch = json!({ "id": app_id, "subscribe": false, "params": {} });
-    let out = ssh.exec(&format!("/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/launch '{launch}'"), Vec::new(), Duration::from_secs(30))?;
+    let out = exec(&session, tv, &format!("/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/launch '{launch}'"), &[], Duration::from_secs(30))?;
     let replies: Vec<Value> = out.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
     if !replies.iter().any(|v| v.get("returnValue") == Some(&Value::Bool(true))) {
         let why = replies.iter().find_map(|v| v.get("errorText").and_then(Value::as_str)).unwrap_or("no answer");
@@ -664,7 +542,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "installs a throwaway copy of the TV app on the TV set up in the webOS CLI, then removes it; needs `cargo build` first"]
+    #[ignore = "installs a throwaway copy of the TV app on the TV set up in the webOS CLI, then removes it"]
     fn installs_and_removes_on_a_real_tv() {
         const ID: &str = "com.cathwyler.magicremoteservice.hdmi9";
         struct Cleanup(PathBuf);
@@ -673,34 +551,100 @@ mod tests {
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
-        // Laid out like the service: the exe beside its files, in a folder with spaces in its name
+        // Laid out like the service's files, in a folder with spaces in its name
         let files = Files { dir: std::env::temp_dir().join(format!("mrs tv real {}", std::process::id())) };
         std::fs::create_dir_all(&files.dir).unwrap();
         let _cleanup = Cleanup(files.dir.clone());
-        let built = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("MagicRemoteService.exe");
-        assert!(built.is_file(), "{} missing: run cargo build", built.display());
-        std::fs::copy(&built, files.dir.join("MagicRemoteService.exe")).unwrap();
         let tvs = tvs(&files);
         let tv = tvs.iter().find(|t| t.default).expect("a TV set up with ares-setup-device and ares-novacom --getkey");
-        let mut ssh = Ssh::new(&files, tv, files.tv_key(&tv.name));
-        // ssh asks the service exe for the passphrase, not this test binary
-        ssh.askpass = files.dir.join("MagicRemoteService.exe");
+        let session = sign_in(&files, tv, &files.tv_key(&tv.name)).unwrap();
+        assert!(pinned_host_key(&files, tv.host, tv.port).is_some(), "the host key is remembered");
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-        install(&ssh, ID, "0.0.1", ipk::build(ID, "0.0.1", &render(ID, "0.0.1", "HDMI 9", b"{}"), now)).unwrap();
-        let info = ssh.exec("/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/dev/listApps '{}'", Vec::new(), Duration::from_secs(30));
-        ssh.follow("remove", json!({ "id": ID, "subscribe": true }), "removed").unwrap();
+        install(&session, tv, ID, "0.0.1", &ipk::build(ID, "0.0.1", &render(ID, "0.0.1", "HDMI 9", b"{}"), now)).unwrap();
+        let info = exec(&session, tv, "/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/dev/listApps '{}'", &[], Duration::from_secs(30));
+        follow(&session, tv, "remove", json!({ "id": ID, "subscribe": true }), "removed").unwrap();
         let info = info.unwrap();
         let listed: Value = serde_json::from_str(info.trim()).unwrap();
         let app = listed["apps"].as_array().unwrap().iter().find(|a| a["id"] == ID).cloned().unwrap_or_default();
         assert_eq!((app["version"].as_str(), app["title"].as_str()), (Some("0.0.1"), Some("MagicRemoteService")), "{info}");
-        assert!(!ssh.exec("ls /media/developer/temp", Vec::new(), Duration::from_secs(30)).unwrap().contains(ID), "the package was left on the TV");
+        assert!(!exec(&session, tv, "ls /media/developer/temp", &[], Duration::from_secs(30)).unwrap().contains(ID), "the package was left on the TV");
+    }
+
+    #[test]
+    #[ignore = "signs in to the TV set up in the webOS CLI with the built-in SSH client"]
+    fn built_in_ssh_reaches_a_real_tv() {
+        use crate::tvssh::connect;
+        use std::time::Instant;
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let files = Files { dir: std::env::temp_dir().join(format!("mrs ssh spike {}", std::process::id())) };
+        std::fs::create_dir_all(&files.dir).unwrap();
+        let _cleanup = Cleanup(files.dir.clone());
+        let tvs = tvs(&files);
+        let tv = tvs.iter().find(|t| t.default).expect("a TV set up with ares-setup-device and ares-novacom --getkey");
+        let key = std::fs::read_to_string(files.tv_key(&tv.name)).unwrap();
+        let started = Instant::now();
+        let session = connect(tv.host, tv.port, &tv.username, &key, &tv.passphrase, None).unwrap();
+        println!("signed in in {:?}; host key {}...", started.elapsed(), &session.host_key[..24]);
+        let out = session.exec("echo ok; echo err >&2; exit 3", &[], false, Duration::from_secs(20), |_| false).unwrap();
+        assert_eq!((out.stdout.trim(), out.stderr.trim(), out.exit), ("ok", "err", Some(3)));
+        // Input on stdin, as the package copy sends it
+        let out = session.exec("wc -c", &[7u8; 100_000], false, Duration::from_secs(30), |_| false).unwrap();
+        assert_eq!(out.stdout.trim(), "100000");
+        let pinned = session.host_key.clone();
+        drop(session);
+        assert_eq!(connect(tv.host, tv.port, &tv.username, &key, "WRONG1", None).err(), Some(SshError::WrongPassphrase));
+        assert!(connect(tv.host, tv.port, &tv.username, &key, &tv.passphrase, Some(&pinned)).is_ok());
+        assert_eq!(connect(tv.host, tv.port, &tv.username, &key, &tv.passphrase, Some("ssh-rsa AAAAnotthisone")).err(), Some(SshError::HostKeyChanged));
+    }
+
+    #[test]
+    #[ignore = "pairs the TV set up in the webOS CLI again, from scratch (Key Server must be on)"]
+    fn pairs_with_a_real_tv() {
+        let cli = temp_files("pair-cli");
+        let tvs = tvs(&cli);
+        let known = tvs.iter().find(|t| t.default).expect("a TV set up with ares-setup-device and ares-novacom --getkey").clone();
+        let fresh = temp_files("pair-fresh");
+        let wrong = pair(&fresh, "", known.host, "WRONG1").unwrap_err();
+        assert!(!wrong.contains("key server"), "turn on Key Server in the TV's Developer Mode app: {wrong}");
+        assert!(wrong.starts_with("Wrong passphrase"), "{wrong}");
+        let paired = pair(&fresh, "", known.host, &known.passphrase);
+        let _ = std::fs::remove_dir_all(&cli.dir);
+        let saved = load(&fresh);
+        let pinned = pinned_host_key(&fresh, known.host, DEV_SSH_PORT);
+        let _ = std::fs::remove_dir_all(&fresh.dir);
+        println!("{paired:?}");
+        assert!(paired.is_ok());
+        assert_eq!(saved.unwrap()[0].host, known.host);
+        assert!(pinned.is_some_and(|k| k.starts_with("ssh-rsa ")));
     }
 
     #[test]
     fn ssh_errors_say_what_to_do() {
         let t = tv("C2", 145, true);
-        assert!(ssh_error(&t, "ssh: connect to host 192.168.1.145 port 9922: Connection timed out").contains("Dev Mode Status"));
-        assert!(ssh_error(&t, "prisoner@192.168.1.145: Permission denied (publickey).").contains("refused this PC's key"));
-        assert_eq!(ssh_error(&t, "\nsomething odd\n\n"), "C2: something odd");
+        assert!(ssh_error(&t, &SshError::Unreachable).contains("Dev Mode Status"));
+        assert!(ssh_error(&t, &SshError::KeyRefused).contains("refused this PC's key"));
+        assert!(ssh_error(&t, &SshError::HostKeyChanged).contains("Pair it again"));
+        assert_eq!(ssh_error(&t, &SshError::Other("something odd".into())), "C2: something odd");
+    }
+
+    #[test]
+    fn host_keys_pinned_by_openssh_still_hold() {
+        let files = temp_files("pins");
+        let tv_ip = Ipv4Addr::new(192, 168, 1, 145);
+        // A line as Windows' OpenSSH wrote it for earlier versions
+        std::fs::write(files.tv_known_hosts(), "[192.168.1.145]:9922 ssh-rsa AAAAold\n[192.168.1.146]:9922 ssh-rsa AAAAother\n").unwrap();
+        assert_eq!(pinned_host_key(&files, tv_ip, 9922).as_deref(), Some("ssh-rsa AAAAold"));
+        assert_eq!(pinned_host_key(&files, tv_ip, 22), None);
+        remember_host_key(&files, tv_ip, 9922, "ssh-rsa AAAAnew");
+        assert_eq!(pinned_host_key(&files, tv_ip, 9922).as_deref(), Some("ssh-rsa AAAAnew"));
+        assert_eq!(pinned_host_key(&files, Ipv4Addr::new(192, 168, 1, 146), 9922).as_deref(), Some("ssh-rsa AAAAother"));
+        forget_host(&files, tv_ip, 9922);
+        assert_eq!(pinned_host_key(&files, tv_ip, 9922), None);
+        let _ = std::fs::remove_dir_all(&files.dir);
     }
 }
