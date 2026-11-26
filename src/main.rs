@@ -11,12 +11,23 @@ Usage:
   MagicRemoteService.exe              Run (as the service when Windows starts it, else on its own with a tray icon)
   MagicRemoteService.exe install      Install or update the service from this exe and start it (admin)
   MagicRemoteService.exe uninstall    Stop and remove the service (admin)
+  MagicRemoteService.exe ui           Open the settings window
   MagicRemoteService.exe status       Show the service state and connected TVs
   MagicRemoteService.exe --version
 
 Options when running on its own (to try a build beside an installed one):
   --port <n>     Listen for TVs on <n> and serve the settings on <n+1>
   --no-ssdp      Don't answer the TV's network discovery";
+
+/// The settings API the window talks to: `--http-port`, else the service's (or, with no service
+/// running, this user's standalone) port plus one.
+fn ui_port(args: &[String]) -> u16 {
+    let given = args.iter().position(|a| a == "--http-port").and_then(|i| args.get(i + 1)?.parse().ok());
+    given.unwrap_or_else(|| {
+        let scope = if service::state() == Some(true) { Scope::Machine } else { Scope::current() };
+        scope.load().port.saturating_add(1)
+    })
+}
 
 /// Lets CLI commands print into the console they were started from.
 fn attach_console() {
@@ -80,6 +91,7 @@ fn main() {
             attach_console();
             print_result(status())
         }
+        Some("ui") => mrs::ui::run(ui_port(&args)),
         Some("--version" | "version") => {
             attach_console();
             print_result(Ok(format!("MagicRemoteService {}", env!("CARGO_PKG_VERSION"))))
@@ -125,8 +137,7 @@ fn run(args: Vec<String>) -> i32 {
         }
         // Started by hand while the service runs: just show its settings
         if service::state() == Some(true) && !proc::is_system() {
-            let _ = proc::open_url(&worker::settings_url(Scope::Machine.load().port + 1));
-            return 0;
+            return mrs::ui::run(Scope::Machine.load().port + 1);
         }
     }
     worker::run(opts)

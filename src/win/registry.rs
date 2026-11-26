@@ -90,7 +90,7 @@ impl Key {
     pub fn get_string(&self, name: &str) -> Option<String> {
         match self.raw(name)? {
             (REG_SZ | REG_EXPAND_SZ, b) => {
-                let w: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                let w: Vec<u16> = b.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
                 Some(from_wide(&w))
             }
             _ => None,

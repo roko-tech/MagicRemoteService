@@ -1,0 +1,329 @@
+import { ScrollView, ComboBox, LineEdit, SpinBox } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, AppSlider, ButtonKind, Card, Field, PageHeader, Pill, Divider } from "widgets.slint";
+import { App, TvRow } from "state.slint";
+
+component TvItem {
+    in property <TvRow> tv;
+    in property <bool> first;
+    VerticalLayout {
+        spacing: 12px;
+        if !root.first: Divider { }
+        HorizontalLayout {
+            spacing: 14px;
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 36px;
+                    height: 36px;
+                    border-radius: 10px;
+                    background: root.tv.is-default ? Theme.accent-soft : Theme.surface-2;
+                    Text {
+                        text: "\u{E7F4}";
+                        font-family: Theme.icons;
+                        accessible-role: none;
+                        font-size: 16px;
+                        color: root.tv.is-default ? Theme.accent : Theme.muted;
+                    }
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                horizontal-stretch: 0;
+                Text {
+                    text: root.tv.name;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+
+                Text {
+                    text: root.tv.ip;
+                    font-size: 12px;
+                    color: Theme.muted;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                if root.tv.is-default: Pill {
+                    text: "Default";
+                }
+            }
+
+            HorizontalLayout {
+                alignment: end;
+                spacing: 8px;
+                horizontal-stretch: 1;
+                if !root.tv.is-default: AppButton {
+                    text: "Make default";
+                    kind: ButtonKind.ghost;
+                    clicked => {
+                        App.make-default(root.tv.name);
+                    }
+                }
+                AppButton {
+                    text: "Unpair";
+                    kind: ButtonKind.danger;
+                    clicked => {
+                        App.unpair(root.tv.name);
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SliderField {
+    in property <string> label;
+    in property <string> value-text;
+    in property <string> hint;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> step: 0.1;
+    in-out property <float> value;
+    // The three sliders share a row equally
+    horizontal-stretch: 1;
+    preferred-width: 100px;
+    VerticalLayout {
+        spacing: 4px;
+        alignment: start;
+        HorizontalLayout {
+            Text {
+                text: root.label;
+                font-size: 12px;
+                font-weight: 600;
+                color: Theme.muted;
+            }
+
+            Text {
+                text: root.value-text;
+                font-size: 12.5px;
+                font-weight: 600;
+                color: Theme.accent;
+                horizontal-alignment: right;
+            }
+        }
+
+        AppSlider {
+            minimum: root.minimum;
+            maximum: root.maximum;
+            step: root.step;
+            value <=> root.value;
+        }
+
+        Text {
+            text: root.hint;
+            font-size: 11.5px;
+            color: Theme.faint;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component TvsPage {
+    ScrollView {
+        VerticalLayout {
+            padding: 32px;
+            padding-top: 28px;
+            spacing: 20px;
+            alignment: start;
+            PageHeader {
+                title: "TVs";
+                subtitle: "Pair your LG TV, then install the TV app on it. No Node.js or webOS tools needed.";
+            }
+
+            Card {
+                title: "Paired TVs";
+                subtitle: "Reinstall TV App installs on the default TV.";
+                if App.tvs.length == 0: Text {
+                    text: "No TV paired yet.";
+                    font-size: 13px;
+                    color: Theme.muted;
+                }
+                for tv[index] in App.tvs: TvItem {
+                    tv: tv;
+                    first: index == 0;
+                }
+            }
+
+            Card {
+                title: "Pair a TV";
+                subtitle: "On the TV, install the Developer Mode app from the LG Content Store, sign in, and turn on Dev Mode Status and Key Server. Turn Key Server off again once the TV is paired.";
+                HorizontalLayout {
+                    spacing: 12px;
+                    Field {
+                        label: "TV IP address";
+                        ip := LineEdit {
+                            placeholder-text: "192.168.1.20";
+                            input-type: decimal;
+                        }
+                    }
+
+                    Field {
+                        label: "Passphrase";
+                        passphrase := LineEdit {
+                            placeholder-text: "As the Developer Mode app shows it";
+                        }
+                    }
+
+                    Field {
+                        label: "Name (optional)";
+                        name := LineEdit {
+                            placeholder-text: "TV";
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 14px;
+                    AppButton {
+                        text: App.pairing ? "Pairing…" : "Pair TV";
+                        icon: "\u{E71B}";
+                        kind: ButtonKind.primary;
+                        busy: App.pairing;
+                        clicked => {
+                            App.pair(ip.text, passphrase.text, name.text);
+                        }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: App.pair-status;
+                        font-size: 12.5px;
+                        color: App.pair-failed ? Theme.danger : Theme.accent;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+            }
+
+            Card {
+                title: "TV app";
+                subtitle: "Pointer and long-press settings reach connected TVs as soon as you save. The HDMI input, network and port need a reinstall.";
+                HorizontalLayout {
+                    spacing: 16px;
+                    Field {
+                        label: "PC's HDMI input on the TV";
+                        ComboBox {
+                            model: ["HDMI 1", "HDMI 2", "HDMI 3", "HDMI 4"];
+                            current-index <=> App.hdmi-index;
+                        }
+                    }
+
+                    Field {
+                        label: "Network the TV is on";
+                        ComboBox {
+                            model: App.networks;
+                            current-index <=> App.network-index;
+                        }
+                    }
+
+                    Field {
+                        label: "Port";
+                        SpinBox {
+                            minimum: 1024;
+                            maximum: 65534;
+                            value <=> App.tv-port;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 28px;
+                    SliderField {
+                        label: "Cursor speed";
+                        value-text: (Math.round(App.cursor-speed * 10) / 10) + "×";
+                        hint: "How far the pointer moves as you wave the remote.";
+                        minimum: 0.1;
+                        maximum: 5;
+                        value <=> App.cursor-speed;
+                    }
+
+                    SliderField {
+                        label: "Scroll speed";
+                        value-text: (Math.round(App.scroll-speed * 10) / 10) + "×";
+                        hint: "How far the wheel scrolls.";
+                        minimum: 0.2;
+                        maximum: 5;
+                        value <=> App.scroll-speed;
+                    }
+
+                    SliderField {
+                        label: "Long press";
+                        value-text: (Math.round(App.long-click / 100) * 100) + " ms";
+                        hint: "How long to hold OK for a long click.";
+                        minimum: 300;
+                        maximum: 5000;
+                        step: 100;
+                        value <=> App.long-click;
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    AppButton {
+                        text: "Save";
+                        icon: "\u{E74E}";
+                        kind: ButtonKind.primary;
+                        busy: App.saving-config;
+                        clicked => {
+                            App.save-tv-app();
+                        }
+                    }
+
+                    AppButton {
+                        text: App.reinstalling ? "Installing…" : "Reinstall TV App";
+                        icon: "\u{E896}";
+                        busy: App.reinstalling;
+                        clicked => {
+                            App.reinstall();
+                        }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: App.reinstall-status;
+                        font-size: 12.5px;
+                        color: App.reinstall-failed ? Theme.danger : Theme.muted;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+                }
+
+                Divider { }
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    VerticalLayout {
+                        alignment: center;
+                        Pill {
+                            text: App.has-token ? "Device token on" : "Device token off";
+                            tint: App.has-token ? Theme.accent : Theme.danger;
+                        }
+                    }
+
+                    Text {
+                        horizontal-stretch: 1;
+                        text: App.has-token ? "Only TVs that carry the token can control this PC." : "Any device on your network can control this PC.";
+                        font-size: 12.5px;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+
+                    AppButton {
+                        text: "New token";
+                        icon: "\u{E72E}";
+                        kind: ButtonKind.ghost;
+                        clicked => {
+                            App.new-token();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

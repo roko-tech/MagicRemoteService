@@ -1,0 +1,444 @@
+import { ScrollView, ComboBox, LineEdit } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, AppCheck, ButtonKind, Card, Field, PageHeader, Pill } from "widgets.slint";
+import { App, RemoteKey } from "state.slint";
+
+component RemoteButton {
+    in property <RemoteKey> key;
+    in property <bool> selected;
+    callback clicked;
+    property <bool> mappable: root.key.code != "";
+    accessible-role: button;
+    accessible-enabled: root.mappable;
+    accessible-label: root.key.name;
+    accessible-action-default => {
+        if (root.mappable) {
+            root.clicked();
+        }
+    }
+
+    if !root.key.plain: Rectangle {
+        border-radius: root.key.round ? self.height / 2 : min(8px, self.height / 2);
+        background: root.key.fill != transparent ? (touch.has-hover ? root.key.fill.brighter(0.15) : root.key.fill)
+            : !root.mappable ? #191d23
+            : touch.pressed ? #2b323d : touch.has-hover ? #313945 : #252b34;
+        border-width: root.selected ? 2px : 1px;
+        border-color: root.selected ? Theme.accent : root.mappable ? #343c48 : #20252c;
+        animate background { duration: 100ms; }
+    }
+
+    Text {
+        text: root.key.glyph;
+        font-family: root.key.icon ? Theme.icons : "Segoe UI";
+        accessible-role: none;
+        font-size: root.key.plain ? 9.5px : root.key.icon ? 13px : 13px;
+        font-weight: 600;
+        color: root.key.plain ? Theme.faint : root.mappable ? (root.selected ? Theme.accent : #e1e6ec) : #4d5560;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    if root.key.custom: Rectangle {
+        x: root.width - 9px;
+        y: -1px;
+        width: 9px;
+        height: 9px;
+        border-radius: 4.5px;
+        background: Theme.accent;
+        border-width: 2px;
+        border-color: #16191f;
+    }
+
+    touch := TouchArea {
+        enabled: root.mappable;
+        mouse-cursor: root.mappable ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// The LG Magic Remote, with the pointer and keyboard gestures below it.
+component RemoteView {
+    width: 220px;
+    height: 744px;
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: 220px;
+        height: 690px;
+        border-radius: 46px;
+        background: @linear-gradient(180deg, #20252d 0%, #171a20 55%, #13161b 100%);
+        border-width: 1px;
+        border-color: #2b313b;
+        drop-shadow-blur: 28px;
+        drop-shadow-color: #0000008c;
+        drop-shadow-offset-y: 10px;
+    }
+
+    // The ring around the arrows
+    Rectangle {
+        x: 32px;
+        y: 378px;
+        width: 156px;
+        height: 156px;
+        border-radius: 78px;
+        background: #111419;
+        border-width: 1px;
+        border-color: #262c35;
+    }
+
+    Text {
+        x: 0px;
+        y: 696px;
+        width: 220px;
+        text: "POINTER & KEYBOARD";
+        font-size: 9.5px;
+        font-weight: 600;
+        color: Theme.faint;
+        horizontal-alignment: center;
+    }
+
+    for key in App.remote-keys: RemoteButton {
+        x: key.x;
+        y: key.y;
+        width: key.w;
+        height: key.h;
+        key: key;
+        selected: key.code != "" && key.code == App.selected-code;
+        clicked => {
+            App.pick-key(key.code);
+        }
+    }
+}
+
+component ProfileBar inherits Card {
+    title: "Profile";
+    subtitle: "Buttons can act differently while particular apps are in front.";
+    HorizontalLayout {
+        spacing: 10px;
+        ComboBox {
+            model: App.profile-names;
+            current-index: App.profile-index;
+            selected => {
+                App.choose-profile(self.current-index);
+            }
+        }
+
+        AppButton {
+            text: "New profile";
+            icon: "\u{E710}";
+            clicked => {
+                App.new-profile-open = !App.new-profile-open;
+            }
+        }
+
+        if App.profile-index > 0: AppButton {
+            text: "Delete";
+            icon: "\u{E74D}";
+            kind: ButtonKind.danger;
+            clicked => {
+                App.delete-profile();
+            }
+        }
+    }
+
+    if App.profile-index > 0: Field {
+        label: "Applies while one of these apps is in front";
+        hint: "Process names as in Task Manager's Details tab, without .exe, separated by commas.";
+        LineEdit {
+            text: App.profile-apps;
+            placeholder-text: "vlc, PotPlayerMini64";
+            accepted(text) => {
+                App.set-profile-apps(text);
+            }
+            edited(text) => {
+                App.set-profile-apps(text);
+            }
+        }
+    }
+
+    if App.new-profile-open: Rectangle {
+        background: Theme.surface-2;
+        border-radius: 10px;
+        VerticalLayout {
+            padding: 16px;
+            spacing: 12px;
+            HorizontalLayout {
+                spacing: 12px;
+                Field {
+                    label: "Name";
+                    new-name := LineEdit {
+                        placeholder-text: "Media players";
+                    }
+                }
+
+                Field {
+                    label: "Apps";
+                    new-apps := LineEdit {
+                        placeholder-text: "vlc, PotPlayerMini64";
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 10px;
+                alignment: end;
+                AppButton {
+                    text: "Cancel";
+                    kind: ButtonKind.ghost;
+                    clicked => {
+                        App.new-profile-open = false;
+                    }
+                }
+
+                AppButton {
+                    text: "Create profile";
+                    kind: ButtonKind.primary;
+                    clicked => {
+                        App.create-profile(new-name.text, new-apps.text);
+                    }
+                }
+            }
+        }
+    }
+}
+
+component BindingEditor inherits Card {
+    if App.selected-code == "": VerticalLayout {
+        padding-top: 30px;
+        padding-bottom: 30px;
+        spacing: 10px;
+        alignment: center;
+        Text {
+            text: "\u{E8B0}";
+            font-family: Theme.icons;
+            accessible-role: none;
+            font-size: 28px;
+            color: Theme.faint;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: "Pick a button on the remote";
+            font-size: 15px;
+            font-weight: 600;
+            color: Theme.text-2;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: "Dimmed buttons belong to the TV and can't be changed.";
+            font-size: 12.5px;
+            color: Theme.faint;
+            horizontal-alignment: center;
+        }
+    }
+
+    if App.selected-code != "": VerticalLayout {
+        spacing: 18px;
+        HorizontalLayout {
+            spacing: 12px;
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: App.selected-name;
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+
+                Text {
+                    text: "Now: " + App.selected-desc;
+                    font-size: 13px;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+            }
+
+            VerticalLayout {
+                alignment: start;
+                Pill {
+                    text: App.selected-source;
+                    tint: App.selected-source == "Default" ? Theme.muted : Theme.accent;
+                }
+            }
+        }
+
+        Field {
+            label: "Type";
+            ComboBox {
+                model: ["Mouse click", "Key", "Shortcut", "Run a command", "TV action"];
+                current-index <=> App.form-kind;
+            }
+        }
+
+        if App.form-kind == 0: Field {
+            label: "Button";
+            ComboBox {
+                model: ["Left click", "Right click", "Middle click"];
+                current-index <=> App.form-mouse;
+            }
+        }
+
+        if App.form-kind == 2: Field {
+            label: "Hold";
+            HorizontalLayout {
+                spacing: 18px;
+                AppCheck {
+                    text: "Ctrl";
+                    checked <=> App.mod-ctrl;
+                }
+
+                AppCheck {
+                    text: "Alt";
+                    checked <=> App.mod-alt;
+                }
+
+                AppCheck {
+                    text: "Shift";
+                    checked <=> App.mod-shift;
+                }
+
+                AppCheck {
+                    text: "Win";
+                    checked <=> App.mod-win;
+                }
+            }
+        }
+
+        if App.form-kind == 1 || App.form-kind == 2: Field {
+            label: "Key";
+            ComboBox {
+                model: App.key-names;
+                current-index <=> App.form-key;
+            }
+        }
+
+        if App.form-kind == 3: Field {
+            label: "Command";
+            hint: "Runs as the user signed in at the PC. & | ; < and > aren't allowed.";
+            LineEdit {
+                text <=> App.form-command;
+                placeholder-text: "notepad.exe";
+            }
+        }
+
+        if App.form-kind == 4: Field {
+            label: "Action";
+            ComboBox {
+                model: ["Shut down the PC (asks on the TV)", "Toggle the TV keyboard"];
+                current-index <=> App.form-action;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: start;
+            AppButton {
+                text: "Save";
+                icon: "\u{E73E}";
+                kind: ButtonKind.primary;
+                busy: App.saving-binding;
+                clicked => {
+                    App.save-binding();
+                }
+            }
+
+            if App.selected-changed: AppButton {
+                text: App.profile-index > 0 ? "Use the normal binding" : "Reset to default";
+                icon: "\u{E777}";
+                kind: ButtonKind.ghost;
+                clicked => {
+                    App.reset-binding();
+                }
+            }
+        }
+    }
+}
+
+component Exclusions inherits Card {
+    title: "Smooth scrolling exceptions";
+    subtitle: "Apps that use the wheel for volume get single steps instead of momentum.";
+    if App.scroll-exclude.length == 0: Text {
+        text: "None: every app gets smooth scrolling.";
+        font-size: 13px;
+        color: Theme.muted;
+    }
+    for process[index] in App.scroll-exclude: Rectangle {
+        border-radius: 8px;
+        background: Theme.surface-2;
+        HorizontalLayout {
+            padding: 4px;
+            padding-left: 14px;
+            Text {
+                text: process;
+                font-size: 13px;
+                color: Theme.text-2;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+
+            AppButton {
+                text: "Remove";
+                kind: ButtonKind.ghost;
+                clicked => {
+                    App.remove-exclusion(index);
+                }
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 10px;
+        app := LineEdit {
+            placeholder-text: "Process name, such as PotPlayerMini64";
+            accepted(text) => {
+                App.add-exclusion(text);
+                self.text = "";
+            }
+        }
+
+        AppButton {
+            text: "Add";
+            icon: "\u{E710}";
+            clicked => {
+                App.add-exclusion(app.text);
+                app.text = "";
+            }
+        }
+    }
+}
+
+export component RemotePage {
+    ScrollView {
+        VerticalLayout {
+            padding: 32px;
+            padding-top: 28px;
+            spacing: 20px;
+            alignment: start;
+            PageHeader {
+                title: "Remote";
+                subtitle: "Choose what each button does on this PC. Changes apply as soon as you save.";
+            }
+
+            HorizontalLayout {
+                spacing: 28px;
+                VerticalLayout {
+                    alignment: start;
+                    padding-top: 4px;
+                    RemoteView { }
+                }
+
+                VerticalLayout {
+                    spacing: 20px;
+                    alignment: start;
+                    horizontal-stretch: 1;
+                    ProfileBar { }
+                    BindingEditor { }
+                    Exclusions { }
+                }
+            }
+        }
+    }
+}

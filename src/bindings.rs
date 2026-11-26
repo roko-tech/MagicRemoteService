@@ -32,6 +32,40 @@ pub enum Bind {
     Command(String),
 }
 
+/// The buttons a binding can change: the webOS key code the TV app forwards, and its name.
+pub const BUTTONS: &[(u16, &str)] = &[
+    (0x0001, "Click (short press)"),
+    (0x0002, "Long click (long press)"),
+    (0x0008, "Backspace (TV keyboard)"),
+    (0x000D, "OK"),
+    (0x0021, "CH +"),
+    (0x0022, "CH -"),
+    (0x0025, "Left"),
+    (0x0026, "Up"),
+    (0x0027, "Right"),
+    (0x0028, "Down"),
+    (0x0030, "0"),
+    (0x0031, "1"),
+    (0x0032, "2"),
+    (0x0033, "3"),
+    (0x0034, "4"),
+    (0x0035, "5"),
+    (0x0036, "6"),
+    (0x0037, "7"),
+    (0x0038, "8"),
+    (0x0039, "9"),
+    (0x0193, "Red"),
+    (0x0194, "Green"),
+    (0x0195, "Yellow"),
+    (0x0196, "Blue"),
+    (0x01CD, "Back"),
+    (0x019F, "Play"),
+    (0x0013, "Pause"),
+    (0x01A1, "Fast forward"),
+    (0x019C, "Rewind"),
+    (0x019D, "Stop"),
+];
+
 /// Remote key code -> what it does, in press order.
 pub type BindMap = BTreeMap<u16, Vec<Bind>>;
 
@@ -438,6 +472,14 @@ mod tests {
         // A later profile for the same app still contributes buttons the first leaves alone
         assert!(matches!(c.plan_for(0x0195, Some("vlc")), Some(Plan::Inputs { .. })));
         assert!(!Compiled::new(&map).has_profiles());
+    }
+
+    #[test]
+    fn every_default_button_is_named() {
+        for code in defaults().keys() {
+            assert!(BUTTONS.iter().any(|(c, _)| c == code), "{code:#06x} has a default but no name");
+        }
+        assert_eq!(BUTTONS.len(), defaults().len());
     }
 
     #[test]

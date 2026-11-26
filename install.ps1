@@ -145,7 +145,7 @@ function Install-Tv {
         $hdmiNumber = [int]$answer
     }
 
-    # Keep what the web UI saved (cursor speed and so on); set what this PC and input decide
+    # Keep what the settings saved (cursor speed and so on); set what this PC and input decide
     $config = [ordered]@{ overlay = $true; inputDirect = $true; longClick = 1500; cursorSpeed = 1.0; extend = $true }
     if ($saved) { foreach ($p in $saved.PSObject.Properties) { $config[$p.Name] = $p.Value } }
     $config.inputId = "HDMI_$hdmiNumber"
@@ -190,7 +190,7 @@ try {
     if ($Part -ne 'Tv') { Install-Pc; $script:Api = Get-ApiBase }
     if ($Part -ne 'Pc') { Install-Tv }
     Write-Host ''
-    Write-Host "Done. Settings: http://localhost:$(([uri]$script:Api).Port)/" -ForegroundColor Green
+    Write-Host "Done. Open the settings from the tray icon, or at http://localhost:$(([uri]$script:Api).Port)/" -ForegroundColor Green
     $code = 0
 } catch {
     Write-Host ''

@@ -14,6 +14,7 @@ pub mod settings;
 pub mod ssdp;
 pub mod state;
 pub mod tv;
+pub mod ui;
 pub mod win;
 pub mod worker;
 pub mod ws;

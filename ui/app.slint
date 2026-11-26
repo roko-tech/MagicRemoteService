@@ -1,0 +1,276 @@
+import { Palette } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, ButtonKind, NavItem, Pill } from "widgets.slint";
+import { App, ClientRow, EventRow, TvRow, DisplayRow, RemoteKey } from "state.slint";
+import { OverviewPage } from "overview.slint";
+import { RemotePage } from "remote.slint";
+import { TvsPage } from "tvs.slint";
+import { PcPage } from "pc.slint";
+
+export { App, ClientRow, EventRow, TvRow, DisplayRow, RemoteKey }
+
+export component MainWindow inherits Window {
+    title: "MagicRemoteService Settings";
+    preferred-width: 1160px;
+    preferred-height: 800px;
+    min-width: 920px;
+    min-height: 620px;
+    background: Theme.bg;
+    default-font-family: "Segoe UI";
+    in-out property <int> page: 0;
+    init => {
+        Palette.color-scheme = ColorScheme.dark;
+    }
+
+    HorizontalLayout {
+        // Sidebar
+        Rectangle {
+            width: 236px;
+            background: Theme.sidebar;
+            Rectangle {
+                x: parent.width - 1px;
+                width: 1px;
+                background: Theme.border;
+            }
+
+            VerticalLayout {
+                padding: 18px;
+                padding-top: 22px;
+                spacing: 6px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    padding-bottom: 14px;
+                    Rectangle {
+                        width: 38px;
+                        height: 38px;
+                        border-radius: 11px;
+                        background: @linear-gradient(135deg, #5fe0b6 0%, #2fa784 100%);
+                        Text {
+                            text: "\u{E7F4}";
+                            font-family: Theme.icons;
+                            accessible-role: none;
+                            font-size: 18px;
+                            color: Theme.on-accent;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        Text {
+                            text: "MagicRemote";
+                            font-size: 16px;
+                            font-weight: 700;
+                            color: Theme.text;
+                        }
+
+                        Text {
+                            text: "LG remote for this PC";
+                            font-size: 11.5px;
+                            color: Theme.muted;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    padding-bottom: 16px;
+                    alignment: start;
+                    Pill {
+                        text: App.status-text;
+                        tint: App.status-kind == 0 ? Theme.accent : App.status-kind == 1 ? Theme.warning : Theme.danger;
+                    }
+                }
+
+                NavItem {
+                    icon: "\u{E80F}";
+                    label: "Overview";
+                    active: root.page == 0;
+                    clicked => {
+                        root.page = 0;
+                    }
+                }
+
+                NavItem {
+                    icon: "\u{E8B0}";
+                    label: "Remote";
+                    active: root.page == 1;
+                    clicked => {
+                        root.page = 1;
+                    }
+                }
+
+                NavItem {
+                    icon: "\u{E7F4}";
+                    label: "TVs";
+                    active: root.page == 2;
+                    clicked => {
+                        root.page = 2;
+                    }
+                }
+
+                NavItem {
+                    icon: "\u{E770}";
+                    label: "PC";
+                    active: root.page == 3;
+                    clicked => {
+                        root.page = 3;
+                    }
+                }
+
+                Rectangle { }
+
+                AppButton {
+                    text: "Open in browser";
+                    icon: "\u{E774}";
+                    kind: ButtonKind.ghost;
+                    clicked => {
+                        App.open-web();
+                    }
+                }
+
+                Text {
+                    text: App.version == "" ? "" : "Version " + App.version;
+                    font-size: 11.5px;
+                    color: Theme.faint;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Page
+        VerticalLayout {
+            if !App.connected: Rectangle {
+                background: Theme.danger-soft;
+                HorizontalLayout {
+                    padding: 12px;
+                    padding-left: 32px;
+                    spacing: 12px;
+                    Text {
+                        text: "\u{E7BA}";
+                        font-family: Theme.icons;
+                        accessible-role: none;
+                        font-size: 15px;
+                        color: Theme.danger;
+                        vertical-alignment: center;
+                    }
+
+                    Text {
+                        text: "The service isn't answering at " + App.api-address + ". Start it from Services, or run MagicRemoteService.exe.";
+                        font-size: 13px;
+                        color: Theme.text-2;
+                        vertical-alignment: center;
+                        wrap: word-wrap;
+                    }
+
+                    AppButton {
+                        text: "Try again";
+                        clicked => {
+                            App.retry();
+                        }
+                    }
+                }
+            }
+
+            if root.page == 0: OverviewPage { }
+            if root.page == 1: RemotePage { }
+            if root.page == 2: TvsPage { }
+            if root.page == 3: PcPage { }
+        }
+    }
+
+    // Toast
+    if App.toast-visible: Rectangle {
+        x: (root.width - self.width) / 2 + 118px;
+        y: root.height - self.height - 28px;
+        width: min(560px, toast-row.preferred-width);
+        height: toast-row.preferred-height;
+        border-radius: 12px;
+        background: Theme.surface-3;
+        border-width: 1px;
+        border-color: App.toast-error ? #f2777a66 : #4ecca366;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #00000099;
+        drop-shadow-offset-y: 6px;
+        toast-row := HorizontalLayout {
+            padding: 14px;
+            padding-left: 16px;
+            padding-right: 18px;
+            spacing: 12px;
+            Text {
+                text: App.toast-error ? "\u{E7BA}" : "\u{E73E}";
+                font-family: Theme.icons;
+                accessible-role: none;
+                font-size: 15px;
+                color: App.toast-error ? Theme.danger : Theme.accent;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: App.toast;
+                font-size: 13px;
+                color: Theme.text;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+        }
+
+        TouchArea {
+            clicked => {
+                App.toast-visible = false;
+            }
+        }
+    }
+
+    // Confirmation
+    if App.confirm-open: Rectangle {
+        background: #000000a6;
+        TouchArea { }
+        Rectangle {
+            width: 420px;
+            height: dialog.preferred-height;
+            border-radius: 16px;
+            background: Theme.surface-2;
+            border-width: 1px;
+            border-color: Theme.border-strong;
+            drop-shadow-blur: 40px;
+            drop-shadow-color: #000000b3;
+            dialog := VerticalLayout {
+                padding: 24px;
+                spacing: 12px;
+                Text {
+                    text: App.confirm-title;
+                    font-size: 17px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+
+                Text {
+                    text: App.confirm-text;
+                    font-size: 13px;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+
+                HorizontalLayout {
+                    padding-top: 10px;
+                    spacing: 10px;
+                    alignment: end;
+                    AppButton {
+                        text: "Cancel";
+                        kind: ButtonKind.ghost;
+                        clicked => {
+                            App.confirm(false);
+                        }
+                    }
+
+                    AppButton {
+                        text: App.confirm-button;
+                        kind: ButtonKind.danger;
+                        clicked => {
+                            App.confirm(true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,210 @@
+import { ScrollView, ComboBox, SpinBox } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { AppButton, AppSwitch, ButtonKind, Card, Field, PageHeader, Divider } from "widgets.slint";
+import { App, DisplayRow } from "state.slint";
+
+component SwitchRow {
+    in property <string> title;
+    in property <string> detail;
+    in-out property <bool> checked;
+    HorizontalLayout {
+        spacing: 16px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 3px;
+            Text {
+                text: root.title;
+                font-size: 14px;
+                color: Theme.text;
+            }
+
+            Text {
+                text: root.detail;
+                font-size: 12px;
+                color: Theme.muted;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            AppSwitch {
+                checked <=> root.checked;
+            }
+        }
+    }
+}
+
+export component PcPage {
+    ScrollView {
+        VerticalLayout {
+            padding: 32px;
+            padding-top: 28px;
+            spacing: 20px;
+            alignment: start;
+            PageHeader {
+                title: "PC";
+                subtitle: App.mode-note;
+            }
+
+            Card {
+                title: "Startup and shutdown";
+                SwitchRow {
+                    title: "Start with Windows";
+                    detail: !App.startup-available ? "Not available here." : App.mode == "Windows service" ? "Switches the service between automatic and manual start." : "Adds it to your sign-in programs.";
+                    checked <=> App.startup;
+                }
+
+                Divider { }
+
+                SwitchRow {
+                    title: "Shut down when the remote is idle";
+                    detail: "With a TV connected and no remote input for this long, Windows shuts down.";
+                    checked <=> App.inactivity;
+                }
+
+                if App.inactivity: HorizontalLayout {
+                    alignment: start;
+                    spacing: 10px;
+                    SpinBox {
+                        width: 140px;
+                        minimum: 1;
+                        maximum: 1440;
+                        value <=> App.inactivity-min;
+                    }
+
+                    Text {
+                        text: "minutes";
+                        font-size: 13px;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Divider { }
+
+                SwitchRow {
+                    title: "Shut down when the monitor is off";
+                    detail: "The same countdown, starting when the PC's monitor turns off.";
+                    checked <=> App.monitor-off;
+                }
+
+                if App.monitor-off: HorizontalLayout {
+                    alignment: start;
+                    spacing: 10px;
+                    SpinBox {
+                        width: 140px;
+                        minimum: 1;
+                        maximum: 1440;
+                        value <=> App.monitor-min;
+                    }
+
+                    Text {
+                        text: "minutes";
+                        font-size: 13px;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                    }
+                }
+
+                Text {
+                    text: "Using the PC in the last five minutes cancels a shutdown; the remote counts.";
+                    font-size: 12px;
+                    color: Theme.faint;
+                    wrap: word-wrap;
+                }
+
+                Divider { }
+
+                HorizontalLayout {
+                    spacing: 16px;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        Text {
+                            text: "TV port";
+                            font-size: 14px;
+                            color: Theme.text;
+                        }
+
+                        Text {
+                            text: "The settings use the next port up. Changing it needs a restart and a TV app reinstall.";
+                            font-size: 12px;
+                            color: Theme.muted;
+                            wrap: word-wrap;
+                        }
+                    }
+
+                    VerticalLayout {
+                        alignment: center;
+                        SpinBox {
+                            width: 140px;
+                            minimum: 1024;
+                            maximum: 65534;
+                            value <=> App.pc-port;
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    AppButton {
+                        text: "Save";
+                        icon: "\u{E74E}";
+                        kind: ButtonKind.primary;
+                        busy: App.saving-pc;
+                        clicked => {
+                            App.save-pc();
+                        }
+                    }
+
+                    if App.restart-needed: AppButton {
+                        text: "Restart to use the new port";
+                        icon: "\u{E72C}";
+                        clicked => {
+                            App.restart-service();
+                        }
+                    }
+                }
+            }
+
+            Card {
+                title: "Pointer display";
+                subtitle: "With several monitors, pick the one each TV shows, so its pointer lands there.";
+                if App.display-tvs.length == 0: Text {
+                    text: "No TV paired yet. Pair one on the TVs page.";
+                    font-size: 13px;
+                    color: Theme.muted;
+                }
+                for tv in App.display-tvs: HorizontalLayout {
+                    spacing: 16px;
+                    VerticalLayout {
+                        alignment: center;
+                        width: 180px;
+                        Text {
+                            text: tv.name;
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: Theme.text;
+                        }
+
+                        Text {
+                            text: tv.ip;
+                            font-size: 12px;
+                            color: Theme.muted;
+                        }
+                    }
+
+                    ComboBox {
+                        model: App.display-names;
+                        current-index: tv.choice;
+                        selected => {
+                            App.set-display(tv.name, self.current-index);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

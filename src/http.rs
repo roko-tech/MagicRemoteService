@@ -173,7 +173,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 return error(500, &format!("cannot save bindings.json: {e}"));
             }
             shared.reload_bindings();
-            log::info("Key bindings saved from the web UI");
+            log::info("Key bindings saved from the settings");
             ok(json!({ "saved": true, "applied": true }))
         }
         ("POST", "/api/config") => {
@@ -187,7 +187,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 return error(500, &format!("cannot save tv-config.json: {e}"));
             }
             shared.reload_tv_config();
-            log::info("TV config saved from the web UI");
+            log::info("TV config saved from the settings");
             ok(json!({ "saved": true }))
         }
         ("POST", "/api/token") => {
@@ -205,7 +205,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 return error(500, &format!("cannot save tv-config.json: {e}"));
             }
             shared.reload_tv_config();
-            log::info("New device token generated from the web UI");
+            log::info("New device token generated from the settings");
             ok(json!({ "saved": true, "hasToken": true }))
         }
         ("POST", "/api/pc") => {
@@ -236,7 +236,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
             }
             let restart_required = new.port != ctx.ws_port;
             shared.set_settings(new);
-            log::info("PC settings saved from the web UI");
+            log::info("PC settings saved from the settings");
             ok(json!({ "saved": true, "restartRequired": restart_required }))
         }
         ("POST", "/api/display") => {
@@ -256,11 +256,11 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
         ("POST", "/api/reinstall") => {
             let (success, message) = match ctx.host.reinstall_tv() {
                 Ok(m) => {
-                    log::info(format!("TV app reinstalled from the web UI: {m}"));
+                    log::info(format!("TV app reinstalled from the settings: {m}"));
                     (true, m)
                 }
                 Err(m) => {
-                    log::warn(format!("TV app reinstall from the web UI failed: {m}"));
+                    log::warn(format!("TV app reinstall from the settings failed: {m}"));
                     (false, m)
                 }
             };
@@ -298,7 +298,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
             }
         }
         ("POST", "/api/restart") => {
-            log::info("Restart requested from the web UI");
+            log::info("Restart requested from the settings");
             Response { after: Some(|h| h.restart()), ..ok(json!({ "restarting": true })) }
         }
         (_, p) if p.starts_with("/api/") => error(404, "not found"),

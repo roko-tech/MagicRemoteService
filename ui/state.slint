@@ -1,0 +1,151 @@
+// What Rust (src/ui/mod.rs) and the pages share: data in, actions out.
+
+export struct ClientRow {
+    ip: string,
+    connected: string,
+    last-input: string,
+    latency: string,
+    pointer: string,
+    counts: string,
+    live: bool,
+}
+
+export struct EventRow {
+    time: string,
+    message: string,
+    level: string,
+}
+
+export struct TvRow {
+    name: string,
+    ip: string,
+    is-default: bool,
+}
+
+export struct DisplayRow {
+    name: string,
+    ip: string,
+    choice: int,
+}
+
+export struct RemoteKey {
+    code: string,
+    name: string,
+    glyph: string,
+    icon: bool,
+    x: length,
+    y: length,
+    w: length,
+    h: length,
+    round: bool,
+    fill: color,
+    plain: bool,
+    custom: bool,
+}
+
+export global App {
+    // Service and connection
+    in property <bool> connected: true;
+    in property <bool> loaded;
+    in property <string> status-text: "Connecting…";
+    // 0 a TV is connected, 1 waiting for a TV, 2 the service isn't answering
+    in property <int> status-kind: 1;
+    in property <string> version;
+    in property <string> mode;
+    in property <string> api-address;
+
+    // Overview
+    in property <[ClientRow]> clients;
+    in property <string> client-count;
+    in property <string> pointer-text;
+    in property <bool> pointer-problem;
+    in property <[EventRow]> events;
+
+    // Remote buttons
+    in property <[RemoteKey]> remote-keys;
+    in property <string> selected-code;
+    in property <string> selected-name;
+    in property <string> selected-desc;
+    in property <string> selected-source;
+    in property <bool> selected-changed;
+    in-out property <int> form-kind;
+    in-out property <int> form-mouse;
+    in-out property <int> form-key;
+    in-out property <bool> mod-ctrl;
+    in-out property <bool> mod-alt;
+    in-out property <bool> mod-shift;
+    in-out property <bool> mod-win;
+    in-out property <string> form-command;
+    in-out property <int> form-action;
+    in property <[string]> key-names;
+    in property <[string]> profile-names;
+    in property <int> profile-index;
+    in property <string> profile-apps;
+    in property <[string]> scroll-exclude;
+    in-out property <bool> new-profile-open;
+    in property <bool> saving-binding;
+    callback pick-key(string);
+    callback save-binding();
+    callback reset-binding();
+    callback choose-profile(int);
+    callback create-profile(string, string);
+    callback delete-profile();
+    callback set-profile-apps(string);
+    callback add-exclusion(string);
+    callback remove-exclusion(int);
+
+    // TVs
+    in property <[TvRow]> tvs;
+    in property <bool> pairing;
+    in property <string> pair-status;
+    in property <bool> pair-failed;
+    callback pair(string, string, string);
+    callback make-default(string);
+    callback unpair(string);
+
+    // TV app
+    in-out property <int> hdmi-index;
+    in property <[string]> networks;
+    in-out property <int> network-index;
+    in-out property <int> tv-port: 41230;
+    in-out property <float> cursor-speed: 1.0;
+    in-out property <float> scroll-speed: 1.0;
+    in-out property <float> long-click: 1500;
+    in property <bool> has-token;
+    in property <bool> saving-config;
+    in property <bool> reinstalling;
+    in property <string> reinstall-status;
+    in property <bool> reinstall-failed;
+    callback save-tv-app();
+    callback reinstall();
+    callback new-token();
+
+    // PC
+    in-out property <int> pc-port: 41230;
+    in-out property <bool> startup;
+    in property <bool> startup-available: true;
+    in property <string> mode-note;
+    in-out property <bool> inactivity;
+    in-out property <int> inactivity-min: 60;
+    in-out property <bool> monitor-off;
+    in-out property <int> monitor-min: 60;
+    in property <bool> restart-needed;
+    in property <bool> saving-pc;
+    in property <[string]> display-names;
+    in property <[DisplayRow]> display-tvs;
+    callback save-pc();
+    callback restart-service();
+    callback set-display(string, int);
+
+    // Window
+    in property <string> toast;
+    in property <bool> toast-error;
+    in-out property <bool> toast-visible;
+    in property <string> confirm-title;
+    in property <string> confirm-text;
+    in property <string> confirm-button;
+    in-out property <bool> confirm-open;
+    callback confirm(bool);
+    callback open-web();
+    callback retry();
+}

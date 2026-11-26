@@ -1,0 +1,517 @@
+import { Theme } from "theme.slint";
+import { Spinner } from "std-widgets.slint";
+
+export enum ButtonKind { primary, secondary, danger, ghost }
+
+// A button in the window's own style, usable with the keyboard and screen readers.
+export component AppButton {
+    in property <string> text;
+    in property <string> icon;
+    in property <ButtonKind> kind: ButtonKind.secondary;
+    in property <bool> enabled: true;
+    in property <bool> busy: false;
+    callback clicked;
+    property <bool> active: root.enabled && !root.busy;
+    property <color> ink: !root.active ? Theme.faint
+        : root.kind == ButtonKind.primary ? Theme.on-accent
+        : root.kind == ButtonKind.danger ? Theme.danger
+        : Theme.text;
+    min-height: 36px;
+    // Keeps its natural width in a row; a column still stretches it
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.active;
+    accessible-action-default => {
+        if (root.active) {
+            root.clicked();
+        }
+    }
+    forward-focus: focus;
+
+    Rectangle {
+        border-radius: Theme.control-radius;
+        background: !root.active ? Theme.surface-2
+            : root.kind == ButtonKind.primary ? (touch.pressed ? Theme.accent-pressed : touch.has-hover ? Theme.accent-hover : Theme.accent)
+            : root.kind == ButtonKind.danger ? (touch.has-hover ? Theme.danger-soft : transparent)
+            : root.kind == ButtonKind.ghost ? (touch.has-hover ? #ffffff0d : transparent)
+            : (touch.pressed ? Theme.surface-2 : touch.has-hover ? Theme.surface-3 : Theme.surface-2);
+        border-width: root.kind == ButtonKind.secondary || root.kind == ButtonKind.danger ? 1px : 0px;
+        border-color: root.kind == ButtonKind.danger ? #f2777a55 : Theme.border-strong;
+        animate background { duration: 120ms; }
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 8px;
+        alignment: center;
+        if root.busy: Spinner {
+            width: 16px;
+            height: 16px;
+            indeterminate: true;
+        }
+        if root.icon != "" && !root.busy: Text {
+            text: root.icon;
+            font-family: Theme.icons;
+            accessible-role: none;
+            font-size: 13px;
+            color: root.ink;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.text;
+            font-size: 13px;
+            font-weight: 600;
+            color: root.ink;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.active;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        enabled: root.active;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        border-radius: Theme.control-radius + 3px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+}
+
+// A titled panel.
+export component Card inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    background: Theme.surface;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    VerticalLayout {
+        padding: 22px;
+        spacing: 16px;
+        if root.title != "": VerticalLayout {
+            spacing: 4px;
+            Text {
+                text: root.title;
+                font-size: 15px;
+                font-weight: 600;
+                color: Theme.text;
+            }
+
+            if root.subtitle != "": Text {
+                text: root.subtitle;
+                font-size: 12.5px;
+                color: Theme.muted;
+                wrap: word-wrap;
+            }
+        }
+        @children
+    }
+}
+
+// A label above a control, with an optional hint below it.
+export component Field {
+    in property <string> label;
+    in property <string> hint;
+    VerticalLayout {
+        spacing: 6px;
+        Text {
+            text: root.label;
+            font-size: 12px;
+            font-weight: 600;
+            color: Theme.muted;
+        }
+
+        @children
+        if root.hint != "": Text {
+            text: root.hint;
+            font-size: 11.5px;
+            color: Theme.faint;
+            wrap: word-wrap;
+        }
+    }
+}
+
+// A coloured status label with a dot.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <color> tint: Theme.accent;
+    width: row.preferred-width;
+    height: 24px;
+    border-radius: 12px;
+    background: root.tint.transparentize(0.86);
+    row := HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 11px;
+        spacing: 7px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 7px;
+                height: 7px;
+                border-radius: 3.5px;
+                background: root.tint;
+            }
+        }
+
+        Text {
+            text: root.text;
+            font-size: 12px;
+            font-weight: 600;
+            color: root.tint;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// A sidebar entry.
+export component NavItem {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked;
+    height: 40px;
+    accessible-role: tab;
+    accessible-label: root.label;
+    accessible-action-default => {
+        root.clicked();
+    }
+    forward-focus: focus;
+    Rectangle {
+        border-radius: 8px;
+        background: root.active ? Theme.accent-soft : touch.has-hover ? #ffffff0a : transparent;
+        animate background { duration: 120ms; }
+    }
+
+    Rectangle {
+        x: 0px;
+        y: (root.height - 18px) / 2;
+        width: 3px;
+        height: 18px;
+        border-radius: 1.5px;
+        background: root.active ? Theme.accent : transparent;
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        spacing: 12px;
+        Text {
+            width: 18px;
+            text: root.icon;
+            font-family: Theme.icons;
+            accessible-role: none;
+            font-size: 15px;
+            color: root.active ? Theme.accent : Theme.muted;
+            vertical-alignment: center;
+        }
+
+        Text {
+            accessible-role: none;
+            text: root.label;
+            font-size: 14px;
+            font-weight: root.active ? 600 : 400;
+            color: root.active ? Theme.text : Theme.text-2;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        border-radius: 8px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+}
+
+// The title at the top of a page.
+export component PageHeader {
+    in property <string> title;
+    in property <string> subtitle;
+    VerticalLayout {
+        spacing: 6px;
+        Text {
+            text: root.title;
+            font-size: 26px;
+            font-weight: 600;
+            color: Theme.text;
+        }
+
+        Text {
+            text: root.subtitle;
+            font-size: 13.5px;
+            color: Theme.muted;
+            wrap: word-wrap;
+        }
+    }
+}
+
+// A thin line between rows.
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+// An on/off switch in the accent colour.
+export component AppSwitch {
+    in-out property <bool> checked;
+    callback toggled;
+    width: 44px;
+    height: 24px;
+    accessible-role: checkbox;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-action-default => {
+        root.flip();
+    }
+    forward-focus: focus;
+    function flip() {
+        root.checked = !root.checked;
+        root.toggled();
+    }
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent) : (touch.has-hover ? #39404b : Theme.surface-3);
+        border-width: root.checked ? 0px : 1px;
+        border-color: Theme.border-strong;
+        animate background { duration: 150ms; }
+    }
+
+    Rectangle {
+        x: root.checked ? root.width - 20px : 4px;
+        y: 4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: root.checked ? Theme.on-accent : Theme.muted;
+        animate x { duration: 150ms; easing: ease-out; }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.flip();
+        }
+    }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.flip();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        border-radius: 15px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+}
+
+// A check box in the accent colour.
+export component AppCheck {
+    in property <string> text;
+    in-out property <bool> checked;
+    accessible-role: checkbox;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-action-default => {
+        root.checked = !root.checked;
+    }
+    forward-focus: focus;
+    HorizontalLayout {
+        spacing: 9px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 18px;
+                height: 18px;
+                border-radius: 5px;
+                background: root.checked ? (touch.has-hover ? Theme.accent-hover : Theme.accent) : transparent;
+                border-width: root.checked ? 0px : 1.5px;
+                border-color: touch.has-hover ? Theme.muted : Theme.border-strong;
+                if root.checked: Text {
+                    text: "\u{E73E}";
+                    font-family: Theme.icons;
+                    accessible-role: none;
+                    font-size: 11px;
+                    color: Theme.on-accent;
+                }
+            }
+        }
+
+        Text {
+            text: root.text;
+            font-size: 13.5px;
+            color: Theme.text;
+            vertical-alignment: center;
+            accessible-role: none;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            root.checked = !root.checked;
+        }
+    }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.checked = !root.checked;
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -4px;
+        y: -2px;
+        width: root.width + 8px;
+        height: root.height + 4px;
+        border-radius: 6px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+}
+
+// A slider in the accent colour; the value snaps to `step`.
+export component AppSlider {
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in property <float> step: 0.1;
+    in-out property <float> value;
+    property <float> ratio: max(0, min(1, (root.value - root.minimum) / (root.maximum - root.minimum)));
+    height: 28px;
+    accessible-role: slider;
+    accessible-value: root.value;
+    accessible-value-minimum: root.minimum;
+    accessible-value-maximum: root.maximum;
+    accessible-value-step: root.step;
+    accessible-action-increment => {
+        root.nudge(1);
+    }
+    accessible-action-decrement => {
+        root.nudge(-1);
+    }
+    forward-focus: focus;
+    function snap(v: float) {
+        root.value = max(root.minimum, min(root.maximum, Math.round(v / root.step) * root.step));
+    }
+    function nudge(steps: int) {
+        root.snap(root.value + steps * root.step);
+    }
+    function point(x: length) {
+        root.snap(root.minimum + max(0, min(1, (x - 9px) / (root.width - 18px))) * (root.maximum - root.minimum));
+    }
+
+    Rectangle {
+        y: (root.height - 4px) / 2;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.surface-3;
+    }
+
+    Rectangle {
+        x: 0px;
+        y: (root.height - 4px) / 2;
+        width: (root.width - 18px) * root.ratio + 9px;
+        height: 4px;
+        border-radius: 2px;
+        background: Theme.accent;
+    }
+
+    Rectangle {
+        x: (root.width - 18px) * root.ratio;
+        y: (root.height - 18px) / 2;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: touch.pressed || touch.has-hover ? Theme.accent-hover : Theme.accent;
+        border-width: 4px;
+        border-color: #e8ecf1;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down) {
+                root.point(self.mouse-x);
+            }
+        }
+        moved => {
+            root.point(self.mouse-x);
+        }
+    }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.RightArrow || event.text == Key.UpArrow) {
+                root.nudge(1);
+                return accept;
+            }
+            if (event.text == Key.LeftArrow || event.text == Key.DownArrow) {
+                root.nudge(-1);
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: (root.width - 18px) * root.ratio - 3px;
+        y: (root.height - 18px) / 2 - 3px;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        border-width: 2px;
+        border-color: Theme.accent;
+    }
+}

@@ -202,8 +202,8 @@ pub fn run(opts: Options) -> i32 {
             log::warn("Another worker is already running");
             return 2;
         }
-        let _ = proc::open_url(&settings_url(Scope::Machine.load().port + 1));
-        return 0;
+        // Started by hand while another worker runs: show that one's settings
+        return crate::ui::run(Scope::Machine.load().port + 1);
     };
     let files = Files { dir: crate::win::exe_dir() };
     // The device token is in tv-config.json: as the service, keep ordinary accounts out of it
@@ -277,11 +277,7 @@ pub fn run(opts: Options) -> i32 {
     }
     let monitor_shared = shared.clone();
     tray::run(tray::Config {
-        on_settings: Box::new(move || {
-            if let Err(e) = proc::open_url(&settings_url(http_port)) {
-                log::warn(format!("Cannot open the settings page: {e}"));
-            }
-        }),
+        on_settings: Box::new(move || crate::ui::launch(http_port)),
         on_monitor: Box::new(move |on| monitor_shared.set_monitor(on)),
         can_exit: !service_mode,
     });

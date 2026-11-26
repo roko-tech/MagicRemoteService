@@ -1,0 +1,247 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Card, PageHeader, Divider } from "widgets.slint";
+import { App, ClientRow, EventRow } from "state.slint";
+
+component StatTile inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <string> value;
+    in property <string> detail;
+    in property <color> tint: Theme.accent;
+    background: Theme.surface;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.border;
+    HorizontalLayout {
+        padding: 18px;
+        spacing: 14px;
+        VerticalLayout {
+            alignment: start;
+            Rectangle {
+                width: 38px;
+                height: 38px;
+                border-radius: 10px;
+                background: root.tint.transparentize(0.86);
+                Text {
+                    text: root.icon;
+                    font-family: Theme.icons;
+                    accessible-role: none;
+                    font-size: 17px;
+                    color: root.tint;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 3px;
+            Text {
+                text: root.label;
+                font-size: 12px;
+                color: Theme.muted;
+            }
+
+            Text {
+                text: root.value;
+                font-size: 18px;
+                font-weight: 600;
+                color: Theme.text;
+                overflow: elide;
+            }
+
+            Text {
+                text: root.detail;
+                font-size: 12px;
+                color: Theme.faint;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+component Metric {
+    in property <string> label;
+    in property <string> value;
+    in property <color> ink: Theme.text-2;
+    VerticalLayout {
+        spacing: 2px;
+        Text {
+            text: root.label;
+            font-size: 11px;
+            color: Theme.faint;
+        }
+
+        Text {
+            text: root.value;
+            font-size: 13px;
+            color: root.ink;
+        }
+    }
+}
+
+component ClientCard inherits Rectangle {
+    in property <ClientRow> client;
+    background: Theme.surface-2;
+    border-radius: 10px;
+    HorizontalLayout {
+        padding: 14px;
+        spacing: 22px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: 18px;
+                background: Theme.accent-soft;
+                Text {
+                    text: "\u{E7F4}";
+                    font-family: Theme.icons;
+                    accessible-role: none;
+                    font-size: 16px;
+                    color: Theme.accent;
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            min-width: 140px;
+            Text {
+                text: root.client.ip;
+                font-size: 14px;
+                font-weight: 600;
+                color: Theme.text;
+            }
+
+            Text {
+                text: "Connected for " + root.client.connected;
+                font-size: 12px;
+                color: Theme.muted;
+            }
+        }
+
+        Metric {
+            label: "Last input";
+            value: root.client.last-input;
+        }
+
+        Metric {
+            label: "Latency";
+            value: root.client.latency;
+        }
+
+        Metric {
+            label: "Pointer";
+            value: root.client.pointer;
+        }
+
+        Metric {
+            label: "Moves · wheel · keys · text";
+            value: root.client.counts;
+        }
+
+        Metric {
+            label: "Live settings";
+            value: root.client.live ? "Yes" : "After reinstall";
+            ink: root.client.live ? Theme.accent : Theme.faint;
+        }
+    }
+}
+
+export component OverviewPage {
+    ScrollView {
+        VerticalLayout {
+            padding: 32px;
+            padding-top: 28px;
+            spacing: 20px;
+            alignment: start;
+            PageHeader {
+                title: "Overview";
+                subtitle: "How the service and your TVs are doing right now.";
+            }
+
+            HorizontalLayout {
+                spacing: 16px;
+                StatTile {
+                    icon: "\u{E770}";
+                    label: "Service";
+                    value: App.connected ? "Running" : "Not answering";
+                    detail: App.connected ? "Version " + App.version + " · " + App.mode : App.api-address;
+                    tint: App.connected ? Theme.accent : Theme.danger;
+                }
+
+                StatTile {
+                    icon: "\u{E7F4}";
+                    label: "TVs connected";
+                    value: App.client-count;
+                    detail: App.clients.length == 0 ? "Open the app on the TV" : "Ready for the remote";
+                    tint: App.clients.length == 0 ? Theme.warning : Theme.accent;
+                }
+
+                StatTile {
+                    icon: "\u{E8B0}";
+                    label: "Remote pointer";
+                    value: App.pointer-problem ? "Needs attention" : App.pointer-text;
+                    detail: App.pointer-problem ? App.pointer-text : "Cursor on this PC";
+                    tint: App.pointer-problem ? Theme.danger : Theme.accent;
+                }
+            }
+
+            Card {
+                title: "Connected TVs";
+                subtitle: "Activity counts only, never which keys or text.";
+                if App.clients.length == 0: Text {
+                    text: "No TV is connected. Open MagicRemoteService on the TV, or switch it to the PC's HDMI input.";
+                    font-size: 13px;
+                    color: Theme.muted;
+                    wrap: word-wrap;
+                }
+                for client in App.clients: ClientCard {
+                    client: client;
+                }
+            }
+
+            Card {
+                title: "Recent events";
+                subtitle: "TVs connecting and leaving, refused connections, saved settings.";
+                if App.events.length == 0: Text {
+                    text: "Nothing yet.";
+                    font-size: 13px;
+                    color: Theme.muted;
+                }
+                for event[index] in App.events: VerticalLayout {
+                    spacing: 10px;
+                    if index > 0: Divider { }
+                    HorizontalLayout {
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: start;
+                            padding-top: 5px;
+                            Rectangle {
+                                width: 7px;
+                                height: 7px;
+                                border-radius: 3.5px;
+                                background: event.level == "error" ? Theme.danger : event.level == "warn" ? Theme.warning : Theme.accent;
+                            }
+                        }
+
+                        Text {
+                            width: 64px;
+                            text: event.time;
+                            font-size: 12.5px;
+                            color: Theme.faint;
+                        }
+
+                        Text {
+                            text: event.message;
+                            font-size: 13px;
+                            color: Theme.text-2;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
