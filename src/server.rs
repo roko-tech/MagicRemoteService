@@ -235,6 +235,7 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
         video_input: settings.video_input.then(|| warning_delay(settings.timeout_video_input_ms)),
         display: platform.display_for(peer.ip()),
         name: name.clone(),
+        heartbeat: Some(crate::session::HEARTBEAT_EVERY),
     };
     let mut session = Session::new(platform.effects(), cfg, Instant::now());
     let mut monitor_seen = shared.monitor().0;

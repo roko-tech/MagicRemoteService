@@ -36,6 +36,7 @@ jobs:
       run: |
         node --check tv/app/main.js
         node --check tv/service/service.js
+        node tests/tv/ssap-frames.test.js tv/service/service.js
 
     - name: Build release
       run: cargo build --release --locked

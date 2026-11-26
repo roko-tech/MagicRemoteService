@@ -55,5 +55,15 @@
 	"strSocketErrorClose": "Se ha cerrado el zócalo",
 	"strShutdownMessage": "Desea apagar el ordenador remoto ?",
 	"strShutdownShutdown": "Apagar",
-	"strShutdownAbort": "No hacer nada"
+	"strShutdownAbort": "No hacer nada",
+	"strToastWakeFailed": "No se pudo encender el PC por red — compruébelo",
+	"strToastSignalLost": "Se perdió la señal del PC",
+	"strToastWaking": "PC no disponible — encendiéndolo...",
+	"strToastRetrying": "PC no disponible — reintentando...",
+	"strToastClosing": "Cerrando la aplicación...",
+	"strToastConnecting": "Conectando con %s...",
+	"strToastTimeout": "Tiempo de conexión agotado — reintentando...",
+	"strToastNotResponding": "El PC no responde — compruebe que esté encendido",
+	"strToastConnected": "Conectado a %s",
+	"strToastDisconnected": "Desconectado — reconectando..."
 }

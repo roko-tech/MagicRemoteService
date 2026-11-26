@@ -168,6 +168,11 @@ var deKeyboard = document.getElementById("keyboard");
 var deVideo = document.getElementById("video");
 
 var deScreenToast = null;
+// A text from appstring.json in the TV's language (English when missing), with %s replaced by strArg
+function Str(strKey, strFallback, strArg) {
+	var str = (oString && oString[strKey]) || strFallback;
+	return strArg === undefined ? str : str.replace("%s", strArg);
+}
 function Toast(strTitle, strMessage) {
 	if(iToastTimer) { clearTimeout(iToastTimer); iToastTimer = 0; }
 	if(ScreenExist(deScreenToast)) {
@@ -356,7 +361,7 @@ function WakeStart() {
 	iTimeoutSourceStatus = setTimeout(function() {
 		iTimeoutSourceStatus = 0;
 		WakeStop();
-		Toast("", "Wake-on-LAN failed — check PC");
+		Toast("", Str("strToastWakeFailed", "Wake-on-LAN failed — check PC"));
 	}, WOL_TIMEOUT);
 }
 function WakeStop() {
@@ -374,15 +379,15 @@ function InputDisconnected(bWasConnected) {};
 if(bInputDirect){
 	InputDisconnected = function(bWasConnected) {
 		if(bWasConnected) {
-			Toast("", "PC signal lost");
+			Toast("", Str("strToastSignalLost", "PC signal lost"));
 		} else {
-			Toast("", "PC not reachable — waking it...");
+			Toast("", Str("strToastWaking", "PC not reachable — waking it..."));
 			WakeStart();
 		}
 	};
 } else {
 	InputDisconnected = function(bWasConnected) {
-		Toast("", "PC not reachable — retrying...");
+		Toast("", Str("strToastRetrying", "PC not reachable — retrying..."));
 	};
 }
 function SubscriptionInputStatus() {
@@ -939,7 +944,7 @@ function SubscriptionDomEvent() {
 			iBackLongPressTimer = setTimeout(function() {
 				iBackLongPressTimer = 0;
 				bBackExitTriggered = true;
-				Toast("", "Closing app...");
+				Toast("", Str("strToastClosing", "Closing app..."));
 				setTimeout(function() {
 					try {
 						if(typeof webOSSystem !== "undefined") webOSSystem.close();
@@ -1092,21 +1097,21 @@ if(bInputDirect){
 function SocketClosed(bWake) {};
 if(bInputDirect){
 	SocketClosed = function(bWake) {
-		Toast("", "Connecting to " + strIP + "...");
+		Toast("", Str("strToastConnecting", "Connecting to %s...", strIP));
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
-			Toast("", "Connection timeout — retrying...");
+			Toast("", Str("strToastTimeout", "Connection timeout — retrying..."));
 		}, SOCKET_TIMEOUT);
 	};
 } else {
 	SocketClosed = function(bWake) {
-		Toast("", "Connecting to " + strIP + "...");
+		Toast("", Str("strToastConnecting", "Connecting to %s...", strIP));
 		if(bWake) {
 			WakeStart();
 		}
 		iTimeoutOpen = setTimeout(function() {
 			iTimeoutOpen = 0;
-			Toast("", "PC not responding — check if it's on");
+			Toast("", Str("strToastNotResponding", "PC not responding — check if it's on"));
 		}, SOCKET_TIMEOUT);
 	};
 }
@@ -1155,6 +1160,45 @@ function RetryStop() {
 		iIntervalRetryOpen = 0;
 	}
 }
+// The PC sends an empty message every 5 s. Without them a PC that went quiet (asleep, unplugged,
+// cable pulled) would look connected for minutes. A PC too old to send them is never timed out.
+var HEARTBEAT_TIMEOUT = 15000;
+var iLastMessage = 0;
+var bHeartbeat = false;
+var iIntervalHeartbeat = 0;
+function HeartbeatStart() {
+	HeartbeatStop();
+	bHeartbeat = false;
+	iLastMessage = Date.now();
+	iIntervalHeartbeat = setInterval(function() {
+		if(bHeartbeat && socClient !== null && Date.now() - iLastMessage > HEARTBEAT_TIMEOUT) {
+			// Drop the silent socket (its late events are ignored) and reconnect
+			var soc = socClient;
+			socClient = null;
+			try { soc.close(); } catch(e) {}
+			SocketLost();
+		}
+	}, 5000);
+}
+function HeartbeatStop() {
+	if(iIntervalHeartbeat) {
+		clearInterval(iIntervalHeartbeat);
+		iIntervalHeartbeat = 0;
+	}
+}
+// The connection dropped: say so once, then keep trying to reconnect
+function SocketLost() {
+	iConnectionState = CONNECTION_STATE.DISCONNECTED;
+	HeartbeatStop();
+	LogIfDebug(oString.strSocketClosed);
+	if(!iIntervalRetryOpen) {
+		Toast("", Str("strToastDisconnected", "Disconnected — reconnecting..."));
+		CursorShowCountIf0();
+		SocketClosed(false);
+		SocketOpen();
+		RetryStart();
+	}
+}
 function SocketOpen() {
 	var soc = new WebSocket("ws://" + strIP + ":" + uiPort + (strToken ? "/?t=" + encodeURIComponent(strToken) : ""));
 	socClient = soc;
@@ -1164,9 +1208,10 @@ function SocketOpen() {
 		if(soc !== socClient) return;
 		iConnectionState = CONNECTION_STATE.CONNECTED;
 		LogIfDebug(oString.strSocketOpened);
-		Toast(oString.strAppTittle || "MagicRemoteService", "Connected to " + strIP);
+		Toast(oString.strAppTittle || "MagicRemoteService", Str("strToastConnected", "Connected to %s", strIP));
 		SocketOpened();
 		RetryStop();
+		HeartbeatStart();
 		if(ScreenExist(deScreenOpen)) {
 			ScreenCancel(deScreenOpen);
 		}
@@ -1179,21 +1224,17 @@ function SocketOpen() {
 	};
 	soc.onclose = function(e) {
 		if(soc !== socClient) return;
-		iConnectionState = CONNECTION_STATE.DISCONNECTED;
-		LogIfDebug(oString.strSocketClosed);
-		if(!iIntervalRetryOpen) {
-			// Only show toast on first disconnect, not on every retry
-			Toast("", "Disconnected — reconnecting...");
-			CursorShowCountIf0();
-			SocketClosed(false);
-			SocketOpen();
-			RetryStart();
-		}
+		SocketLost();
 	};
 	soc.onmessage = function(e) {
 		if(soc !== socClient) return;
+		iLastMessage = Date.now();
 		if(e.data instanceof ArrayBuffer) {
-			if(e.data.byteLength < 1) return;
+			if(e.data.byteLength < 1) {
+				// A heartbeat
+				bHeartbeat = true;
+				return;
+			}
 			var dwData = new DataView(e.data);
 			switch(dwData.getUint8(0)) {
 				case 0x01:
@@ -1258,6 +1299,7 @@ function Open() {
 function Close() {
 	// Stop reconnecting whatever the state, so no timer outlives the connection
 	RetryStop();
+	HeartbeatStop();
 	if(iConnectionState === CONNECTION_STATE.DISCONNECTED || socClient === null) {
 		SocketOpened();
 		SocketClose();

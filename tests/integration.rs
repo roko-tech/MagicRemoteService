@@ -156,14 +156,18 @@ fn send(s: &mut TcpStream, opcode: u8, payload: &[u8]) {
     s.write_all(&f).unwrap();
 }
 
-/// Reads one server frame: (opcode, payload).
+/// Reads the next server frame other than a heartbeat (an empty binary message): (opcode, payload).
 fn recv(s: &mut TcpStream) -> (u8, Vec<u8>) {
-    let mut h = [0u8; 2];
-    s.read_exact(&mut h).unwrap();
-    assert_eq!(h[1] & 0x80, 0, "server frames are unmasked");
-    let mut p = vec![0u8; (h[1] & 0x7F) as usize];
-    s.read_exact(&mut p).unwrap();
-    (h[0] & 0x0F, p)
+    loop {
+        let mut h = [0u8; 2];
+        s.read_exact(&mut h).unwrap();
+        assert_eq!(h[1] & 0x80, 0, "server frames are unmasked");
+        let mut p = vec![0u8; (h[1] & 0x7F) as usize];
+        s.read_exact(&mut p).unwrap();
+        if (h[0] & 0x0F, p.len()) != (0x2, 0) {
+            return (h[0] & 0x0F, p);
+        }
+    }
 }
 
 #[test]

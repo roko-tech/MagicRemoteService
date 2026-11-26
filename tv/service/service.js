@@ -32,6 +32,15 @@ var serService = new Service(strAppId + ".service");
 
 var arrLog = [];
 var dLog = {};
+// Log lines the app hasn't collected yet. The service runs for days while the app is closed, so
+// only the most recent ones are kept.
+var LOG_BACKLOG = 200;
+function PushLog(oLog) {
+	arrLog.push(oLog);
+	if(arrLog.length > LOG_BACKLOG) {
+		arrLog.splice(0, arrLog.length - LOG_BACKLOG);
+	}
+}
 var metLog = serService.register("log");
 metLog.on("request", function(mMessage) {
 	try {
@@ -112,7 +121,7 @@ function SendLog() {
 
 function Log() {
 	console.log.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: false,
 		iType: 0,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -135,7 +144,7 @@ if(bDebug) {
 
 function Warn() {
 	console.warn.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: false,
 		iType: 1,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -151,7 +160,7 @@ function Warn() {
 
 function Error() {
 	console.error.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: false,
 		iType: 2,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -167,7 +176,7 @@ function Error() {
 
 function ConsoleLog() {
 	console.log.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: true,
 		iType: 0,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -183,7 +192,7 @@ function ConsoleLog() {
 
 function ConsoleWarn() {
 	console.warn.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: true,
 		iType: 1,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -199,7 +208,7 @@ function ConsoleWarn() {
 
 function ConsoleError() {
 	console.error.apply(console, arguments);
-	arrLog.push({
+	PushLog({
 		bConsole: true,
 		iType: 2,
 		strMessage: (new Date()).toString() + " " + Array.prototype.slice.call(arguments).map(function(x) {
@@ -529,9 +538,11 @@ if(bOverlay){
 					LogIfDebug("Ssap close");
 					SsapRetry();
 				});
+				// A frame can arrive split across data events: keep its start until the rest comes
+				var bufPending = Buffer.alloc(0);
 				socSsap.on("data", function(bufStream) {
 					try{
-						UnframeData(bufStream, function(bufFrame, bFin, bRsv1, bRsv2, bRsv3, ucOpcode, bufMask, bufData) {
+						bufPending = UnframeData(Buffer.concat([bufPending, bufStream]), function(bufFrame, bFin, bRsv1, bRsv2, bRsv3, ucOpcode, bufMask, bufData) {
 							if(!bFin) {
 								Error("Ssap unable to process split frame", bufFrame);
 							} else {
@@ -566,7 +577,7 @@ if(bOverlay){
 														},
 														"client-key": strSsapClientKey
 													}
-												}), true, false, false, false, 0x1, 0), "binary");
+												}), true, false, false, false, 0x1), "binary");
 												break;
 											case "registered":
 												strSsapClientKey = mMessage.payload["client-key"];
@@ -580,7 +591,7 @@ if(bOverlay){
 													uri: "ssap://com.webos.applicationManager/getForegroundAppInfo",
 													id: uiSsapId++,
 													payload: {}
-												}), true, false, false, false, 0x1, 0), "binary");
+												}), true, false, false, false, 0x1), "binary");
 												break;
 											case "response":
 												switch(mMessage.payload.appId) {
@@ -614,8 +625,10 @@ if(bOverlay){
 										break;
 									case 0x9: //Ping
 										LogIfDebug("Ssap data Ping", bufFrame);
-										bufFrame[0] = (bufFrame[0] & 0xF0) | (0x0A & 0x0F);
-										socSsap.write(bufFrame, "binary");
+										if(bufMask !== undefined) {
+											Unmask(bufMask, bufData);
+										}
+										socSsap.write(FrameData(bufData, true, false, false, false, 0xA), "binary");
 										break;
 									case 0xA: //Pong
 										Error("Ssap unable to process pong frame", bufFrame);
@@ -627,6 +640,7 @@ if(bOverlay){
 							}
 						});
 					} catch(eError) {
+						bufPending = Buffer.alloc(0);
 						Error("data error [", eError, "]");
 					}
 				});
@@ -640,7 +654,7 @@ if(bOverlay){
 							appId: strAppId,
 							appName: "MagicRemoteService"
 						}
-					}), true, false, false, false, 0x1, 0), "binary");
+					}), true, false, false, false, 0x1), "binary");
 				} catch(eError) {
 					Error("Ssap open error [", eError, "]");
 				}
@@ -649,56 +663,45 @@ if(bOverlay){
 		});
 	}
 
+	// Decodes the complete frames at the start of bufStream and returns what is left: the start of
+	// a frame whose rest comes with the next 'data' event.
 	function UnframeData(bufStream, fCallback) {
-		var ulLenStream = bufStream.length;
 		var ulOffsetFrame = 0;
-		while(!(ulOffsetFrame == ulLenStream)) {
-			var bFin = (bufStream[ulOffsetFrame] & 0x80) == 0x80;
-			var bRsv1 = (bufStream[ulOffsetFrame] & 0x40) == 0x40;
-			var bRsv2 = (bufStream[ulOffsetFrame] & 0x20) == 0x20;
-			var bRsv3 = (bufStream[ulOffsetFrame] & 0x10) == 0x10;
-			var ucOpcode = bufStream[ulOffsetFrame] & 0x0F;
-
-			var bMask = (bufStream[ulOffsetFrame + 1] & 0x80) == 0x80;
-			var ulLenData;
-			var ulOffsetMask;
-			if((bufStream[ulOffsetFrame + 1] & 0x7F) == 0x7F) {
-				// For 64-bit length, read upper 32 bits and check they're 0 (we don't support >4GB frames)
-				var ulLenHigh = bufStream.readUInt32BE(ulOffsetFrame + 2);
-				if(ulLenHigh > 0) {
-					// Frame too large
-					return;
+		while(bufStream.length - ulOffsetFrame >= 2) {
+			var ucHead = bufStream[ulOffsetFrame];
+			var ucLen = bufStream[ulOffsetFrame + 1];
+			var ulLenData = ucLen & 0x7F;
+			var ulOffsetMask = ulOffsetFrame + 2;
+			if(ulLenData == 0x7E) {
+				if(bufStream.length < ulOffsetFrame + 4) break;
+				ulLenData = bufStream.readUInt16BE(ulOffsetFrame + 2);
+				ulOffsetMask = ulOffsetFrame + 4;
+			} else if(ulLenData == 0x7F) {
+				if(bufStream.length < ulOffsetFrame + 10) break;
+				if(bufStream.readUInt32BE(ulOffsetFrame + 2) > 0) {
+					// Over 4 GB: never a real SSAP frame, so drop the stream
+					return Buffer.alloc(0);
 				}
 				ulLenData = bufStream.readUInt32BE(ulOffsetFrame + 6);
 				ulOffsetMask = ulOffsetFrame + 10;
-			} else if((bufStream[ulOffsetFrame + 1] & 0x7F) == 0x7E) {
-				ulLenData = bufStream.readUInt16BE(ulOffsetFrame + 2);
-				ulOffsetMask = ulOffsetFrame + 4;
-			} else {
-				ulLenData = bufStream[ulOffsetFrame + 1] & 0x7F;
-				ulOffsetMask = ulOffsetFrame + 2;
 			}
-			var bufMask;
-			var ulOffsetData;
-			if(bMask) {
-				bufMask = bufStream.slice(ulOffsetMask, ulOffsetMask + 4);
-				ulOffsetData = ulOffsetMask + 4;
-			} else {
-				bufMask = undefined;
-				ulOffsetData = ulOffsetMask;
-			}
-			if(ulOffsetData + ulLenData > bufStream.length) {
-				return; // frame extends past buffer
-			}
+			var bMask = (ucLen & 0x80) == 0x80;
+			var ulOffsetData = ulOffsetMask + (bMask ? 4 : 0);
+			if(bufStream.length < ulOffsetData + ulLenData) break;
+			var bufMask = bMask ? bufStream.slice(ulOffsetMask, ulOffsetMask + 4) : undefined;
 			var bufData = bufStream.slice(ulOffsetData, ulOffsetData + ulLenData);
 			var bufFrame = bufStream.slice(ulOffsetFrame, ulOffsetData + ulLenData);
-			fCallback(bufFrame, bFin, bRsv1, bRsv2, bRsv3, ucOpcode, bufMask, bufData);
-			ulOffsetFrame += bufFrame.length;
+			fCallback(bufFrame, (ucHead & 0x80) == 0x80, (ucHead & 0x40) == 0x40, (ucHead & 0x20) == 0x20, (ucHead & 0x10) == 0x10, ucHead & 0x0F, bufMask, bufData);
+			ulOffsetFrame = ulOffsetData + ulLenData;
 		}
+		return bufStream.slice(ulOffsetFrame);
 	}
 
-	function FrameData(strData, bFin, bRsv1, bRsv2, bRsv3, ucOpcode, ulMask) {
-		var ulLenData = Buffer.byteLength(strData);
+	// One frame from this client: masked with a fresh random key, as RFC 6455 requires of clients.
+	// The payload is a string (UTF-8) or a Buffer.
+	function FrameData(data, bFin, bRsv1, bRsv2, bRsv3, ucOpcode) {
+		var bufPayload = Buffer.isBuffer(data) ? data : Buffer.from(data, "utf8");
+		var ulLenData = bufPayload.length;
 		var ulOffsetMask;
 		if(ulLenData > 0xFFFF) {
 			ulOffsetMask = 10;
@@ -707,34 +710,30 @@ if(bOverlay){
 		} else {
 			ulOffsetMask = 2;
 		}
-		var ulOffsetData;
-		if(ulMask) {
-			ulOffsetData = ulOffsetMask + 4;
-		} else {
-			ulOffsetData = ulOffsetMask;
-		}
-		bufData = Buffer.alloc(ulOffsetData + ulLenData);
+		var ulOffsetData = ulOffsetMask + 4;
+		var bufData = Buffer.alloc(ulOffsetData + ulLenData);
 		bufData[0] = (bFin ? 0x80 : 0x00);
 		bufData[0] |= (bRsv1 ? 0x40 : 0x00);
 		bufData[0] |= (bRsv2 ? 0x20 : 0x00);
 		bufData[0] |= (bRsv3 ? 0x10 : 0x00);
 		bufData[0] |= (ucOpcode & 0x0F);
 
-		bufData[1] = (ulMask > 0 ? 0x80 : 0x00);
+		bufData[1] = 0x80;
 		if(ulLenData > 0xFFFF) {
 			bufData[1] |= 0x7F;
-			bufData.writeUInt32BE(ulLenData, 2);
-			bufData.fill(0x00, 6, 10);
+			bufData.writeUInt32BE(0, 2);
+			bufData.writeUInt32BE(ulLenData, 6);
 		} else if(ulLenData > 0x7D) {
 			bufData[1] |= 0x7E;
 			bufData.writeUInt16BE(ulLenData, 2);
 		} else {
-			bufData[1] |= (ulLenData & 0x7F);
+			bufData[1] |= ulLenData;
 		}
-		if(ulMask > 0) {
-			bufData.writeUInt32BE(ulMask, ulOffsetMask);
+		var bufMask = Crypto.randomBytes(4);
+		bufMask.copy(bufData, ulOffsetMask);
+		for(var ul = 0; ul < ulLenData; ul++) {
+			bufData[ulOffsetData + ul] = bufPayload[ul] ^ bufMask[ul % 4];
 		}
-		bufData.write(strData, ulOffsetData, ulLenData, "utf8");
 		return bufData;
 	}
 

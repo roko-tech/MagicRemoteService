@@ -63,5 +63,15 @@
 	"strSocketErrorClose": "Socket déjà fermée",
 	"strShutdownMessage": "Voulez-vous éteindre l'ordinateur distant ?",
 	"strShutdownShutdown": "Éteindre",
-	"strShutdownAbort": "Ne rien faire"
+	"strShutdownAbort": "Ne rien faire",
+	"strToastWakeFailed": "Le réveil par le réseau a échoué — vérifiez le PC",
+	"strToastSignalLost": "Signal du PC perdu",
+	"strToastWaking": "PC injoignable — réveil en cours...",
+	"strToastRetrying": "PC injoignable — nouvelle tentative...",
+	"strToastClosing": "Fermeture de l'application...",
+	"strToastConnecting": "Connexion à %s...",
+	"strToastTimeout": "Délai de connexion dépassé — nouvelle tentative...",
+	"strToastNotResponding": "Le PC ne répond pas — vérifiez qu'il est allumé",
+	"strToastConnected": "Connecté à %s",
+	"strToastDisconnected": "Déconnecté — reconnexion..."
 }

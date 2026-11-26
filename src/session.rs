@@ -9,6 +9,9 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 pub const PING_EVERY: Duration = Duration::from_secs(30);
+/// How often the PC sends the TV an empty binary message. The TV's JavaScript can't see
+/// WebSocket pings, so this is how it notices a PC that went quiet (asleep, unplugged).
+pub const HEARTBEAT_EVERY: Duration = Duration::from_secs(5);
 pub const PONG_TIMEOUT: Duration = Duration::from_secs(5);
 pub const INPUT_POLL: Duration = Duration::from_millis(500);
 const EXCLUDED_SCROLL_GAP: Duration = Duration::from_millis(300);
@@ -49,6 +52,8 @@ pub struct SessionConfig {
     pub display: Option<u32>,
     /// Prefix for log lines.
     pub name: String,
+    /// Send the TV an empty binary message this often (`HEARTBEAT_EVERY` for real TVs).
+    pub heartbeat: Option<Duration>,
 }
 
 /// Timeout settings in milliseconds -> the delay before asking the TV, which allows five
@@ -68,6 +73,7 @@ pub struct Session<E: Effects> {
     held: HashMap<u16, Vec<InputEvent>>,
     pointer_shown: bool,
     ping_at: Option<Instant>,
+    heartbeat_at: Option<Instant>,
     pong_by: Option<Instant>,
     inactivity_at: Option<Instant>,
     video_at: Option<Instant>,
@@ -80,6 +86,7 @@ pub struct Session<E: Effects> {
 impl<E: Effects> Session<E> {
     pub fn new(fx: E, cfg: SessionConfig, now: Instant) -> Self {
         let inactivity_at = cfg.inactivity.map(|d| now + d);
+        let heartbeat_at = cfg.heartbeat.map(|d| now + d);
         Session {
             fx,
             cfg,
@@ -88,6 +95,7 @@ impl<E: Effects> Session<E> {
             held: HashMap::new(),
             pointer_shown: false,
             ping_at: Some(now + PING_EVERY),
+            heartbeat_at,
             pong_by: None,
             inactivity_at,
             video_at: None,
@@ -289,6 +297,11 @@ impl<E: Effects> Session<E> {
 
     pub fn tick(&mut self, now: Instant) {
         let due = |t: Option<Instant>| t.is_some_and(|t| t <= now);
+        if due(self.heartbeat_at) {
+            // Older TV apps ignore an empty message; newer ones reconnect when these stop
+            self.send(ws::OP_BINARY, &[]);
+            self.heartbeat_at = self.cfg.heartbeat.map(|d| now + d);
+        }
         if due(self.ping_at) {
             self.send(ws::OP_PING, &[]);
             self.pong_by.get_or_insert(now + PONG_TIMEOUT);
@@ -325,7 +338,10 @@ impl<E: Effects> Session<E> {
 
     /// When `tick` next has something to do.
     pub fn next_deadline(&self) -> Option<Instant> {
-        [self.ping_at, self.pong_by, self.inactivity_at, self.video_at, self.presence_pong_by, self.input_watch_at].into_iter().flatten().min()
+        [self.ping_at, self.heartbeat_at, self.pong_by, self.inactivity_at, self.video_at, self.presence_pong_by, self.input_watch_at]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// The connection is gone: release what the remote left pressed and give the pointer back,
@@ -601,6 +617,22 @@ mod tests {
         assert_eq!(take(&fake), vec![Call::Shutdown(ShutdownKind::Abort)]);
         s.tick(t0 + Duration::from_secs(1000));
         assert!(take(&fake).is_empty());
+    }
+
+    #[test]
+    fn heartbeats_are_empty_binary_messages_every_few_seconds() {
+        let (fake, t0) = (Fake::default(), Instant::now());
+        let mut s = session(&fake, SessionConfig { heartbeat: Some(HEARTBEAT_EVERY), ..Default::default() }, t0);
+        assert_eq!(s.next_deadline(), Some(t0 + HEARTBEAT_EVERY));
+        s.tick(t0 + Duration::from_secs(4));
+        assert!(s.out.is_empty());
+        s.tick(t0 + Duration::from_secs(5));
+        assert_eq!(std::mem::take(&mut s.out), [0x82, 0x00]);
+        s.tick(t0 + Duration::from_secs(9));
+        assert!(s.out.is_empty());
+        s.tick(t0 + Duration::from_secs(10));
+        assert_eq!(s.out, [0x82, 0x00]);
+        assert!(take(&fake).is_empty(), "nothing happens on the PC");
     }
 
     #[test]

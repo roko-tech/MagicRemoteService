@@ -119,6 +119,8 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | Web UI won't load | Open http://localhost:41231 on the PC itself. Check `MagicRemoteService.exe status` |
 | Reinstall TV App says "No user is signed in" | Sign in at the PC: the webOS CLI runs with that user's TV list and keys |
 | Reinstall TV App can't find `ares-…` or Node | Install Node.js and run `npm install -g @webos-tools/cli` as the user signed in at the PC |
+| Worried about burn-in on an OLED TV | The TV app keeps the TV's screensaver off while the PC is connected, so a video never gets interrupted. Set Windows to turn off the display after a few minutes (Settings › System › Power): it stays on while a video plays, and an idle desktop then goes dark |
+| TV says "Disconnected" a few seconds after the PC sleeps | Expected: the PC sends a heartbeat every 5 seconds, and the TV reconnects when it wakes |
 | Home launcher pointer blocked | Expected in overlay mode — use D-pad to navigate the TV launcher |
 | TV app shows after long delay | Normal on cold boot — webOS takes ~60s to initialize developer apps |
 | Can't exit TV app | Press and hold the Back button for 1 second |

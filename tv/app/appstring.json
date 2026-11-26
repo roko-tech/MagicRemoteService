@@ -64,5 +64,15 @@
 	"strSocketErrorClose": "Socket already closed",
 	"strShutdownMessage": "Do you want to shutdown the remote computer ?",
 	"strShutdownShutdown": "Shutdown",
-	"strShutdownAbort": "Do nothing"
+	"strShutdownAbort": "Do nothing",
+	"strToastWakeFailed": "Wake-on-LAN failed — check PC",
+	"strToastSignalLost": "PC signal lost",
+	"strToastWaking": "PC not reachable — waking it...",
+	"strToastRetrying": "PC not reachable — retrying...",
+	"strToastClosing": "Closing app...",
+	"strToastConnecting": "Connecting to %s...",
+	"strToastTimeout": "Connection timeout — retrying...",
+	"strToastNotResponding": "PC not responding — check if it's on",
+	"strToastConnected": "Connected to %s",
+	"strToastDisconnected": "Disconnected — reconnecting..."
 }
