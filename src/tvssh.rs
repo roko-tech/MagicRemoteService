@@ -96,7 +96,8 @@ pub fn connect(host: Ipv4Addr, port: u16, user: &str, key_pem: &str, passphrase:
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e| SshError::Other(e.to_string()))?;
     let seen = Arc::new(Mutex::new(None));
     let client = Client { expected: expected_host_key.map(str::to_string), seen: seen.clone() };
-    let config = Arc::new(client::Config { inactivity_timeout: Some(Duration::from_secs(60)), ..Default::default() });
+    // No inactivity limit: each command has its own timeout, and installing can be quiet for a while
+    let config = Arc::new(client::Config::default());
     let handle = rt.block_on(async {
         let mut handle = match tokio::time::timeout(CONNECT_TIMEOUT, client::connect(config, (IpAddr::V4(host), port), client)).await {
             Err(_) => return Err(SshError::Unreachable),

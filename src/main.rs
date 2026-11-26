@@ -14,6 +14,8 @@ Usage:
   MagicRemoteService.exe uninstall    Stop and remove the service (admin)
   MagicRemoteService.exe ui           Open the settings window
   MagicRemoteService.exe status       Show the service state and connected TVs
+  MagicRemoteService.exe private-network <id>
+                                      Make that network Private, so the firewall lets the TV in (admin)
   MagicRemoteService.exe --version
 
 Running without the service:
@@ -35,6 +37,13 @@ fn ui_port(args: &[String]) -> u16 {
 fn attach_console() {
     use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
     unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+}
+
+/// The settings window runs commands elevated and shows what happened from `--result-file`.
+fn write_result_file(args: &[String], result: &Result<String, String>) {
+    if let Some(path) = args.iter().position(|a| a == "--result-file").and_then(|i| args.get(i + 1)) {
+        let _ = std::fs::write(path, result.as_ref().unwrap_or_else(|e| e));
+    }
 }
 
 fn print_result(r: Result<String, String>) -> i32 {
@@ -78,10 +87,16 @@ fn main() {
         Some("install") => {
             attach_console();
             let result = service::install();
-            // The settings window runs this elevated and shows what happened
-            if let Some(path) = args.iter().position(|a| a == "--result-file").and_then(|i| args.get(i + 1)) {
-                let _ = std::fs::write(path, result.as_ref().unwrap_or_else(|e| e));
-            }
+            write_result_file(&args, &result);
+            print_result(result)
+        }
+        Some("private-network") => {
+            attach_console();
+            let result = match args.get(1) {
+                Some(id) => mrs::win::netlist::make_private(id),
+                None => Err("Usage: MagicRemoteService.exe private-network <network id>".into()),
+            };
+            write_result_file(&args, &result);
             print_result(result)
         }
         Some("uninstall") => {

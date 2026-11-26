@@ -72,11 +72,16 @@ export global App {
     in property <bool> setup-installing;
     in property <string> setup-status;
     in property <bool> setup-failed;
+    // The network the TV reaches this PC through, when Windows calls it public
+    in property <string> public-network;
+    in property <bool> making-private;
+    in property <string> private-error;
     callback install-service();
     callback search-tvs();
     callback pair-again();
     callback setup-tv-app();
     callback tv-app-again();
+    callback make-private();
 
     // Service and connection
     in property <bool> connected: true;

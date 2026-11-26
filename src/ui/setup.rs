@@ -2,7 +2,7 @@
 //! worked out from the service's own API, so a set-up PC opens on the Overview instead.
 
 use super::{background, model, port, toast, with, App, FoundTv, MainWindow, LONG, SHORT};
-use crate::win::{service, wide, Handle};
+use crate::win::{netlist, service, wide, Handle};
 use crate::{client, discover, settings::Scope};
 use serde_json::json;
 use slint::{ComponentHandle, ModelRc, VecModel};
@@ -26,6 +26,8 @@ pub(super) struct Setup {
     pub page_chosen: bool,
     pub pair_again: bool,
     pub tv_app_again: bool,
+    /// The network the TV reaches this PC through, when Windows calls it public.
+    pub public: Option<netlist::Connection>,
 }
 
 /// Whether the TV app has been set up: a saved config that names the PC and the input.
@@ -116,8 +118,12 @@ pub(super) fn refresh(ui: &MainWindow) {
         }
     }
 
-    // An update counts as unfinished: someone who runs a newer exe wants it in front of them
-    let complete = connected && install_step == 2 && pair_step == 2 && app_step == 2;
+    let public = with(|s| s.setup.public.clone());
+    app.set_public_network(public.as_ref().map(|c| c.name.clone()).unwrap_or_default().into());
+
+    // An update counts as unfinished: someone who runs a newer exe wants it in front of them. So
+    // does a public network, where the remote can't connect.
+    let complete = connected && install_step == 2 && pair_step == 2 && app_step == 2 && public.is_none();
     app.set_setup_complete(complete);
 
     // Search for TVs as soon as pairing is the next step
@@ -132,6 +138,33 @@ pub(super) fn choose_first_page(ui: &MainWindow) {
     if first && !ui.global::<App>().get_setup_complete() {
         ui.global::<App>().set_page(4);
     }
+}
+
+/// This PC's address the TV app is set up to reach: on the default TV's subnet, else the first.
+fn pc_ip_for_tv() -> Option<Ipv4Addr> {
+    with(|s| {
+        let tv: Ipv4Addr = s.setup.tvs.iter().find(|t| t.2).or(s.setup.tvs.first())?.1.parse().ok()?;
+        let i = model::network_for(tv, &s.networks).unwrap_or(0);
+        s.networks.get(i)?.0.parse().ok()
+    })
+}
+
+/// Asks Windows whether the network the TV reaches this PC through is public, and shows it. The
+/// first time, also picks the page to open on, once that's known.
+pub(super) fn check_network(ui: &MainWindow, choose_page: bool) {
+    let ip = pc_ip_for_tv();
+    background(
+        ui,
+        move || ip.and_then(netlist::public_network),
+        move |ui, public| {
+            if with(|s| std::mem::replace(&mut s.setup.public, public.clone()) != public) {
+                refresh(&ui);
+            }
+            if choose_page {
+                choose_first_page(&ui);
+            }
+        },
+    );
 }
 
 fn search(ui: &MainWindow) {
@@ -157,8 +190,9 @@ fn search(ui: &MainWindow) {
     );
 }
 
-/// Runs `exe args` elevated (Windows asks for consent) and waits for it. Returns the exit code.
-fn run_elevated(exe: &Path, args: &str) -> Result<u32, String> {
+/// Runs `exe args` elevated (Windows asks for consent) and waits for it. Returns the exit code, or
+/// `declined` when the user said no.
+fn run_elevated(exe: &Path, args: &str, declined: &str) -> Result<u32, String> {
     use windows_sys::Win32::Foundation::{GetLastError, ERROR_CANCELLED};
     use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
     use windows_sys::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
@@ -173,9 +207,9 @@ fn run_elevated(exe: &Path, args: &str) -> Result<u32, String> {
     info.nShow = SW_HIDE;
     if unsafe { ShellExecuteExW(&mut info) } == 0 {
         return Err(if unsafe { GetLastError() } == ERROR_CANCELLED {
-            "Windows didn't get your OK, so nothing was installed.".into()
+            declined.into()
         } else {
-            format!("Windows couldn't start the installer: {}", std::io::Error::last_os_error())
+            format!("Windows couldn't start it: {}", std::io::Error::last_os_error())
         });
     }
     let process = Handle::new(info.hProcess).map_err(|e| e.to_string())?;
@@ -195,7 +229,7 @@ fn install(ui: &MainWindow) {
         || -> Result<String, String> {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
             let result = std::env::temp_dir().join(format!("MagicRemoteService-install-{}.txt", std::process::id()));
-            let code = run_elevated(&exe, &format!("install --result-file \"{}\"", result.display()))?;
+            let code = run_elevated(&exe, &format!("install --result-file \"{}\"", result.display()), "Windows didn't get your OK, so nothing was installed.")?;
             let message = std::fs::read_to_string(&result).unwrap_or_default().trim().to_string();
             let _ = std::fs::remove_file(&result);
             if code == 0 {
@@ -219,6 +253,44 @@ fn install(ui: &MainWindow) {
                 }
                 Err(e) => {
                     app.set_install_error(e.clone().into());
+                    toast(&ui, &e, true);
+                }
+            }
+        },
+    );
+}
+
+/// Makes the public network the TV is on private, elevated, then checks it again.
+fn make_private(ui: &MainWindow) {
+    let Some(network) = with(|s| s.setup.public.clone()) else { return };
+    let app = ui.global::<App>();
+    app.set_making_private(true);
+    app.set_private_error("".into());
+    background(
+        ui,
+        move || -> Result<String, String> {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let result = std::env::temp_dir().join(format!("MagicRemoteService-network-{}.txt", std::process::id()));
+            let args = format!("private-network {} --result-file \"{}\"", network.network, result.display());
+            let code = run_elevated(&exe, &args, "Windows didn't get your OK, so the network is still public.")?;
+            let message = std::fs::read_to_string(&result).unwrap_or_default().trim().to_string();
+            let _ = std::fs::remove_file(&result);
+            if code == 0 {
+                Ok(message)
+            } else {
+                Err(if message.is_empty() { format!("Changing the network stopped with code {code}.") } else { message })
+            }
+        },
+        |ui, r| {
+            let app = ui.global::<App>();
+            app.set_making_private(false);
+            match r {
+                Ok(message) => {
+                    toast(&ui, &message, false);
+                    check_network(&ui, false);
+                }
+                Err(e) => {
+                    app.set_private_error(e.clone().into());
                     toast(&ui, &e, true);
                 }
             }
@@ -326,6 +398,12 @@ pub(super) fn wire(ui: &MainWindow) {
     app.on_setup_tv_app(move || {
         if let Some(ui) = w.upgrade() {
             set_up_tv_app(&ui);
+        }
+    });
+    let w = ui.as_weak();
+    app.on_make_private(move || {
+        if let Some(ui) = w.upgrade() {
+            make_private(&ui);
         }
     });
     let w = ui.as_weak();

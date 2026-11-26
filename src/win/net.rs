@@ -13,6 +13,8 @@ pub struct Interface {
     pub name: String,
     /// Has a default gateway: the network the TV is most likely on.
     pub gateway: bool,
+    /// The adapter's id, `{GUID}`.
+    pub adapter: String,
 }
 
 pub fn mask(prefix: u8) -> Ipv4Addr {
@@ -48,6 +50,7 @@ pub fn interfaces() -> Vec<Interface> {
             let mac = ad.PhysicalAddress[..ad.PhysicalAddressLength as usize].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":");
             let name = from_wide(std::slice::from_raw_parts(ad.FriendlyName, (0..).take_while(|&i| *ad.FriendlyName.add(i) != 0).count()));
             let gateway = !ad.FirstGatewayAddress.is_null();
+            let adapter = if ad.AdapterName.is_null() { String::new() } else { std::ffi::CStr::from_ptr(ad.AdapterName as _).to_string_lossy().into_owned() };
             let mut u = ad.FirstUnicastAddress;
             while !u.is_null() {
                 let ua = &*u;
@@ -58,7 +61,7 @@ pub fn interfaces() -> Vec<Interface> {
                 }
                 let sin = &*(sa as *const SOCKADDR_IN);
                 let ip = Ipv4Addr::from(u32::from_be(sin.sin_addr.S_un.S_addr));
-                out.push(Interface { ip, mac: mac.clone(), mask: mask(ua.OnLinkPrefixLength), name: name.clone(), gateway });
+                out.push(Interface { ip, mac: mac.clone(), mask: mask(ua.OnLinkPrefixLength), name: name.clone(), gateway, adapter: adapter.clone() });
             }
         }
     }

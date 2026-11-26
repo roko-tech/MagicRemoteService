@@ -30,7 +30,7 @@ sha1_smol = "1"
 socket2 = "0.6"
 tiny_http = "0.12"
 windows-service = "0.8"
-# Raw Win32 calls; the COM audio query uses the `windows` crate below.
+# Raw Win32 calls; the COM queries (audio, network type) use the `windows` crate below.
 windows-sys = { version = "0.61", features = [
     "Win32_Devices_Display",
     "Win32_Foundation",
@@ -64,6 +64,7 @@ windows-sys = { version = "0.61", features = [
 ] }
 windows = { version = "0.62", features = [
     "Win32_Media_Audio",
+    "Win32_Networking_NetworkListManager",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Variant",

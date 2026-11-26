@@ -213,7 +213,7 @@ fn apply_snapshot(ui: &MainWindow, snap: Snapshot) {
     );
     render_displays(ui, &snap.displays);
     setup::refresh(ui);
-    setup::choose_first_page(ui);
+    setup::check_network(ui, true);
 }
 
 /// The status bar, the Overview counts and the event log, refreshed every few seconds.
@@ -1019,6 +1019,7 @@ pub fn run(http_port: u16) -> i32 {
     refresh.start(TimerMode::Repeated, Duration::from_secs(3), move || {
         if let Some(ui) = weak.upgrade() {
             poll(&ui);
+            setup::check_network(&ui, false);
         }
     });
     // The window exists once the event loop runs: try until it's there (about 2 s at most)

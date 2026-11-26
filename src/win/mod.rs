@@ -7,6 +7,7 @@ pub mod effects;
 pub mod eventlog;
 pub mod input;
 pub mod net;
+pub mod netlist;
 pub mod proc;
 pub mod registry;
 pub mod screens;
