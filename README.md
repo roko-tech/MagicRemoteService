@@ -3,10 +3,11 @@
 # MagicRemoteService
 
 **Your LG Magic Remote, now a mouse and keyboard for your Windows PC.**<br>
-Point, click, scroll and type from the couch.
+Point, click, scroll and type from the couch. Written in Rust.
 
 [![Build](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml/badge.svg)](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/roko-tech/MagicRemoteService?color=4ecca3&label=release)](https://github.com/roko-tech/MagicRemoteService/releases/latest)
+[![Written in Rust](https://img.shields.io/badge/written%20in-Rust-B7410E?logo=rust&logoColor=white)](#building-from-source)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 
@@ -23,6 +24,7 @@ Point, click, scroll and type from the couch.
 - **Set up from the PC** — pair the TV and install its app in seconds. No Node.js, no webOS CLI.
 - **Tune it live** — cursor speed, scroll speed and long-press time reach the TV the moment you save.
 - **Stays out of the way** — one small Windows service. It starts with Windows, wakes the PC from the TV, and can shut it down when you're done.
+- **Written in Rust** — one self-contained exe, with no .NET or Node.js to install. Its settings window is native too, built with [Slint](https://slint.dev).
 - **Private by design** — other devices on your network can't take over the PC, and the settings are only reachable from the PC itself.
 
 ## Quick start
