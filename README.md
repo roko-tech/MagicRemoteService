@@ -9,7 +9,7 @@ Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRem
 ## Install
 
 You need:
-- the [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) on the TV, with Dev Mode Status and Key Server on;
+- the [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) on the TV, with Dev Mode Status on, and Key Server on while you pair the TV (turn it off afterwards: the key it serves is protected only by the short passphrase);
 - Windows' OpenSSH Client on the PC, which Windows 10 (1809 and later) and 11 include. If it was removed, add it back under Settings > System > Optional features.
 
 No Node.js or webOS CLI is needed: the service builds the TV app's package itself and installs it over the TV's Developer Mode SSH.
@@ -73,7 +73,7 @@ Open **http://localhost:41231** on the PC. It is only reachable from the PC itse
 - **Remote configurator** — click any button on the visual remote to map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a shell command, or a special action (shut down the PC, toggle the TV keyboard). Bindings apply as soon as they're saved. Hover a button to see what it does; green dots mark custom bindings. "Reset All Bindings" restores the defaults.
 - **Per-app profiles** — under "Bindings for", create a profile for some apps (their process names, as in Task Manager's Details tab, such as `vlc`). Buttons you change in it act differently while one of those apps is in front; the others keep their normal binding.
 - **Smooth scroll exclusions** — apps (such as media players) that use the wheel for volume get single scroll steps instead of momentum. Add their process names.
-- **TVs** — pair a TV with its IP and the passphrase its Developer Mode app shows (Key Server must be on), pick the default TV, or unpair one. Pairing downloads the TV's key and checks it opens a session before saving it.
+- **TVs** — pair a TV with its IP and the passphrase its Developer Mode app shows (Key Server on while pairing; turn it off afterwards), pick the default TV, or unpair one. Pairing downloads the TV's key and checks it opens a session before saving it.
 - **TV app configuration** — the HDMI input the PC is on, the PC's IP, MAC (for Wake-on-LAN) and subnet, the port, and the cursor speed, scroll speed and long-press time. The last three reach connected TVs as soon as you save (with a TV app from this version on); the rest need **Reinstall TV App**, which packages the TV app built into the service with this configuration and installs and launches it on the default TV.
 - **PC** — the TV port, start with Windows, and the shutdown timeouts:
   - **Inactivity:** with the TV connected and no remote input for that long, Windows shuts down. Using the PC in the last five minutes cancels it; the remote counts.
@@ -153,7 +153,7 @@ Layout: `src/` is the PC service (`src/win/` holds the Windows calls), `tv/app` 
 - **Service location** — the service runs as SYSTEM from `C:\Program Files\MagicRemoteService`, where only administrators can change files. Never point it at a folder ordinary accounts can write to.
 - **Least privilege** — shell-command bindings and the browser run as the user signed in at the PC, never as SYSTEM.
 - **TV keys** — a paired TV's SSH key stays encrypted with its passphrase. `tvs.json` (which holds the passphrase) and the key files are readable only by SYSTEM and administrators, and the API never returns a passphrase. The service trusts a TV's SSH host key the first time it connects and refuses a different one afterwards, until the TV is paired again.
-- **Web UI and API** — loopback only. Requests with other `Host` names (DNS rebinding) or foreign origins are refused. Changes (POST) need an `X-Requested-With` header, which cross-site pages can't send; send it if you script the API. Any program running on the PC can still use the API: it can change bindings and settings, but it can't read the token.
+- **Web UI and API** — loopback only. Requests with other `Host` names (DNS rebinding) or foreign origins are refused. Changes (POST) need an `X-Requested-With` header, which cross-site pages can't send; send it if you script the API. Any program running on the PC can still use the API: it can change bindings and settings, pair a TV and reinstall the TV app (whose package carries the token). It can't read the token or a TV's passphrase through the API, but treat programs on this PC as trusted.
 - **WebSocket** — upgrades from web pages (an `http` or `https` `Origin`) are refused, so a page open in any browser can't drive the PC even in open mode. Frame sizes are capped, the handshake must finish within 10 seconds, at most 16 connections are open at once, and the token is compared in constant time. Refused connections are logged at most once a minute per address.
 - **Command bindings** — `& | ; < >` are refused so a binding can't chain commands, but a binding still runs whatever program it names.
 

@@ -563,7 +563,7 @@ pub fn reinstall(files: &Files, version: &str) -> Result<String, String> {
     let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     install(&ssh, &app_id, version, ipk::build(&app_id, version, &render(&app_id, version, input_name, &config), now))?;
     let name = &tv.name;
-    let launch = json!({ "id": app_id });
+    let launch = json!({ "id": app_id, "subscribe": false, "params": {} });
     let out = ssh.exec(&format!("/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/launch '{launch}'"), Vec::new(), Duration::from_secs(30))?;
     let replies: Vec<Value> = out.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
     if !replies.iter().any(|v| v.get("returnValue") == Some(&Value::Bool(true))) {
@@ -673,14 +673,18 @@ mod tests {
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
-        let files = temp_files("real");
+        // Laid out like the service: the exe beside its files, in a folder with spaces in its name
+        let files = Files { dir: std::env::temp_dir().join(format!("mrs tv real {}", std::process::id())) };
+        std::fs::create_dir_all(&files.dir).unwrap();
         let _cleanup = Cleanup(files.dir.clone());
+        let built = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("MagicRemoteService.exe");
+        assert!(built.is_file(), "{} missing: run cargo build", built.display());
+        std::fs::copy(&built, files.dir.join("MagicRemoteService.exe")).unwrap();
         let tvs = tvs(&files);
         let tv = tvs.iter().find(|t| t.default).expect("a TV set up with ares-setup-device and ares-novacom --getkey");
         let mut ssh = Ssh::new(&files, tv, files.tv_key(&tv.name));
         // ssh asks the service exe for the passphrase, not this test binary
-        ssh.askpass = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("MagicRemoteService.exe");
-        assert!(ssh.askpass.is_file(), "{} missing: run cargo build", ssh.askpass.display());
+        ssh.askpass = files.dir.join("MagicRemoteService.exe");
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
         install(&ssh, ID, "0.0.1", ipk::build(ID, "0.0.1", &render(ID, "0.0.1", "HDMI 9", b"{}"), now)).unwrap();
         let info = ssh.exec("/usr/bin/luna-send-pub -n 1 luna://com.webos.applicationManager/dev/listApps '{}'", Vec::new(), Duration::from_secs(30));

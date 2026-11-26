@@ -110,6 +110,7 @@ function Select-Tv {
     Write-Host @'
 To pair a TV: on the TV, install the Developer Mode app from the LG Content Store, sign in,
 and turn on Dev Mode Status and Key Server. The app shows the passphrase to enter here.
+Turn Key Server off once the TV is paired.
 '@
     $ip = (Read-Host 'TV IP address').Trim()
     $passphrase = (Read-Host 'Passphrase').Trim()
