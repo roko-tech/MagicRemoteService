@@ -5,8 +5,8 @@
 **Your LG Magic Remote, now a mouse and keyboard for your Windows PC.**<br>
 Point, click, scroll and type from the couch. Written in Rust.
 
-[![Build](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml/badge.svg)](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/roko-tech/MagicRemoteService?color=4ecca3&label=release)](https://github.com/roko-tech/MagicRemoteService/releases/latest)
+[![Build](https://github.com/roko-tech/MagicRemoteService-Rust/actions/workflows/build.yml/badge.svg)](https://github.com/roko-tech/MagicRemoteService-Rust/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/roko-tech/MagicRemoteService-Rust?color=4ecca3&label=release)](https://github.com/roko-tech/MagicRemoteService-Rust/releases/latest)
 [![Written in Rust](https://img.shields.io/badge/written%20in-Rust-B7410E?logo=rust&logoColor=white)](#building-from-source)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
@@ -36,7 +36,7 @@ Point, click, scroll and type from the couch. Written in Rust.
 | **A network** | The PC and the TV on the same local network |
 
 1. **Prepare the TV.** Install the Developer Mode app from the LG Content Store, sign in, and turn on **Dev Mode Status** and **Key Server**. Note the TV's IP address and the passphrase the app shows.
-2. **Install on the PC.** Download `MagicRemoteService-<version>.zip` from the [latest release](https://github.com/roko-tech/MagicRemoteService/releases/latest), extract it, and double-click `install.bat`. Accept the administrator prompt.
+2. **Install on the PC.** Download `MagicRemoteService-<version>.zip` from the [latest release](https://github.com/roko-tech/MagicRemoteService-Rust/releases/latest), extract it, and double-click `install.bat`. Accept the administrator prompt.
 3. **Answer the installer.** It installs the service, pairs the TV (its IP and the passphrase), asks which network the TV is on and which HDMI input the PC uses, then installs and opens the TV app.
 4. **Turn Key Server off** in the Developer Mode app. It's only needed while pairing.
 
@@ -188,7 +188,7 @@ Every push runs formatting, lint and tests in CI. Pushing a `v*` tag publishes a
 - **3.0** — the PC side rebuilt in Rust: one exe with no .NET, a supervisor that restarts its worker, and settings that apply without a restart.
 - **2.x** — the C# version: discovery, the web settings page, smooth scrolling and device token auth.
 
-See [Releases](https://github.com/roko-tech/MagicRemoteService/releases) for the full notes.
+See [Releases](https://github.com/roko-tech/MagicRemoteService-Rust/releases) for the full notes.
 
 ## Credits and license
 

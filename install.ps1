@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Releases = 'https://github.com/roko-tech/MagicRemoteService/releases'
+$Releases = 'https://github.com/roko-tech/MagicRemoteService-Rust/releases'
 
 function Test-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
