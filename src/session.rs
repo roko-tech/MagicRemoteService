@@ -12,6 +12,28 @@ pub const PING_EVERY: Duration = Duration::from_secs(30);
 /// How often the PC sends the TV an empty binary message. The TV's JavaScript can't see
 /// WebSocket pings, so this is how it notices a PC that went quiet (asleep, unplugged).
 pub const HEARTBEAT_EVERY: Duration = Duration::from_secs(5);
+/// How often the PC measures the round trip to the TV, for the web UI. A dedicated ping, since
+/// the keep-alive ping is pushed back by every input and never fires while the remote is in use.
+pub const LATENCY_PROBE_EVERY: Duration = Duration::from_secs(10);
+/// Payload of the latency ping; the TV's browser echoes it in the pong.
+const LATENCY_PROBE: [u8; 1] = [0x02];
+
+/// What a connection has done, for the web UI's diagnostics. Counts and times only, never which
+/// keys were pressed or what was typed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Stats {
+    /// Pointer moves (relative and absolute).
+    pub pointer: u64,
+    pub wheel: u64,
+    /// Key presses (downs).
+    pub keys: u64,
+    /// Characters typed on the TV keyboard.
+    pub text: u64,
+    pub last_input: Option<Instant>,
+    /// Last measured round trip to the TV.
+    pub latency: Option<Duration>,
+    pub pointer_shown: bool,
+}
 pub const PONG_TIMEOUT: Duration = Duration::from_secs(5);
 pub const INPUT_POLL: Duration = Duration::from_millis(500);
 const EXCLUDED_SCROLL_GAP: Duration = Duration::from_millis(300);
@@ -54,6 +76,8 @@ pub struct SessionConfig {
     pub name: String,
     /// Send the TV an empty binary message this often (`HEARTBEAT_EVERY` for real TVs).
     pub heartbeat: Option<Duration>,
+    /// Measure the round trip this often (`LATENCY_PROBE_EVERY` for real TVs).
+    pub latency_probe: Option<Duration>,
 }
 
 /// Timeout settings in milliseconds -> the delay before asking the TV, which allows five
@@ -74,6 +98,9 @@ pub struct Session<E: Effects> {
     pointer_shown: bool,
     ping_at: Option<Instant>,
     heartbeat_at: Option<Instant>,
+    probe_at: Option<Instant>,
+    probe_sent: Option<Instant>,
+    stats: Stats,
     pong_by: Option<Instant>,
     inactivity_at: Option<Instant>,
     video_at: Option<Instant>,
@@ -87,6 +114,8 @@ impl<E: Effects> Session<E> {
     pub fn new(fx: E, cfg: SessionConfig, now: Instant) -> Self {
         let inactivity_at = cfg.inactivity.map(|d| now + d);
         let heartbeat_at = cfg.heartbeat.map(|d| now + d);
+        // First measurement shortly after connecting, so the web UI has a figure at once
+        let probe_at = cfg.latency_probe.map(|d| now + d.min(Duration::from_secs(1)));
         Session {
             fx,
             cfg,
@@ -96,6 +125,9 @@ impl<E: Effects> Session<E> {
             pointer_shown: false,
             ping_at: Some(now + PING_EVERY),
             heartbeat_at,
+            probe_at,
+            probe_sent: None,
+            stats: Stats::default(),
             pong_by: None,
             inactivity_at,
             video_at: None,
@@ -155,6 +187,11 @@ impl<E: Effects> Session<E> {
             ws::OP_PING => self.send(ws::OP_PONG, payload),
             ws::OP_PONG => match payload {
                 [] => self.pong_by = None,
+                [0x02] => {
+                    if let Some(sent) = self.probe_sent.take() {
+                        self.stats.latency = Some(now.saturating_duration_since(sent));
+                    }
+                }
                 [0x01] => {
                     // The TV says nobody is using it: schedule a shutdown the user can cancel by touching the PC
                     self.presence_pong_by = None;
@@ -177,6 +214,14 @@ impl<E: Effects> Session<E> {
                 return;
             }
         };
+        self.stats.last_input = Some(now);
+        match msg {
+            ClientMessage::PositionRelative { .. } | ClientMessage::PositionAbsolute { .. } => self.stats.pointer += 1,
+            ClientMessage::Wheel { .. } => self.stats.wheel += 1,
+            ClientMessage::Key { down: true, .. } => self.stats.keys += 1,
+            ClientMessage::Unicode(_) => self.stats.text += 1,
+            _ => {}
+        }
         match msg {
             ClientMessage::PositionRelative { dx, dy } => self.fx.send_input(&[InputEvent::MoveRelative { dx: dx as i32, dy: dy as i32 }]),
             ClientMessage::PositionAbsolute { x, y } => {
@@ -297,6 +342,11 @@ impl<E: Effects> Session<E> {
 
     pub fn tick(&mut self, now: Instant) {
         let due = |t: Option<Instant>| t.is_some_and(|t| t <= now);
+        if due(self.probe_at) {
+            self.send(ws::OP_PING, &LATENCY_PROBE);
+            self.probe_sent = Some(now);
+            self.probe_at = self.cfg.latency_probe.map(|d| now + d);
+        }
         if due(self.heartbeat_at) {
             // Older TV apps ignore an empty message; newer ones reconnect when these stop
             self.send(ws::OP_BINARY, &[]);
@@ -338,10 +388,14 @@ impl<E: Effects> Session<E> {
 
     /// When `tick` next has something to do.
     pub fn next_deadline(&self) -> Option<Instant> {
-        [self.ping_at, self.heartbeat_at, self.pong_by, self.inactivity_at, self.video_at, self.presence_pong_by, self.input_watch_at]
+        [self.ping_at, self.heartbeat_at, self.probe_at, self.pong_by, self.inactivity_at, self.video_at, self.presence_pong_by, self.input_watch_at]
             .into_iter()
             .flatten()
             .min()
+    }
+
+    pub fn stats(&self) -> Stats {
+        Stats { pointer_shown: self.pointer_shown, ..self.stats }
     }
 
     /// The connection is gone: release what the remote left pressed and give the pointer back,
@@ -633,6 +687,33 @@ mod tests {
         s.tick(t0 + Duration::from_secs(10));
         assert_eq!(s.out, [0x82, 0x00]);
         assert!(take(&fake).is_empty(), "nothing happens on the PC");
+    }
+
+    #[test]
+    fn diagnostics_count_input_and_measure_latency_without_recording_what() {
+        let (fake, t0, b) = (Fake::default(), Instant::now(), Compiled::new(&defaults()));
+        let mut s = session(&fake, SessionConfig { latency_probe: Some(LATENCY_PROBE_EVERY), ..Default::default() }, t0);
+        s.ping_at = None;
+        bin(&mut s, &[0x00, 1, 0, 1, 0], &b, t0);
+        bin(&mut s, &[0x01, 1, 0, 1, 0], &b, t0);
+        bin(&mut s, &[0x02, 1, 0], &b, t0);
+        bin(&mut s, &[0x04, 0x0D, 0x00, 0x01], &b, t0);
+        bin(&mut s, &[0x04, 0x0D, 0x00, 0x00], &b, t0);
+        bin(&mut s, &[0x05, 0x41, 0x00], &b, t0 + Duration::from_millis(300));
+        bin(&mut s, &[0x03, 0x01], &b, t0 + Duration::from_millis(400));
+        // The first probe goes out a second after connecting; the TV's browser echoes it
+        s.tick(t0 + Duration::from_secs(1));
+        assert_eq!(std::mem::take(&mut s.out), [0x89, 0x01, 0x02]);
+        s.on_frame(true, ws::OP_PONG, &[0x02], &b, t0 + Duration::from_millis(1042));
+        assert!(take(&fake).iter().all(|c| !matches!(c, Call::Shutdown(_))), "a probe pong is not the presence answer");
+        let st = s.stats();
+        assert_eq!((st.pointer, st.wheel, st.keys, st.text, st.pointer_shown), (2, 1, 1, 1, true));
+        assert_eq!(st.latency, Some(Duration::from_millis(42)));
+        assert_eq!(st.last_input, Some(t0 + Duration::from_millis(400)));
+        // Then every 10 seconds, whatever the remote is doing
+        bin(&mut s, &[0x00, 1, 0, 1, 0], &b, t0 + Duration::from_secs(5));
+        s.tick(t0 + Duration::from_secs(11));
+        assert_eq!(s.out, [0x89, 0x01, 0x02]);
     }
 
     #[test]

@@ -109,7 +109,19 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 "clients": clients.iter().map(|c| json!({
                     "ip": c.ip.to_string(),
                     "since": c.since.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0),
+                    // Counts and times only, never which keys or text
+                    "lastInputMs": c.stats.last_input.map(|t| t.elapsed().as_millis() as u64),
+                    "latencyMs": c.stats.latency.map(|d| d.as_millis() as u64),
+                    "pointerShown": c.stats.pointer_shown,
+                    "pointer": c.stats.pointer,
+                    "wheel": c.stats.wheel,
+                    "keys": c.stats.keys,
+                    "text": c.stats.text,
                 })).collect::<Vec<_>>(),
+                "remotePointer": {
+                    "active": crate::win::cursor::status().0,
+                    "problem": crate::win::cursor::status().1,
+                },
                 "version": env!("CARGO_PKG_VERSION"),
                 "mode": ctx.host.mode(),
                 "hasToken": !shared.token().is_empty(),

@@ -17,12 +17,15 @@ struct State {
     saved_cursors: Vec<(SYSTEM_CURSOR_ID, HCURSOR)>,
     saved_speed: Option<i32>,
     saved_accel: Option<[i32; 3]>,
+    /// What went wrong the last time the remote's pointer was applied.
+    problem: Option<String>,
 }
 
 // Cursor handles are session-wide, not tied to a thread.
 unsafe impl Send for State {}
 
-static STATE: Mutex<State> = Mutex::new(State { users: 0, remote: std::ptr::null_mut(), saved_cursors: Vec::new(), saved_speed: None, saved_accel: None });
+static STATE: Mutex<State> =
+    Mutex::new(State { users: 0, remote: std::ptr::null_mut(), saved_cursors: Vec::new(), saved_speed: None, saved_accel: None, problem: None });
 
 fn load_remote_cursor() -> HCURSOR {
     let path = std::env::temp_dir().join(format!("MagicRemoteService-{}.cur", std::process::id()));
@@ -35,10 +38,11 @@ fn load_remote_cursor() -> HCURSOR {
 }
 
 fn apply(s: &mut State) {
+    let mut problems = Vec::new();
     if s.remote.is_null() {
         s.remote = load_remote_cursor();
         if s.remote.is_null() {
-            crate::log::warn(format!("Cannot load the remote's cursor: {}", super::last_error()));
+            problems.push(format!("cannot load the remote's cursor: {}", super::last_error()));
         }
     }
     unsafe {
@@ -47,14 +51,20 @@ fn apply(s: &mut State) {
                 let current = CopyIcon(LoadCursorW(std::ptr::null_mut(), id as usize as *const u16));
                 s.saved_cursors.push((id, current));
                 // SetSystemCursor takes ownership of the handle it is given
-                SetSystemCursor(CopyIcon(s.remote), id);
+                if SetSystemCursor(CopyIcon(s.remote), id) == 0 && problems.is_empty() {
+                    problems.push(format!("SetSystemCursor failed: {}", super::last_error()));
+                }
             }
         }
         if s.saved_speed.is_none() {
             let mut speed = 0i32;
             if SystemParametersInfoW(SPI_GETMOUSESPEED, 0, &mut speed as *mut i32 as _, 0) != 0 {
                 s.saved_speed = Some(speed);
-                SystemParametersInfoW(SPI_SETMOUSESPEED, 0, REMOTE_SPEED as usize as _, 0);
+                if SystemParametersInfoW(SPI_SETMOUSESPEED, 0, REMOTE_SPEED as usize as _, 0) == 0 {
+                    problems.push(format!("setting the pointer speed failed: {}", super::last_error()));
+                }
+            } else {
+                problems.push(format!("reading the pointer speed failed: {}", super::last_error()));
             }
         }
         if s.saved_accel.is_none() {
@@ -62,9 +72,16 @@ fn apply(s: &mut State) {
             if SystemParametersInfoW(SPI_GETMOUSE, 0, accel.as_mut_ptr() as _, 0) != 0 {
                 s.saved_accel = Some(accel);
                 let mut off = [0i32; 3];
-                SystemParametersInfoW(SPI_SETMOUSE, 0, off.as_mut_ptr() as _, 0);
+                if SystemParametersInfoW(SPI_SETMOUSE, 0, off.as_mut_ptr() as _, 0) == 0 {
+                    problems.push(format!("turning pointer acceleration off failed: {}", super::last_error()));
+                }
             }
         }
+    }
+    s.problem = (!problems.is_empty()).then(|| problems.join("; "));
+    match &s.problem {
+        Some(p) => crate::log::warn(format!("Remote pointer: {p}")),
+        None => crate::log::debug("Remote pointer applied"),
     }
 }
 
@@ -103,4 +120,10 @@ pub fn restore_all() {
     let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
     s.users = 0;
     restore(&mut s);
+}
+
+/// Whether a TV is showing its pointer now, and what failed the last time it was applied.
+pub fn status() -> (bool, Option<String>) {
+    let s = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    (s.users > 0, s.problem.clone())
 }

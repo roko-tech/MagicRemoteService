@@ -15,6 +15,7 @@ pub struct Client {
     pub id: u64,
     pub ip: IpAddr,
     pub since: SystemTime,
+    pub stats: crate::session::Stats,
 }
 
 type Listener = Box<dyn Fn(usize) + Send + Sync>;
@@ -111,7 +112,7 @@ impl Shared {
     pub fn add_client(&self, id: u64, ip: IpAddr) {
         let n = {
             let mut c = self.clients.lock().unwrap_or_else(|e| e.into_inner());
-            c.push(Client { id, ip, since: SystemTime::now() });
+            c.push(Client { id, ip, since: SystemTime::now(), stats: Default::default() });
             c.len()
         };
         self.notify(n);
@@ -124,6 +125,13 @@ impl Shared {
             c.len()
         };
         self.notify(n);
+    }
+
+    /// The connection's latest counters, for the web UI.
+    pub fn set_client_stats(&self, id: u64, stats: crate::session::Stats) {
+        if let Some(c) = self.clients.lock().unwrap_or_else(|e| e.into_inner()).iter_mut().find(|c| c.id == id) {
+            c.stats = stats;
+        }
     }
 
     pub fn clients(&self) -> Vec<Client> {

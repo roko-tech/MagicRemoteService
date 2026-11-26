@@ -95,6 +95,10 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .token-row{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:#aaa}
 .token-row span{flex:1}
 .token-row .on{color:#4ecca3}.token-row .off{color:#f87171}
+.diag{width:100%;border-collapse:collapse;font-size:13px}
+.diag th{color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:500;text-align:left;padding:4px 8px 6px 0}
+.diag td{padding:6px 8px 6px 0;border-top:1px solid #30363d;color:#e0e0e0}
+.diag .muted{color:#7d8590}
 .log .t{color:#555}.log .warn{color:#f59e0b}.log .error{color:#f87171}
 @media(max-width:700px){
   .main{flex-direction:column;align-items:center}
@@ -323,6 +327,14 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
   <h2>Pointer Display</h2>
   <div class="note" style="margin-top:0;margin-bottom:12px">With several monitors, pick the one each TV shows, so its pointer lands there.</div>
   <div id="disp-list" class="note">Loading TVs from ares-cli...</div>
+</div>
+</div>
+
+<div class="cfg-section" id="diag-section" style="display:none">
+<div class="cfg-panel">
+  <h2>Connected TVs</h2>
+  <div id="diag-list"></div>
+  <div class="note" id="diag-pointer" style="margin-top:10px"></div>
 </div>
 </div>
 
@@ -740,7 +752,63 @@ function sanitize(str) {
 /* ========================================
    Status polling (every 10s)
    ======================================== */
+function ago(ms) {
+  if (ms === null || ms === undefined) return "\u2014";
+  var s = Math.round(ms / 1000);
+  if (s < 60) return s + " s";
+  if (s < 3600) return Math.floor(s / 60) + " min";
+  return Math.floor(s / 3600) + " h " + Math.floor((s % 3600) / 60) + " min";
+}
+
+// One row per TV: what it is doing, never which keys or text
+function renderDiagnostics(d) {
+  var clients = d.clients || [];
+  if (!clients.length || !("latencyMs" in clients[0])) {
+    if (!("remotePointer" in d)) return;
+  }
+  document.getElementById("diag-section").style.display = "";
+  var list = document.getElementById("diag-list");
+  list.innerHTML = "";
+  if (!clients.length) {
+    list.className = "note";
+    list.textContent = "No TV connected.";
+  } else {
+    list.className = "";
+    var table = document.createElement("table");
+    table.className = "diag";
+    var head = table.insertRow();
+    ["TV", "Connected", "Last input", "Latency", "Pointer", "Moves / wheel / keys / text"].forEach(function(h) {
+      var th = document.createElement("th");
+      th.textContent = h;
+      head.appendChild(th);
+    });
+    clients.forEach(function(c) {
+      var row = table.insertRow();
+      [
+        c.ip,
+        ago(Date.now() - c.since),
+        c.lastInputMs === null ? "none yet" : ago(c.lastInputMs) + " ago",
+        c.latencyMs === null ? "measuring\u2026" : c.latencyMs + " ms",
+        c.pointerShown ? "shown" : "hidden",
+        c.pointer + " / " + c.wheel + " / " + c.keys + " / " + c.text
+      ].forEach(function(v, i) {
+        var td = row.insertCell();
+        td.textContent = v;
+        if (i === 2 && c.lastInputMs === null) td.className = "muted";
+      });
+    });
+    list.appendChild(table);
+  }
+  var rp = d.remotePointer || {};
+  var line = document.getElementById("diag-pointer");
+  line.style.color = rp.problem ? "#f87171" : "";
+  line.textContent = rp.problem
+    ? "Remote pointer on this PC: " + rp.problem
+    : rp.active ? "The remote's pointer is shown on this PC." : "The PC shows its usual pointer.";
+}
+
 function renderStatus(d) {
+  renderDiagnostics(d);
   var sb = document.getElementById("sb");
   var ips = (d.clients || []).map(function(c) { return sanitize(c.ip); });
   var safeIp = ips.length > 1 ? ips.length + " TVs (" + ips.join(", ") + ")" : sanitize(d.clientIp);
@@ -983,7 +1051,7 @@ loadPc();
 loadDisplays();
 loadLogs();
 
-// Poll status every 10s
-setInterval(updateStatus, 10000);
+// Refresh the status and the Connected TVs card every 3 s while the page is visible
+setInterval(function() { if (!document.hidden) updateStatus(); }, 3000);
 </script>
 </body></html>

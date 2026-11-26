@@ -236,11 +236,13 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
         display: platform.display_for(peer.ip()),
         name: name.clone(),
         heartbeat: Some(crate::session::HEARTBEAT_EVERY),
+        latency_probe: Some(crate::session::LATENCY_PROBE_EVERY),
     };
     let mut session = Session::new(platform.effects(), cfg, Instant::now());
     let mut monitor_seen = shared.monitor().0;
     let mut settings_seen = shared.settings_gen();
     let mut chunk = vec![0u8; 16 * 1024];
+    let mut stats_published = Instant::now();
     let reason = loop {
         let now = Instant::now();
         loop {
@@ -272,6 +274,11 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
             );
         }
         session.tick(now);
+        // The web UI's diagnostics: once a second is plenty
+        if now.duration_since(stats_published) >= Duration::from_secs(1) {
+            stats_published = now;
+            shared.set_client_stats(id, session.stats());
+        }
         if shared.stopping() {
             session.stop();
         }
