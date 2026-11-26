@@ -56,7 +56,7 @@ Then open the app on the TV, or switch the TV to the PC's input, and point.
 <details>
 <summary><b>Updating, uninstalling and installer options</b></summary>
 
-- **Update:** run the new release's `MagicRemoteService.exe`. Setup offers **Update**; your bindings, TV settings and registry settings are kept. Then click **Install it again** in step 3 so the TV gets the matching app.
+- **Update:** run the new release's `MagicRemoteService.exe`. Setup offers **Update**; your bindings, TV settings and registry settings are kept. When the release notes say the TV app changed, also click **Install it again** in step 3.
 - **Uninstall:** run `"C:\Program Files\MagicRemoteService\MagicRemoteService.exe" uninstall` from an administrator prompt, then remove the app from the TV's app list.
 - **Installing from a console:** the release zip has `install.bat`, which does the same steps by asking questions. Choose "PC service only" or "TV app only" in its menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4`, for example `install.bat -Part Tv -Hdmi 4`.
 - **From source:** install [Rust](https://rustup.rs) (MSVC toolchain), clone the repository and run `install.bat`; it builds the exe with `cargo` if there isn't one yet.
