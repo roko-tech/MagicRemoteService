@@ -12,33 +12,33 @@ use std::time::Duration;
 
 macro_rules! tv_files {
     ($($path:literal),* $(,)?) => {
-        &[$(($path, include_bytes!(concat!("../MagicRemoteService/Resources/TV/", $path)) as &[u8])),*]
+        &[$(($path, include_bytes!(concat!("../tv/", $path)) as &[u8])),*]
     };
 }
 
 /// TV sources as `install.bat` packages them (`config.json` comes from `tv-config.json`).
 static FILES: &[(&str, &[u8])] = tv_files![
-    "MagicRemoteService/appinfo.json",
-    "MagicRemoteService/appstring.json",
-    "MagicRemoteService/index.html",
-    "MagicRemoteService/main.js",
-    "MagicRemoteService/icon.png",
-    "MagicRemoteService/miniIcon.png",
-    "MagicRemoteService/largeIcon.png",
-    "MagicRemoteService/cursor.png",
-    "MagicRemoteService/MuseoSans-Medium.ttf",
-    "MagicRemoteService/webOSTVjs-1.2.12/webOSTV-dev.js",
-    "MagicRemoteService/webOSTVjs-1.2.12/webOSTV.js",
-    "MagicRemoteService/resources/fr/appinfo.json",
-    "MagicRemoteService/resources/fr/appstring.json",
-    "MagicRemoteService/resources/es/appinfo.json",
-    "MagicRemoteService/resources/es/appstring.json",
-    "Service/package.json",
-    "Service/service.js",
-    "Service/services.json",
+    "app/appinfo.json",
+    "app/appstring.json",
+    "app/index.html",
+    "app/main.js",
+    "app/icon.png",
+    "app/miniIcon.png",
+    "app/largeIcon.png",
+    "app/cursor.png",
+    "app/MuseoSans-Medium.ttf",
+    "app/webOSTVjs-1.2.12/webOSTV-dev.js",
+    "app/webOSTVjs-1.2.12/webOSTV.js",
+    "app/resources/fr/appinfo.json",
+    "app/resources/fr/appstring.json",
+    "app/resources/es/appinfo.json",
+    "app/resources/es/appstring.json",
+    "service/package.json",
+    "service/service.js",
+    "service/services.json",
 ];
 
-static NODE_POLYFILL: &[u8] = include_bytes!("../MagicRemoteService/Resources/node-polyfill.js");
+static NODE_POLYFILL: &[u8] = include_bytes!("../resources/node-polyfill.js");
 const TEMPLATE_APP_ID: &str = "com.cathwyler.magicremoteservice";
 const ARES_TIMEOUT: Duration = Duration::from_secs(180);
 
@@ -65,19 +65,19 @@ pub fn render(app_id: &str, version: &str, input_name: &str, config: &[u8]) -> V
         .map(|(path, data)| {
             let text = || String::from_utf8_lossy(data).into_owned();
             let data = match *path {
-                "MagicRemoteService/appinfo.json" => text()
+                "app/appinfo.json" => text()
                     .replace(&format!("\"id\": \"{TEMPLATE_APP_ID}\""), &format!("\"id\": \"{app_id}\""))
                     .replace("\"version\": \"1.0.0\"", &format!("\"version\": \"{version}\""))
                     .replace("\"appDescription\": \"HDMI\"", &format!("\"appDescription\": {}", Value::from(input_name)))
                     .into_bytes(),
-                "Service/package.json" | "Service/services.json" => text().replace(&format!("{TEMPLATE_APP_ID}.service"), &service_id).into_bytes(),
+                "service/package.json" | "service/services.json" => text().replace(&format!("{TEMPLATE_APP_ID}.service"), &service_id).into_bytes(),
                 _ => data.to_vec(),
             };
             (path.to_string(), data)
         })
         .collect();
-    out.push(("MagicRemoteService/config.json".into(), config.to_vec()));
-    out.push(("Service/config.json".into(), config.to_vec()));
+    out.push(("app/config.json".into(), config.to_vec()));
+    out.push(("service/config.json".into(), config.to_vec()));
     out
 }
 
@@ -209,7 +209,7 @@ fn package(ares: &Ares, build: &Path, app_id: &str, version: &str, input_name: &
     })?
     .map_err(|e| format!("Cannot write the TV sources: {e}"))?;
     let q = |p: &Path| proc::quote(&p.to_string_lossy());
-    ares.run("ares-package", &format!("{} -n -o {} {}", q(&build.join("MagicRemoteService")), q(build), q(&build.join("Service"))))
+    ares.run("ares-package", &format!("{} -n -o {} {}", q(&build.join("app")), q(build), q(&build.join("service"))))
         .map_err(|e| format!("ares-package failed: {e}"))?;
     let ipk = build.join(format!("{app_id}_{version}_all.ipk"));
     if ares.as_user(|| ipk.is_file())? {
@@ -276,15 +276,15 @@ mod tests {
     fn renders_ids_version_and_config() {
         let files = render("com.cathwyler.magicremoteservice.hdmi4", "3.0.0", "HDMI \"4\"", b"{\"token\":\"x\"}");
         let get = |p: &str| String::from_utf8(files.iter().find(|(n, _)| n == p).unwrap().1.clone()).unwrap();
-        let appinfo: Value = serde_json::from_str(&get("MagicRemoteService/appinfo.json")).unwrap();
+        let appinfo: Value = serde_json::from_str(&get("app/appinfo.json")).unwrap();
         assert_eq!(appinfo["id"], "com.cathwyler.magicremoteservice.hdmi4");
         assert_eq!(appinfo["version"], "3.0.0");
         assert_eq!(appinfo["appDescription"], "HDMI \"4\"");
-        let services: Value = serde_json::from_str(&get("Service/services.json")).unwrap();
+        let services: Value = serde_json::from_str(&get("service/services.json")).unwrap();
         assert_eq!(services["id"], "com.cathwyler.magicremoteservice.hdmi4.service");
         assert_eq!(services["services"][0]["name"], "com.cathwyler.magicremoteservice.hdmi4.service");
-        assert!(get("Service/package.json").contains("\"com.cathwyler.magicremoteservice.hdmi4.service\""));
-        assert_eq!(get("Service/config.json"), "{\"token\":\"x\"}");
+        assert!(get("service/package.json").contains("\"com.cathwyler.magicremoteservice.hdmi4.service\""));
+        assert_eq!(get("service/config.json"), "{\"token\":\"x\"}");
         assert_eq!(files.len(), FILES.len() + 2);
     }
 

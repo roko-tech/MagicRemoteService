@@ -10,7 +10,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
-pub static SETTINGS_HTML: &str = include_str!("../settings-ui.html");
+pub static SETTINGS_HTML: &str = include_str!("../resources/settings-ui.html");
 const MAX_BODY: usize = 1024 * 1024;
 
 /// What the API needs from the running program, so tests can stand in for it.
