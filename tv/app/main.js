@@ -80,8 +80,11 @@ const MessageType = {
 	Key: 0x04,
 	Unicode: 0x05,
 	Shutdown: 0x06,
-	Volume: 0x07
+	Volume: 0x07,
+	Hello: 0x08
 }
+// Hello capabilities: this app applies settings the PC sends (message 0x04)
+var CAN_LIVE_SETTINGS = 0x01;
 
 var BUFFER_RECONNECT_INTERVAL = 5000;
 var SENSOR_DEAD_ZONE = 0.04;
@@ -121,6 +124,7 @@ var aSensor = {
 	dSpeed: 9,
 };
 var dCursorSpeed = 1.0;
+var dScrollSpeed = 1.0;
 var strToken = "";
 var strAppId = "com.cathwyler.magicremoteservice";
 
@@ -147,6 +151,7 @@ function LoadConfig() {
 			if(cfg.inputDirect !== undefined) bInputDirect = cfg.inputDirect;
 			if(cfg.longClick) uiLongClick = cfg.longClick;
 			if(cfg.cursorSpeed) dCursorSpeed = cfg.cursorSpeed;
+			if(cfg.scrollSpeed) dScrollSpeed = cfg.scrollSpeed;
 			if(cfg.token) strToken = cfg.token;
 		}
 	} catch(e) {
@@ -918,7 +923,7 @@ function SubscriptionDomEvent() {
 	}
 	if(arrVersion[0] > 1) {
 		deVideo.addEventListener("wheel", function(inEvent) {
-			dScrollVelocity += inEvent.deltaY * SCROLL_VELOCITY_MULTIPLIER;
+			dScrollVelocity += inEvent.deltaY * SCROLL_VELOCITY_MULTIPLIER * dScrollSpeed;
 			if(!iScrollInterval) {
 				iScrollInterval = setInterval(SmoothScroll, SCROLL_FRAME_INTERVAL);
 			}
@@ -926,7 +931,7 @@ function SubscriptionDomEvent() {
 		});
 	} else {
 		deVideo.addEventListener("mousewheel", function(inEvent) {
-			dScrollVelocity += inEvent.wheelDeltaY * SCROLL_VELOCITY_MULTIPLIER;
+			dScrollVelocity += inEvent.wheelDeltaY * SCROLL_VELOCITY_MULTIPLIER * dScrollSpeed;
 			if(!iScrollInterval) {
 				iScrollInterval = setInterval(SmoothScroll, SCROLL_FRAME_INTERVAL);
 			}
@@ -1212,6 +1217,7 @@ function SocketOpen() {
 		SocketOpened();
 		RetryStop();
 		HeartbeatStart();
+		SendHello();
 		if(ScreenExist(deScreenOpen)) {
 			ScreenCancel(deScreenOpen);
 		}
@@ -1264,6 +1270,9 @@ function SocketOpen() {
 				case 0x03:
 					if(e.data.byteLength < 2) break;
 					RestoreVolume(dwData.getInt8(1));
+					break;
+				case 0x04:
+					ApplyLiveSettings(e.data);
 					break;
 				default:
 					Error(oString.strActionUnprocessed);
@@ -1386,6 +1395,38 @@ function SendWheel(wWheel) {
 			Error(oString.strSendWheelFailure + " [", eError, "]@" + strIP + ":" + uiPort + " ", wWheel);
 		}
 	}
+}
+
+// Tells the PC what this app understands; a PC that does not know the message ignores it
+var bufHello = new ArrayBuffer(2);
+var dwHello = new DataView(bufHello);
+dwHello.setUint8(0, MessageType.Hello);
+dwHello.setUint8(1, CAN_LIVE_SETTINGS);
+function SendHello() {
+	if(socClient !== null && socClient.readyState === WebSocket.OPEN) {
+		try {
+			socClient.send(bufHello);
+		} catch(eError) {
+			Error("Hello [", eError, "]@" + strIP + ":" + uiPort);
+		}
+	}
+}
+
+// Settings saved on the PC while the app runs: JSON after the 0x04 byte. Only positive numbers
+// are applied; anything else keeps the current value.
+function ApplyLiveSettings(buf) {
+	var o;
+	try {
+		o = JSON.parse(String.fromCharCode.apply(null, new Uint8Array(buf, 1)));
+	} catch(eError) {
+		Error("Live settings [", eError, "]");
+		return;
+	}
+	var num = function(v) { return typeof v === "number" && v > 0 ? v : 0; };
+	if(num(o.cursorSpeed)) dCursorSpeed = o.cursorSpeed;
+	if(num(o.longClick)) uiLongClick = o.longClick;
+	if(num(o.scrollSpeed)) dScrollSpeed = o.scrollSpeed;
+	LogIfDebug("Live settings", o);
 }
 
 var bufVisible = new ArrayBuffer(2);

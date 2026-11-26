@@ -299,6 +299,8 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
     <div class="field"><label>Subnet Mask</label><input type="text" id="cfg-mask" readonly style="color:#4ecca3"></div>
     <div class="field"><label>Port</label><input type="number" id="cfg-port" value="41230" min="1" max="65535"></div>
     <div class="field"><label>Cursor Speed</label><input type="number" id="cfg-speed" value="1.0" step="0.1" min="0.1" max="5.0"></div>
+    <div class="field"><label>Scroll Speed</label><input type="number" id="cfg-scroll" value="1.0" step="0.1" min="0.2" max="5.0"></div>
+    <div class="field"><label>Long Press (ms)</label><input type="number" id="cfg-longclick" value="1500" step="100" min="300" max="5000"></div>
   </div>
   <div class="cfg-actions">
     <button class="btn-apply" id="btn-cfg-save" onclick="saveConfig()">Save Config</button>
@@ -750,6 +752,10 @@ function saveConfig() {
   if (isNaN(port) || port < 1 || port > 65535) { showToast("Invalid port (1-65535)", "err"); return; }
   var speed = parseFloat(document.getElementById("cfg-speed").value);
   if (isNaN(speed) || speed < 0.1 || speed > 5.0) { showToast("Speed must be 0.1-5.0", "err"); return; }
+  var scroll = parseFloat(document.getElementById("cfg-scroll").value);
+  if (isNaN(scroll) || scroll < 0.2 || scroll > 5.0) { showToast("Scroll speed must be 0.2-5.0", "err"); return; }
+  var longClick = parseInt(document.getElementById("cfg-longclick").value, 10);
+  if (isNaN(longClick) || longClick < 300 || longClick > 5000) { showToast("Long press must be 300-5000 ms", "err"); return; }
 
   // Without the saved config, a save would drop the token and the fields this form doesn't show
   if (!savedCfg) { showToast("Saved config not loaded yet. Reload the page and try again.", "err"); return; }
@@ -761,12 +767,20 @@ function saveConfig() {
     ip: document.getElementById("cfg-ip").value, port: port,
     mask: document.getElementById("cfg-mask").value, mac: document.getElementById("cfg-mac").value,
     appId: "com.cathwyler.magicremoteservice.hdmi" + h,
-    cursorSpeed: speed
+    cursorSpeed: speed, scrollSpeed: scroll, longClick: longClick
   });
+  // The speeds and long press reach running TV apps at once; the rest is built into the app
+  var needsReinstall = ["inputId", "ip", "port", "mask", "mac", "appId"].some(function(k) { return cfg[k] !== savedCfg[k]; });
 
   setLoading("btn-cfg-save", true);
   postJson("/api/config", cfg)
-    .then(function() { savedCfg = cfg; showToast("Config saved! Reinstall TV app to apply.", "ok"); setLoading("btn-cfg-save", false); })
+    .then(function() {
+      savedCfg = cfg;
+      showToast(needsReinstall
+        ? "Config saved. Reinstall the TV app to apply the HDMI input, IP or port."
+        : "Saved. Connected TVs with the latest app use it now; older ones after Reinstall TV App.", "ok");
+      setLoading("btn-cfg-save", false);
+    })
     .catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-cfg-save", false); });
 }
 
@@ -874,7 +888,7 @@ function renderDiagnostics(d) {
     var table = document.createElement("table");
     table.className = "diag";
     var head = table.insertRow();
-    ["TV", "Connected", "Last input", "Latency", "Pointer", "Moves / wheel / keys / text"].forEach(function(h) {
+    ["TV", "Connected", "Last input", "Latency", "Pointer", "Moves / wheel / keys / text", "Live settings"].forEach(function(h) {
       var th = document.createElement("th");
       th.textContent = h;
       head.appendChild(th);
@@ -887,11 +901,12 @@ function renderDiagnostics(d) {
         c.lastInputMs === null ? "none yet" : ago(c.lastInputMs) + " ago",
         c.latencyMs === null ? "measuring\u2026" : c.latencyMs + " ms",
         c.pointerShown ? "shown" : "hidden",
-        c.pointer + " / " + c.wheel + " / " + c.keys + " / " + c.text
+        c.pointer + " / " + c.wheel + " / " + c.keys + " / " + c.text,
+        c.liveSettings ? "yes" : "after Reinstall TV App"
       ].forEach(function(v, i) {
         var td = row.insertCell();
         td.textContent = v;
-        if (i === 2 && c.lastInputMs === null) td.className = "muted";
+        if ((i === 2 && c.lastInputMs === null) || (i === 6 && !c.liveSettings)) td.className = "muted";
       });
     });
     list.appendChild(table);
@@ -1078,6 +1093,12 @@ fetch("/api/config")
     }
     if (cfg && cfg.cursorSpeed) {
       document.getElementById("cfg-speed").value = cfg.cursorSpeed;
+    }
+    if (cfg && cfg.scrollSpeed) {
+      document.getElementById("cfg-scroll").value = cfg.scrollSpeed;
+    }
+    if (cfg && cfg.longClick) {
+      document.getElementById("cfg-longclick").value = cfg.longClick;
     }
   })
   .catch(function() {})

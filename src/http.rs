@@ -113,6 +113,7 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                     "lastInputMs": c.stats.last_input.map(|t| t.elapsed().as_millis() as u64),
                     "latencyMs": c.stats.latency.map(|d| d.as_millis() as u64),
                     "pointerShown": c.stats.pointer_shown,
+                    "liveSettings": c.stats.live_settings,
                     "pointer": c.stats.pointer,
                     "wheel": c.stats.wheel,
                     "keys": c.stats.keys,

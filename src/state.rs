@@ -25,6 +25,9 @@ pub struct Shared {
     settings: RwLock<PcSettings>,
     bindings: RwLock<Arc<Compiled>>,
     token: RwLock<String>,
+    /// Live TV settings (JSON) and a counter that changes when they are saved.
+    tv_settings: RwLock<String>,
+    tv_settings_gen: AtomicU64,
     scroll_exclude: RwLock<Vec<String>>,
     clients: Mutex<Vec<Client>>,
     on_clients: Mutex<Option<Listener>>,
@@ -42,6 +45,8 @@ impl Shared {
             settings: RwLock::new(settings),
             bindings: RwLock::new(Arc::new(Compiled::default())),
             token: RwLock::new(String::new()),
+            tv_settings: RwLock::new(String::new()),
+            tv_settings_gen: AtomicU64::new(0),
             scroll_exclude: RwLock::new(Vec::new()),
             clients: Mutex::new(Vec::new()),
             on_clients: Mutex::new(None),
@@ -84,10 +89,22 @@ impl Shared {
         *self.scroll_exclude.write().unwrap_or_else(|e| e.into_inner()) = settings::scroll_exclude(doc.as_ref());
     }
 
-    /// Re-reads the device token from `tv-config.json`.
+    /// Re-reads the device token and the live TV settings from `tv-config.json`.
     pub fn reload_tv_config(&self) {
-        let token = settings::token(settings::read_json(&self.files.tv_config()).as_ref());
-        *self.token.write().unwrap_or_else(|e| e.into_inner()) = token;
+        let config = settings::read_json(&self.files.tv_config());
+        *self.token.write().unwrap_or_else(|e| e.into_inner()) = settings::token(config.as_ref());
+        *self.tv_settings.write().unwrap_or_else(|e| e.into_inner()) = settings::live_tv_settings(config.as_ref()).to_string();
+        self.tv_settings_gen.fetch_add(1, Ordering::Release);
+    }
+
+    /// Changes each time the live TV settings are saved.
+    pub fn tv_settings_gen(&self) -> u64 {
+        self.tv_settings_gen.load(Ordering::Acquire)
+    }
+
+    /// The live TV settings as JSON.
+    pub fn tv_settings(&self) -> String {
+        self.tv_settings.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
     pub fn bindings(&self) -> Arc<Compiled> {

@@ -71,7 +71,7 @@ Open **http://localhost:41231** on the PC. It is only reachable from the PC itse
 - **Remote configurator** — click any button on the visual remote to map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a shell command, or a special action (shut down the PC, toggle the TV keyboard). Bindings apply as soon as they're saved. Hover a button to see what it does; green dots mark custom bindings. "Reset All Bindings" restores the defaults.
 - **Per-app profiles** — under "Bindings for", create a profile for some apps (their process names, as in Task Manager's Details tab, such as `vlc`). Buttons you change in it act differently while one of those apps is in front; the others keep their normal binding.
 - **Smooth scroll exclusions** — apps (such as media players) that use the wheel for volume get single scroll steps instead of momentum. Add their process names.
-- **TV app configuration** — the HDMI input the PC is on, the PC's IP, MAC (for Wake-on-LAN) and subnet, the port and the cursor speed. **Reinstall TV App** packages the TV app built into the service with this configuration, then installs and launches it on the webOS CLI's default TV. The CLI runs as the user signed in at the PC.
+- **TV app configuration** — the HDMI input the PC is on, the PC's IP, MAC (for Wake-on-LAN) and subnet, the port, and the cursor speed, scroll speed and long-press time. The last three reach connected TVs as soon as you save (with a TV app from this version on); the rest need **Reinstall TV App**, which packages the TV app built into the service with this configuration and installs and launches it on the webOS CLI's default TV. The CLI runs as the user signed in at the PC.
 - **PC** — the TV port, start with Windows, and the shutdown timeouts:
   - **Inactivity:** with the TV connected and no remote input for that long, Windows shuts down. Using the PC in the last five minutes cancels it; the remote counts.
   - **Monitor off:** the same countdown, starting when the PC's monitor turns off.
@@ -106,7 +106,7 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 
 **Settings** live in `C:\Program Files\MagicRemoteService` (`bindings.json`, `tv-config.json`) and in `HKLM\SOFTWARE\WOW6432Node\MagicRemoteService` (port, timeouts, per-TV display). **Logs** go to Event Viewer (Windows Logs → Application, source MagicRemoteService) and to the web UI's Recent Events.
 
-**On the TV**, the web app (`tv/app`) captures the remote and talks to the PC. A small JS service (`tv/service`) finds the PC on the network, sends Wake-on-LAN, and relaunches the app when the PC input is selected. The app reads its settings from a `config.json` packaged from `tv-config.json`.
+**On the TV**, the web app (`tv/app`) captures the remote and talks to the PC. A small JS service (`tv/service`) finds the PC on the network, sends Wake-on-LAN, and relaunches the app when the PC input is selected. The app reads its settings from a `config.json` packaged from `tv-config.json`; the speeds and long-press time also come over the connection when they change.
 
 ## Troubleshooting
 

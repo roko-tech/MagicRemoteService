@@ -172,6 +172,18 @@ pub fn token(tv_config: Option<&Value>) -> String {
     tv_config.and_then(|c| c.get("token")).and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
+/// Settings a TV app applies while running: pointer speed, long-press time and scroll speed. Out
+/// of range values are clamped rather than refused (the installer posts back whatever is saved),
+/// and never 0, which the TV app would ignore.
+pub fn live_tv_settings(tv_config: Option<&Value>) -> Value {
+    let num = |k: &str, default: f64, lo: f64, hi: f64| tv_config.and_then(|c| c.get(k)).and_then(Value::as_f64).unwrap_or(default).clamp(lo, hi);
+    serde_json::json!({
+        "cursorSpeed": num("cursorSpeed", 1.0, 0.1, 5.0),
+        "longClick": num("longClick", 1500.0, 300.0, 5000.0).round() as u64,
+        "scrollSpeed": num("scrollSpeed", 1.0, 0.2, 5.0),
+    })
+}
+
 /// The TV config as the API shows it: everything but the token, plus whether one is set.
 /// The token stays inside the service: only the TV app it deploys needs it.
 pub fn config_for_api(saved: Option<Value>) -> Value {
@@ -237,6 +249,14 @@ mod tests {
         assert_eq!(Value::Object(merge_posted_config(posted, Some(&saved))), json!({"token": ""}));
         let Value::Object(posted) = json!({"appId": "z"}) else { panic!() };
         assert_eq!(Value::Object(merge_posted_config(posted, None)), json!({"appId": "z"}));
+    }
+
+    #[test]
+    fn live_tv_settings_have_defaults_and_are_clamped() {
+        assert_eq!(live_tv_settings(None), json!({"cursorSpeed": 1.0, "longClick": 1500, "scrollSpeed": 1.0}));
+        let c = json!({"cursorSpeed": 0, "longClick": 99999, "scrollSpeed": 2.5, "token": "t"});
+        assert_eq!(live_tv_settings(Some(&c)), json!({"cursorSpeed": 0.1, "longClick": 5000, "scrollSpeed": 2.5}));
+        assert_eq!(live_tv_settings(Some(&json!({"cursorSpeed": "fast"})))["cursorSpeed"], 1.0);
     }
 
     #[test]

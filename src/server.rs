@@ -244,6 +244,7 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
     let mut session = Session::new(platform.effects(), cfg, Instant::now());
     let mut monitor_seen = shared.monitor().0;
     let mut settings_seen = shared.settings_gen();
+    let mut tv_settings_seen = shared.tv_settings_gen();
     let mut chunk = vec![0u8; 16 * 1024];
     let mut stats_published = Instant::now();
     let reason = loop {
@@ -262,6 +263,12 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
                 }
             }
         }
+        // Live TV settings: when the app asks for them, and again whenever they are saved
+        let tv_gen = shared.tv_settings_gen();
+        if session.take_settings_due() || (tv_gen != tv_settings_seen && session.accepts_settings()) {
+            session.send_settings(&shared.tv_settings());
+        }
+        tv_settings_seen = tv_gen;
         let (gen, on) = shared.monitor();
         if gen != monitor_seen {
             monitor_seen = gen;

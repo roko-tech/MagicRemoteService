@@ -235,6 +235,25 @@ fn a_tv_session_end_to_end() {
 }
 
 #[test]
+fn live_settings_reach_a_tv_app_that_says_hello() {
+    let rig = Rig::new("live", Some(json!({ "cursorSpeed": 2.5 })));
+    let (mut tv, status) = upgrade(rig.port(), "/");
+    assert_eq!(status, "HTTP/1.1 101 Switching Protocols");
+    let settings = |tv: &mut TcpStream| {
+        let (op, p) = recv(tv);
+        assert_eq!((op, p[0]), (0x2, 0x04));
+        serde_json::from_slice::<Value>(&p[1..]).unwrap()
+    };
+    // Right after the hello
+    send(&mut tv, 0x2, &[0x08, 0x01]);
+    assert_eq!(settings(&mut tv), json!({ "cursorSpeed": 2.5, "longClick": 1500, "scrollSpeed": 1.0 }));
+    // And again when they are saved while it is connected
+    std::fs::write(rig.dir.join("tv-config.json"), json!({ "cursorSpeed": 2.5, "longClick": 800, "scrollSpeed": 3 }).to_string()).unwrap();
+    rig.shared.reload_tv_config();
+    assert_eq!(settings(&mut tv), json!({ "cursorSpeed": 2.5, "longClick": 800, "scrollSpeed": 3.0 }));
+}
+
+#[test]
 fn close_frames_are_echoed_and_stopping_says_goodbye() {
     let mut rig = Rig::new("close", None);
     let (mut a, _) = upgrade(rig.port(), "/");

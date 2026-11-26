@@ -19,7 +19,13 @@ pub enum ClientMessage {
     Shutdown,
     /// 0x07: the TV volume moved by this many steps.
     Volume(i8),
+    /// 0x08: sent by TV apps that understand more than the original protocol, right after
+    /// connecting. Bit 0x01: it applies live settings ([`settings_payload`]).
+    Hello { capabilities: u8 },
 }
+
+/// `Hello` capability: the TV app applies settings the PC sends.
+pub const CAN_LIVE_SETTINGS: u8 = 0x01;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {
@@ -42,7 +48,7 @@ pub fn parse(p: &[u8]) -> Result<ClientMessage, ParseError> {
     let need = match kind {
         0x00 | 0x01 => 5,
         0x02 | 0x05 => 3,
-        0x03 | 0x07 => 2,
+        0x03 | 0x07 | 0x08 => 2,
         0x04 => 4,
         0x06 => 1,
         other => return Err(ParseError::Unknown(other)),
@@ -58,7 +64,8 @@ pub fn parse(p: &[u8]) -> Result<ClientMessage, ParseError> {
         0x04 => ClientMessage::Key { code: u16_at(p, 1), down: p[3] & 0x01 == 0x01 },
         0x05 => ClientMessage::Unicode(u16_at(p, 1)),
         0x06 => ClientMessage::Shutdown,
-        _ => ClientMessage::Volume(p[1] as i8),
+        0x07 => ClientMessage::Volume(p[1] as i8),
+        _ => ClientMessage::Hello { capabilities: p[1] },
     })
 }
 
@@ -70,6 +77,15 @@ pub fn action_payload(action: u8) -> [u8; 1] {
 /// Payload that tells the TV to undo a volume step the PC took over.
 pub fn restore_volume_payload(step: i8) -> [u8; 2] {
     [0x03, step as u8]
+}
+
+/// Payload carrying live TV settings as JSON (0x04), only for TV apps that said they apply them:
+/// older apps show an error for message types they don't know.
+pub fn settings_payload(json: &str) -> Vec<u8> {
+    let mut p = Vec::with_capacity(json.len() + 1);
+    p.push(0x04);
+    p.extend_from_slice(json.as_bytes());
+    p
 }
 
 /// Ping payload asking the TV whether someone is still watching; it answers with pong `01`.
@@ -91,6 +107,7 @@ mod tests {
         assert_eq!(parse(&[0x05, 0xE9, 0x00]), Ok(ClientMessage::Unicode(0x00E9)));
         assert_eq!(parse(&[0x06]), Ok(ClientMessage::Shutdown));
         assert_eq!(parse(&[0x07, 0xFF]), Ok(ClientMessage::Volume(-1)));
+        assert_eq!(parse(&[0x08, 0x01]), Ok(ClientMessage::Hello { capabilities: CAN_LIVE_SETTINGS }));
     }
 
     #[test]
@@ -99,12 +116,14 @@ mod tests {
         assert_eq!(parse(&[0x00, 1, 2, 3]), Err(ParseError::TooShort(0x00)));
         assert_eq!(parse(&[0x04, 1, 2]), Err(ParseError::TooShort(0x04)));
         assert_eq!(parse(&[0x07]), Err(ParseError::TooShort(0x07)));
-        assert_eq!(parse(&[0x08]), Err(ParseError::Unknown(0x08)));
+        assert_eq!(parse(&[0x08]), Err(ParseError::TooShort(0x08)));
+        assert_eq!(parse(&[0x09]), Err(ParseError::Unknown(0x09)));
     }
 
     #[test]
     fn server_payloads_match_what_main_js_reads() {
         assert_eq!(action_payload(0x02), [0x02]);
         assert_eq!(restore_volume_payload(-3), [0x03, 0xFD]);
+        assert_eq!(settings_payload("{}"), b"\x04{}");
     }
 }

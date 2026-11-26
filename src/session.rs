@@ -33,6 +33,8 @@ pub struct Stats {
     /// Last measured round trip to the TV.
     pub latency: Option<Duration>,
     pub pointer_shown: bool,
+    /// The TV app applies live settings (it is recent enough).
+    pub live_settings: bool,
 }
 pub const PONG_TIMEOUT: Duration = Duration::from_secs(5);
 pub const INPUT_POLL: Duration = Duration::from_millis(500);
@@ -100,6 +102,9 @@ pub struct Session<E: Effects> {
     /// Remote keys held down, with the release sequence they were pressed with.
     held: HashMap<u16, Vec<InputEvent>>,
     pointer_shown: bool,
+    /// The TV app said it applies live settings; `settings_due` until it has been sent them.
+    live_settings: bool,
+    settings_due: bool,
     ping_at: Option<Instant>,
     heartbeat_at: Option<Instant>,
     probe_at: Option<Instant>,
@@ -127,6 +132,8 @@ impl<E: Effects> Session<E> {
             closed: None,
             held: HashMap::new(),
             pointer_shown: false,
+            live_settings: false,
+            settings_due: false,
             ping_at: Some(now + PING_EVERY),
             heartbeat_at,
             probe_at,
@@ -218,7 +225,9 @@ impl<E: Effects> Session<E> {
                 return;
             }
         };
-        self.stats.last_input = Some(now);
+        if !matches!(msg, ClientMessage::Hello { .. }) {
+            self.stats.last_input = Some(now);
+        }
         match msg {
             ClientMessage::PositionRelative { .. } | ClientMessage::PositionAbsolute { .. } => self.stats.pointer += 1,
             ClientMessage::Wheel { .. } => self.stats.wheel += 1,
@@ -252,6 +261,10 @@ impl<E: Effects> Session<E> {
             ClientMessage::Shutdown => {
                 log::info(format!("{}: shutdown requested from the TV", self.cfg.name));
                 self.fx.shutdown(ShutdownKind::Now);
+            }
+            ClientMessage::Hello { capabilities } => {
+                self.live_settings = capabilities & protocol::CAN_LIVE_SETTINGS != 0;
+                self.settings_due = self.live_settings;
             }
             ClientMessage::Volume(step) => {
                 // A TV volume step: when Windows plays on the TV it stays there,
@@ -400,8 +413,24 @@ impl<E: Effects> Session<E> {
             .min()
     }
 
+    /// True once after the TV app said it applies live settings: send them now.
+    pub fn take_settings_due(&mut self) -> bool {
+        std::mem::take(&mut self.settings_due)
+    }
+
+    pub fn accepts_settings(&self) -> bool {
+        self.live_settings
+    }
+
+    /// Sends live TV settings (JSON), if this TV app applies them; older ones would show an error.
+    pub fn send_settings(&mut self, json: &str) {
+        if self.live_settings {
+            self.send(ws::OP_BINARY, &protocol::settings_payload(json));
+        }
+    }
+
     pub fn stats(&self) -> Stats {
-        Stats { pointer_shown: self.pointer_shown, ..self.stats }
+        Stats { pointer_shown: self.pointer_shown, live_settings: self.live_settings, ..self.stats }
     }
 
     /// The connection is gone: release what the remote left pressed and give the pointer back,
@@ -742,6 +771,25 @@ mod tests {
         bin(&mut s, &[0x04, 0x96, 0x01, 0x01], &b, t0);
         assert!(take(&other).is_empty());
         assert_eq!(s.out, [0x82, 0x01, 0x02], "elsewhere Blue still toggles the TV keyboard");
+    }
+
+    #[test]
+    fn live_settings_go_only_to_tv_apps_that_asked() {
+        let (fake, t0, b) = (Fake::default(), Instant::now(), Compiled::new(&defaults()));
+        let mut s = session(&fake, SessionConfig::default(), t0);
+        // An older TV app never says hello: nothing is sent, ever
+        s.send_settings("{}");
+        assert!(!s.take_settings_due() && s.out.is_empty());
+        bin(&mut s, &[0x08, 0x00], &b, t0);
+        assert!(!s.take_settings_due() && !s.accepts_settings());
+        // A recent one asks once; it gets settings now and whenever they change
+        bin(&mut s, &[0x08, protocol::CAN_LIVE_SETTINGS], &b, t0);
+        assert!(s.take_settings_due());
+        assert!(!s.take_settings_due());
+        s.send_settings(r#"{"cursorSpeed":2}"#);
+        assert_eq!(s.out, [&[0x82, 18, 0x04][..], br#"{"cursorSpeed":2}"#].concat());
+        assert!(s.stats().live_settings);
+        assert_eq!(s.stats().last_input, None, "a hello is not remote input");
     }
 
     #[test]
