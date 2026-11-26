@@ -5,7 +5,7 @@ use super::wide;
 use std::sync::Mutex;
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
-static CURSOR_FILE: &[u8] = include_bytes!("../../MagicRemoteService/Resources/MagicRemoteService.cur");
+static CURSOR_FILE: &[u8] = include_bytes!("../../resources/MagicRemoteService.cur");
 
 const IDS: [SYSTEM_CURSOR_ID; 8] = [OCR_NORMAL, OCR_IBEAM, OCR_WAIT, OCR_CROSS, OCR_UP, OCR_HAND, OCR_NO, OCR_APPSTARTING];
 const REMOTE_SPEED: i32 = 10;

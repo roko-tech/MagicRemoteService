@@ -8,7 +8,18 @@ Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRem
 
 ## Install
 
-### Automated (recommended)
+You need:
+- [Developer Mode](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) on the TV, with the TV added to the webOS CLI on the PC (the installer explains how when it finds none);
+- [Node.js](https://nodejs.org/) and `@webos-tools/cli` on the PC to deploy the TV app (the installer offers to install both).
+
+### From a release (recommended)
+
+1. Download `MagicRemoteService-<version>.zip` from [Releases](https://github.com/roko-tech/MagicRemoteService/releases) and extract it.
+2. Double-click `install.bat` and accept the administrator prompt.
+
+### From source
+
+Install [Rust](https://rustup.rs) (MSVC toolchain), then:
 
 ```
 git clone https://github.com/roko-tech/MagicRemoteService.git
@@ -16,28 +27,16 @@ cd MagicRemoteService
 install.bat
 ```
 
-Run as **Administrator**. The installer handles everything:
-- Installs all prerequisites automatically (Node.js, webOS CLI, Build Tools, .NET 4.7.2)
-- Builds and registers the PC service
-- Auto-detects your PC's IP, MAC, and subnet
-- Deploys the TV app to your LG TV
-- Adds firewall rules
+`install.bat` builds the exe with `cargo` when `target\release\MagicRemoteService.exe` doesn't exist yet.
 
-**Only prerequisite:** [Developer Mode](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) enabled on your TV.
+### What the installer does
 
-### Manual
+1. Copies `MagicRemoteService.exe` to `C:\Program Files\MagicRemoteService` and registers the Windows service there, restarting it automatically if it fails. It also adds the firewall rules and starts it. Settings from an earlier version (`bindings.json`, `tv-config.json` and the registry) are kept.
+2. Asks which network the TV is on and which HDMI input the PC is plugged into, generates a device token if there is none, and installs and launches the TV app on the webOS CLI's default TV.
 
-1. Download from [Releases](https://github.com/roko-tech/MagicRemoteService/releases) and extract
-2. Install [Node.js](https://nodejs.org/) and run `npm install -g @webos-tools/cli`
-3. Register the service (admin command prompt):
-   ```
-   sc create MagicRemoteService binPath= "C:\MagicRemoteService\MagicRemoteService.exe" start= auto
-   net start MagicRemoteService
-   netsh advfirewall firewall add rule name="MagicRemoteService" dir=in action=allow protocol=TCP localport=41230
-   netsh advfirewall firewall add rule name="MagicRemoteService Web" dir=in action=allow protocol=TCP localport=41231
-   ```
-4. Run `MagicRemoteService.exe` — configure TV in the Settings UI → click **Install on TV**
-5. Open http://localhost:41231 to configure key bindings
+Choose "PC service only" or "TV app only" in its menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4` (for example `install.bat -Part Tv -Hdmi 4`).
+
+To update, run the installer of the new version. To uninstall, run `"C:\Program Files\MagicRemoteService\MagicRemoteService.exe" uninstall` from an administrator prompt. Then remove the TV app with `ares-install --device <tv> --remove com.cathwyler.magicremoteservice.hdmi<N>`.
 
 ## Usage
 
@@ -63,37 +62,33 @@ All mappings are customizable via the web UI.
 
 The remote's volume buttons stay with the TV while Windows plays through it (HDMI, DisplayPort, or S/PDIF, such as the TV or a soundbar on its eARC). While Windows plays on another device, such as headphones, they change the PC volume instead, and the TV app sets the TV volume back after each step. This works while the TV app shows the PC input.
 
+When the PC is off, opening the TV app (or switching back to the PC's input) sends Wake-on-LAN for 15 seconds. Shutting the PC down never wakes it again by itself.
+
 ## Web Settings
 
-Open **http://localhost:41231** while the service is running.
+Open **http://localhost:41231** on the PC. It is only reachable from the PC itself.
 
-### Visual Remote Configurator
+- **Remote configurator** — click any button on the visual remote to map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a shell command, or a special action (shut down the PC, toggle the TV keyboard). Bindings apply as soon as they're saved. Hover a button to see what it does; green dots mark custom bindings. "Reset All Bindings" restores the defaults.
+- **Smooth scroll exclusions** — apps (such as media players) that use the wheel for volume get single scroll steps instead of momentum. Add their process names.
+- **TV app configuration** — the HDMI input the PC is on, the PC's IP, MAC (for Wake-on-LAN) and subnet, the port and the cursor speed. **Reinstall TV App** packages the TV app built into the service with this configuration, then installs and launches it on the webOS CLI's default TV. The CLI runs as the user signed in at the PC.
+- **PC** — the TV port, start with Windows, and the shutdown timeouts:
+  - **Inactivity:** with the TV connected and no remote input for that long, Windows shuts down. Using the PC in the last five minutes cancels it; the remote counts.
+  - **Monitor off:** the same countdown, starting when the PC's monitor turns off.
+- **Pointer display** — with several monitors, pick the one each TV shows so its pointer lands there.
+- **Recent events** — what the service logged: TVs connecting and leaving, refused connections, saved settings.
 
-Click any button on the visual LG remote to remap it:
-- **Mouse click** — left, right, middle
-- **Keyboard key** — Enter, Escape, F1-F12, A-Z, arrows, etc.
-- **Keyboard shortcut** — Ctrl+C, Alt+Tab, Win+D, any combo
-- **Shell command** — launch any program
-- **Special action** — shutdown PC, toggle TV keyboard
+Keyboard: **Tab** moves between remote buttons, **Enter/Space** selects one, **Enter** in the exclusion box adds the app.
 
-### TV App Configuration
+## Commands
 
-- **HDMI port** — auto-detected at runtime, or select manually
-- **PC IP / MAC / Subnet** — auto-detected from your network interfaces
-- **Cursor speed** — adjustable from 0.1 (slow) to 5.0 (fast)
-- **Reinstall TV App** — one-click deploy without command line: packages the TV app built into the service with the saved config, installs it on the default ares-cli device of the user signed in at the PC, and launches it
+| Command | What it does |
+|---------|--------------|
+| `MagicRemoteService.exe install` | Copy this exe to `C:\Program Files\MagicRemoteService` and install or update the service from there (administrator) |
+| `MagicRemoteService.exe uninstall` | Stop and remove the service (administrator) |
+| `MagicRemoteService.exe status` | Service state, port and connected TVs |
+| `MagicRemoteService.exe --port 41330 --no-ssdp` | Run a second copy on its own beside the service, to try a build |
 
-### Smooth Scroll Exclusions
-
-Some apps (like media players) use scroll for volume control. Add their process names to disable momentum scrolling — sends single steps instead.
-
-### Visual Remote Tooltips
-
-Hover any button on the visual remote to see its current binding (e.g. "Green → Win" or "Red → Shutdown PC"). Green dots indicate custom (non-default) bindings.
-
-### Reset All Bindings
-
-A single button at the bottom of the config panel resets all buttons to their default bindings (with confirmation).
+These are window-less programs: in PowerShell, pipe them (`… status | Out-Host`) to see their output.
 
 ## How It Works
 
@@ -104,32 +99,13 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
   scroll wheel     messages
 ```
 
-**Two processes on the PC:**
-- **Service** runs as SYSTEM — starts at boot, accepts network connections
-- **Client** runs in your user session — injects mouse/keyboard input via SendInput
+**On the PC**, one exe runs as two processes:
+- the **service**, in session 0 as SYSTEM, starts at boot and keeps the worker running, restarting it after a crash or when another session takes the console;
+- the **worker**, in the console session as SYSTEM, does the actual work. It listens for the TV on TCP 41230, answers the TV's network search on UDP 1900, serves the web UI on port 41231 (this PC only), and injects input with `SendInput`.
 
-**TV app configuration** is stored in `config.json` — no JavaScript files are modified during installation. The HDMI port is auto-detected at runtime.
+**Settings** live in `C:\Program Files\MagicRemoteService` (`bindings.json`, `tv-config.json`) and in `HKLM\SOFTWARE\WOW6432Node\MagicRemoteService` (port, timeouts, per-TV display). **Logs** go to Event Viewer (Windows Logs → Application, source MagicRemoteService) and to the web UI's Recent Events.
 
-## Key Improvements Over Original
-
-- **Config injection** — `config.json` replaces fragile sed/PowerShell string replacement
-- **Auto-discovery** — TV finds PC via SSDP, no manual IP entry needed
-- **Auto-detect HDMI** — switches to the correct port automatically
-- **Web settings UI** — visual remote configurator at localhost:41231
-- **Smooth scrolling** — Mac-style momentum with per-app exclusions
-- **Non-blocking toasts** — small pill notifications instead of full-screen dialogs
-- **CPU fixed** — reduced from 20%+ to near 0% (timer + WebSocket spin fixes)
-- **Security hardened** — buffer overflow protection, command injection blocking, XSS prevention, pipe access control, CSRF headers
-- **Connection state machine** — prevents race conditions during connect/disconnect
-- **Node.js v22+** — polyfill for ares-cli compatibility
-- **Service keepalive** — prevents webOS 25 from killing the TV service
-- **One-click install** — `install.bat` handles all prerequisites
-
-## Keyboard Shortcuts in Web UI
-
-- **Tab** — navigate between remote buttons
-- **Enter / Space** — select focused button
-- **Enter** in scroll exclusion input — add to list
+**On the TV**, the web app (`tv/app`) captures the remote and talks to the PC. A small JS service (`tv/service`) finds the PC on the network, sends Wake-on-LAN, and relaunches the app when the PC input is selected. The app reads its settings from a `config.json` packaged from `tv-config.json`.
 
 ## Troubleshooting
 
@@ -138,78 +114,46 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | "Service is busy" or "not running" | Reboot TV, then relaunch the app |
 | Pointer doesn't work but scroll does | Wave the remote at the TV to activate the gyroscope. It auto-retries every 3 seconds |
 | "Failed to get sensor data [1003]" | Normal on webOS 25 — auto-retries in the background |
-| TV can't find PC | Ensure same subnet, UDP multicast not blocked. Fall back to manual IP in config |
-| Web UI won't load | Open http://localhost:41231 (not 41230). The PC service must be running |
-| Settings UI says "ares not found" | Install Node.js and run `npm install -g @webos-tools/cli` |
-| High CPU usage | Update to v2.2.0+ — fixes timer polling and WebSocket spin bugs |
+| TV can't reach the PC after its IP changed | Run the installer again ("TV app only"), or update the IP in the web UI, Save Config and Reinstall TV App. A DHCP reservation in your router stops it changing |
+| TV keeps retrying; Recent Events shows "invalid or missing token" | The TV app carries an old token: click Reinstall TV App |
+| Web UI won't load | Open http://localhost:41231 on the PC itself. Check `MagicRemoteService.exe status` |
+| Reinstall TV App says "No user is signed in" | Sign in at the PC: the webOS CLI runs with that user's TV list and keys |
+| Reinstall TV App can't find `ares-…` or Node | Install Node.js and run `npm install -g @webos-tools/cli` as the user signed in at the PC |
 | Home launcher pointer blocked | Expected in overlay mode — use D-pad to navigate the TV launcher |
 | TV app shows after long delay | Normal on cold boot — webOS takes ~60s to initialize developer apps |
 | Can't exit TV app | Press and hold the Back button for 1 second |
 | Forgot what a button does | Hover it in the web UI — shows current binding |
 
-## Rust Version (3.0)
+## Building from Source
 
-The PC side has been rebuilt in Rust (`src/`, `Cargo.toml`). It speaks the same protocol to the same TV app and reads the same `bindings.json`, `tv-config.json` and registry settings, so it is a drop-in replacement for `MagicRemoteService.exe`. Until it replaces the C# build below, both live in this repository.
-
-What changes:
-
-- **One file.** A 1.4 MB exe with the web UI, TV app, cursor and icon built in. No .NET Framework, MSBuild, Visual Studio Build Tools or NuGet. Node.js and `@webos-tools/cli` are still needed to deploy the TV app.
-- **Lighter.** About 2 MB of private memory for the idle worker (plus a small supervisor in service mode), against about 50 MB for the two C# processes.
-- **Simpler and self-healing.** The service keeps one worker running in the console session and restarts it after a crash. This replaces the socket hand-off through a named pipe and the six global events.
-- **Settings apply live.** Saved bindings, scroll exclusions, the device token and the shutdown timeouts take effect without a restart. Only a port change needs one.
-- **Web UI only.** The WinForms window is gone. The web UI gains PC settings (port, shutdown timeouts, start with Windows), a per-TV pointer display, every connected TV in the status bar, and a Recent Events log.
-- **Safer.** Shell-command bindings, ares-cli and the browser run as the signed-in user, not as SYSTEM. The web UI listens on loopback only and refuses other `Host` names (DNS rebinding) and foreign `Origin`s. The token is compared in constant time, request sizes are capped, and a connection that does not finish its WebSocket handshake within 10 seconds is dropped.
-- **Correct pointing on high-DPI and multi-monitor PCs.** The process is per-monitor DPI aware, so the TV's absolute pointer lands on exact pixels.
-- **Fixes.** Mouse speed is restored when the remote's pointer hides; the C# build never restored it. One TV hiding its pointer no longer resets the cursor for another. `/api/pcinfo` lists the network with a gateway first, so `install.bat` no longer picks a VPN or Hyper-V adapter. ares-cli only runs on a TV connection when a TV is mapped to a display.
-
-Build and test (Rust 1.85+, MSVC toolchain):
+Rust 1.85 or newer with the MSVC toolchain (`rustup` installs it; the Windows SDK supplies the resource compiler).
 
 ```
 cargo test
 cargo build --release
 ```
 
-The exe is `target\release\MagicRemoteService.exe`:
+The exe is `target\release\MagicRemoteService.exe`. `cargo test -- --ignored` also runs two tests that need this PC's hardware and tools: one reads the default audio device; the other packages the TV app with the webOS CLI, without contacting a TV.
 
-| Command | What it does |
-|---------|--------------|
-| `MagicRemoteService.exe install` | Copy this exe to `C:\Program Files\MagicRemoteService`, bring `bindings.json` and `tv-config.json` over from where the service ran before, and install or update the service from there, with restart-on-failure, the event log source and firewall rules, then start it (admin) |
-| `MagicRemoteService.exe uninstall` | Stop and remove the service (admin) |
-| `MagicRemoteService.exe status` | Service state, port and connected TVs |
-| `MagicRemoteService.exe --port 41330 --no-ssdp` | Run on its own beside an installed service, to try a build |
-
-These are window-less programs, so in PowerShell use `Start-Process -Wait` (or run them from a `.bat`) to wait for their output.
-
-To install or upgrade, run `install` from an elevated PowerShell, whichever folder the new exe is in:
-
-```
-Start-Process -Wait -Verb RunAs target\release\MagicRemoteService.exe install
-```
-
-The service always runs from `C:\Program Files\MagicRemoteService`. It runs as SYSTEM, so its exe must sit where only administrators can change it; a folder that ordinary accounts can write to (a source checkout, `C:\MagicRemoteService`) would let any account on the PC replace it. To go back to the C# build, point the service at its exe from an elevated prompt (`sc.exe config MagicRemoteService binPath= "<path>\MagicRemoteService.exe"`) and restart it.
-
-## Building from Source
-
-```
-git clone https://github.com/roko-tech/MagicRemoteService.git
-cd MagicRemoteService
-build.bat
-```
-
-Requires Visual Studio 2022 (or Build Tools) and .NET Framework 4.7.2.
+Layout: `src/` is the PC service (`src/win/` holds the Windows calls), `tv/app` and `tv/service` the webOS app and service, `resources/` the web UI, icon, cursor and manifest built into the exe. Pushes and pull requests run formatting, lint and tests in CI; pushing a `v*` tag publishes a release.
 
 ## Security
 
-- **Device token auth** — the TV presents a shared token (generated into `config.json` at install) in the WebSocket URL; connections without the matching token are rejected, so other devices on your LAN can't drive the PC. The installer keeps the PC and TV tokens in sync; if you set a token, **every** TV must carry the same one — a PC-side token with an un-updated TV will silently reject that TV. Clear the `token` field in `tv-config.json` (next to the exe) to revert to open mode.
-  - *What the token protects against:* blind LAN devices and malicious web pages (which can neither read it cross-origin nor sniff your wire). *What it does **not**:* the token is sent in cleartext over `ws://` (no TLS), so a passive sniffer on your own network segment could capture and replay it. It raises the bar within a trusted LAN; it is not a substitute for one.
+- **Device token** — the TV presents a shared token (generated by the installer, kept in `tv-config.json`) in the WebSocket URL, and connections without it are refused, so other devices on your LAN can't drive the PC. Every TV must carry the same token: reinstall a TV's app after the token changes. With no token the service runs in open mode, and anything on the LAN can control the PC.
+  - *What it protects against:* blind LAN devices and malicious web pages, which can neither read it cross-origin nor sniff your network. *What it does **not**:* the token travels in cleartext over `ws://` (no TLS), so a sniffer on your network segment could capture and replay it. It raises the bar within a trusted LAN; it is not a substitute for one.
 - **Local network only** — no encryption between TV and PC. Don't use on an untrusted network.
-- **Buffer overflow protection** — WebSocket frame bounds checking (overflow-safe length validation)
-- **Command injection blocking** — shell metacharacters rejected in key bindings (note: a command binding still runs the program you configure; the filter only blocks shell chaining)
-- **XSS prevention** — user input sanitized in web UI
-- **Pipe access control** — named pipe restricted to authenticated users
-- **CSRF protection** — mutating POST requests are rejected server-side unless they carry the `X-Requested-With` header (which cross-origin pages can't set without a CORS preflight). If you script the HTTP API directly, send that header on POSTs.
+- **Service location** — the service runs as SYSTEM from `C:\Program Files\MagicRemoteService`, where only administrators can change files. Never point it at a folder ordinary accounts can write to.
+- **Least privilege** — shell-command bindings, the webOS CLI and the browser run as the user signed in at the PC, never as SYSTEM.
+- **Web UI and API** — loopback only. Requests with other `Host` names (DNS rebinding) or foreign origins are refused. Changes (POST) need an `X-Requested-With` header, which cross-site pages can't send; send it if you script the API. Any program running on the PC can still use the API, including reading the token.
+- **WebSocket** — frame sizes are capped, the handshake must finish within 10 seconds, at most 16 connections at once, and the token is compared in constant time.
+- **Command bindings** — `& | ; < >` are refused so a binding can't chain commands, but a binding still runs whatever program it names.
 
 Don't enter passwords via the remote.
+
+## History
+
+- **3.0** — the PC service rebuilt in Rust: one exe with no .NET dependency; a supervisor that restarts its worker; settings that apply without a restart; PC settings, pointer display and an event log in the web UI. It also fixes mouse speed not being restored, Wake-on-LAN waking the PC right after a shutdown, and reconnect timers stacking up. See [Releases](https://github.com/roko-tech/MagicRemoteService/releases).
+- **2.x** — the C# version: `config.json` instead of patching JavaScript at install, SSDP discovery, the web UI, smooth scrolling with per-app exclusions, non-blocking toasts, CPU use near zero, a keepalive for the webOS 25 TV service, a Node.js 22 polyfill for the webOS CLI, and device token auth.
 
 ## License
 
