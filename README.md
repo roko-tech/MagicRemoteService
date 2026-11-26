@@ -147,7 +147,7 @@ LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mo
 | Can't exit TV app | Press and hold the Back button for 1 second |
 | Forgot what a button does | Hover it in the web UI — shows current binding |
 
-## Rust Version (3.0, in testing)
+## Rust Version (3.0)
 
 The PC side has been rebuilt in Rust (`src/`, `Cargo.toml`). It speaks the same protocol to the same TV app and reads the same `bindings.json`, `tv-config.json` and registry settings, so it is a drop-in replacement for `MagicRemoteService.exe`. Until it replaces the C# build below, both live in this repository.
 
