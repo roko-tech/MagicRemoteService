@@ -1,5 +1,6 @@
 //! Win32 calls, kept out of the pure core.
 
+pub mod acl;
 pub mod audio;
 pub mod cursor;
 pub mod effects;

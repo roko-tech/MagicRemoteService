@@ -2,7 +2,7 @@
 
 use crate::bindings::{Action, Bind, BindMap, KeyStroke, MouseButton};
 use crate::win::registry::{Key, Root, CURRENT_USER, LOCAL_MACHINE};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 
 pub const REG_PATH: &str = "Software\\MagicRemoteService";
@@ -172,6 +172,42 @@ pub fn token(tv_config: Option<&Value>) -> String {
     tv_config.and_then(|c| c.get("token")).and_then(Value::as_str).unwrap_or_default().to_string()
 }
 
+/// The TV config as the API shows it: everything but the token, plus whether one is set.
+/// The token stays inside the service: only the TV app it deploys needs it.
+pub fn config_for_api(saved: Option<Value>) -> Value {
+    let mut map = match saved {
+        Some(Value::Object(m)) => m,
+        _ => Map::new(),
+    };
+    let has_token = map.remove("token").and_then(|t| t.as_str().map(|s| !s.is_empty())).unwrap_or(false);
+    map.insert("hasToken".into(), Value::Bool(has_token));
+    Value::Object(map)
+}
+
+/// A config posted through the API, ready to save: keeps the saved token unless the post sets
+/// `token` itself (an empty string turns token auth off).
+pub fn merge_posted_config(mut posted: Map<String, Value>, saved: Option<&Value>) -> Map<String, Value> {
+    posted.remove("hasToken");
+    if !posted.contains_key("token") {
+        if let Some(t) = saved.and_then(|s| s.get("token")).filter(|t| t.is_string()) {
+            posted.insert("token".into(), t.clone());
+        }
+    }
+    posted
+}
+
+/// Saves `tv-config.json`. As the service, only SYSTEM and administrators may read it, since it
+/// holds the device token.
+pub fn save_tv_config(files: &Files, config: &Value) -> std::io::Result<()> {
+    let path = files.tv_config();
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, serde_json::to_vec_pretty(config).unwrap_or_default())?;
+    if crate::win::proc::is_system() {
+        crate::win::acl::restrict_to_admins(&tmp)?;
+    }
+    std::fs::rename(&tmp, &path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,6 +219,24 @@ mod tests {
         assert_eq!(scroll_exclude(Some(&json!({"bindings": {}}))).len(), 4);
         assert_eq!(scroll_exclude(Some(&json!({"scrollExclude": ["vlc", "", 3]}))), vec!["vlc"]);
         assert!(scroll_exclude(Some(&json!({"scrollExclude": []}))).is_empty());
+    }
+
+    #[test]
+    fn the_api_never_shows_the_token_and_saves_keep_it() {
+        let saved = json!({"appId": "x", "token": "s3cret"});
+        let shown = config_for_api(Some(saved.clone()));
+        assert_eq!(shown, json!({"appId": "x", "hasToken": true}));
+        assert_eq!(config_for_api(Some(json!({"token": ""})))["hasToken"], false);
+        assert_eq!(config_for_api(None), json!({"hasToken": false}));
+
+        // The web UI posts back what it was shown: the token survives
+        let Value::Object(posted) = json!({"appId": "y", "hasToken": true}) else { panic!() };
+        assert_eq!(Value::Object(merge_posted_config(posted, Some(&saved))), json!({"appId": "y", "token": "s3cret"}));
+        // An explicit token replaces it, and an empty one turns auth off
+        let Value::Object(posted) = json!({"token": ""}) else { panic!() };
+        assert_eq!(Value::Object(merge_posted_config(posted, Some(&saved))), json!({"token": ""}));
+        let Value::Object(posted) = json!({"appId": "z"}) else { panic!() };
+        assert_eq!(Value::Object(merge_posted_config(posted, None)), json!({"appId": "z"}));
     }
 
     #[test]

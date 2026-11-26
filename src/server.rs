@@ -5,10 +5,11 @@ use crate::log;
 use crate::session::{warning_delay, Effects, Session, SessionConfig};
 use crate::state::Shared;
 use crate::ws;
+use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -93,7 +94,9 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, platform: Arc<dyn Pla
         threads.retain(|t| !t.is_finished());
         let Ok(stream) = stream else { continue };
         if active.load(Ordering::Acquire) >= MAX_CONNECTIONS {
-            log::warn("Refused a connection: too many open");
+            if let Ok(peer) = stream.peer_addr() {
+                log_refusal(peer.ip(), "too many connections open");
+            }
             continue;
         }
         active.fetch_add(1, Ordering::AcqRel);
@@ -117,8 +120,43 @@ fn accept_loop(listener: TcpListener, shared: Arc<Shared>, platform: Arc<dyn Pla
 
 enum Handshake {
     Accepted(Vec<u8>),
-    Rejected(&'static str),
+    Rejected(String),
     Gone,
+}
+
+/// Refusals are logged once a minute per address, so a LAN host can't flood the event log.
+const REFUSAL_LOG_EVERY: Duration = Duration::from_secs(60);
+
+/// When to log a refusal from `ip`: `Some(n)` to log it, with `n` refusals held back since the
+/// last line; `None` to stay quiet.
+fn note_refusal(seen: &mut HashMap<IpAddr, (Instant, u32)>, ip: IpAddr, now: Instant) -> Option<u32> {
+    match seen.get_mut(&ip) {
+        Some((at, held)) if now.duration_since(*at) < REFUSAL_LOG_EVERY => {
+            *held += 1;
+            None
+        }
+        entry => {
+            let held = entry.map_or(0, |(_, held)| *held);
+            seen.retain(|_, (at, _)| now.duration_since(*at) < REFUSAL_LOG_EVERY);
+            seen.insert(ip, (now, 0));
+            Some(held)
+        }
+    }
+}
+
+static REFUSALS: Mutex<Option<HashMap<IpAddr, (Instant, u32)>>> = Mutex::new(None);
+
+fn log_refusal(ip: IpAddr, why: &str) {
+    let mut seen = REFUSALS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(held) = note_refusal(seen.get_or_insert_with(HashMap::new), ip, Instant::now()) {
+        let more = if held > 0 { format!(" ({held} more refused since the last report)") } else { String::new() };
+        log::warn(format!("TV {ip}: refused, {why}{more}"));
+    }
+}
+
+/// An `Origin` value safe to put in a log line.
+fn printable(s: &str) -> String {
+    s.chars().filter(|c| !c.is_control()).take(80).collect()
 }
 
 /// Reads and answers the upgrade request. Returns bytes received after it.
@@ -133,14 +171,14 @@ fn handshake(stream: &mut TcpStream, shared: &Shared) -> Handshake {
             break end;
         }
         if buf.len() >= MAX_HEAD {
-            return Handshake::Rejected("request head too large");
+            return Handshake::Rejected("request head too large".into());
         }
         if shared.stopping() {
             return Handshake::Gone;
         }
         let left = deadline.saturating_duration_since(Instant::now());
         if left.is_zero() {
-            return Handshake::Rejected("handshake not finished in time");
+            return Handshake::Rejected("handshake not finished in time".into());
         }
         let _ = stream.set_read_timeout(Some(left.min(MAX_WAIT)));
         match stream.read(&mut chunk) {
@@ -153,15 +191,18 @@ fn handshake(stream: &mut TcpStream, shared: &Shared) -> Handshake {
     let head = String::from_utf8_lossy(&buf[..end]);
     let request = match ws::parse_handshake(&head) {
         Ok(r) => r,
-        Err(ws::HandshakeError::NotGet) => return Handshake::Rejected("not a WebSocket upgrade"),
-        Err(ws::HandshakeError::MissingKey) => return Handshake::Rejected("missing Sec-WebSocket-Key"),
+        Err(ws::HandshakeError::NotGet) => return Handshake::Rejected("not a WebSocket upgrade".into()),
+        Err(ws::HandshakeError::MissingKey) => return Handshake::Rejected("missing Sec-WebSocket-Key".into()),
     };
+    if !ws::origin_allowed(request.origin.as_deref()) {
+        return Handshake::Rejected(format!("web page origin {}", printable(request.origin.as_deref().unwrap_or_default())));
+    }
     // When a token is configured (tv-config.json), only a TV presenting it (ws://pc:port/?t=TOKEN) may connect
     let token = shared.token();
     if !token.is_empty() {
         let given = ws::query_param(&request.target, "t").unwrap_or_default();
         if !ws::constant_time_eq(given.as_bytes(), token.as_bytes()) {
-            return Handshake::Rejected("invalid or missing token");
+            return Handshake::Rejected("invalid or missing token".into());
         }
     }
     if stream.write_all(ws::response_101(&request.key).as_bytes()).is_err() {
@@ -179,7 +220,7 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
     let mut buf = match handshake(&mut stream, shared) {
         Handshake::Accepted(rest) => rest,
         Handshake::Rejected(why) => {
-            log::warn(format!("{name}: refused, {why}"));
+            log_refusal(peer.ip(), &why);
             let _ = stream.write_all(ws::RESPONSE_403);
             return;
         }
@@ -255,4 +296,27 @@ fn connection(mut stream: TcpStream, shared: &Shared, platform: &dyn Platform) {
     session.finish();
     shared.remove_client(id);
     log::info(format!("{name}: disconnected ({reason})"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refusals_are_logged_once_a_minute_per_address() {
+        let (mut seen, t0) = (HashMap::new(), Instant::now());
+        let (a, b): (IpAddr, IpAddr) = ("192.168.1.9".parse().unwrap(), "192.168.1.10".parse().unwrap());
+        assert_eq!(note_refusal(&mut seen, a, t0), Some(0));
+        assert_eq!(note_refusal(&mut seen, a, t0 + Duration::from_secs(1)), None);
+        assert_eq!(note_refusal(&mut seen, a, t0 + Duration::from_secs(2)), None);
+        assert_eq!(note_refusal(&mut seen, b, t0 + Duration::from_secs(3)), Some(0), "other addresses are not held back");
+        assert_eq!(note_refusal(&mut seen, a, t0 + Duration::from_secs(61)), Some(2));
+        assert_eq!(note_refusal(&mut seen, a, t0 + Duration::from_secs(62)), None);
+    }
+
+    #[test]
+    fn origins_in_logs_are_trimmed_to_printable_text() {
+        assert_eq!(printable("https://x\r\nfake: line"), "https://xfake: line");
+        assert_eq!(printable(&"a".repeat(200)).len(), 80);
+    }
 }

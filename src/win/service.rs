@@ -179,7 +179,10 @@ fn netsh(line: &str) -> bool {
 
 /// Inbound rules for the TV's WebSocket port and the SSDP search. The web UI listens on
 /// loopback only, so the old "Web UI" rule is removed rather than recreated.
-fn firewall(exe: &Path, port: u16, add: bool) -> bool {
+/// Inbound rules for the TV: TCP to this exe whatever port it is set to (so a port change can't
+/// leave the TV blocked), and its SSDP answers. Only on networks Windows treats as private or a
+/// domain, never on public ones (a cafe, an airport).
+fn firewall(exe: &Path, add: bool) -> bool {
     for name in [NAME, "MagicRemoteService Web UI", "MagicRemoteService SSDP"] {
         netsh(&format!("advfirewall firewall delete rule name=\"{name}\""));
     }
@@ -187,9 +190,9 @@ fn firewall(exe: &Path, port: u16, add: bool) -> bool {
         return true;
     }
     let program = proc::quote(&exe.to_string_lossy());
-    let tcp = netsh(&format!("advfirewall firewall add rule name=\"{NAME}\" dir=in action=allow program={program} protocol=TCP localport={port}"));
+    let tcp = netsh(&format!("advfirewall firewall add rule name=\"{NAME}\" dir=in action=allow program={program} protocol=TCP profile=private,domain"));
     let udp = netsh(&format!(
-        "advfirewall firewall add rule name=\"MagicRemoteService SSDP\" dir=in action=allow program={program} protocol=UDP localport={}",
+        "advfirewall firewall add rule name=\"MagicRemoteService SSDP\" dir=in action=allow program={program} protocol=UDP localport={} profile=private,domain",
         crate::ssdp::PORT
     ));
     tcp && udp
@@ -299,7 +302,7 @@ pub fn install() -> Result<String, String> {
     });
     let _ = super::eventlog::register_source();
     let port = crate::settings::Scope::Machine.load().port;
-    let fw = firewall(&exe, port, true);
+    let fw = firewall(&exe, true);
     svc.start(&[] as &[&str]).map_err(|e| format!("Installed, but the service did not start: {e}"))?;
     let mut msg = format!("Service installed in {} and started.\nSettings: http://localhost:{}/", dir.display(), port as u32 + 1);
     if !copied.is_empty() {
@@ -308,7 +311,9 @@ pub fn install() -> Result<String, String> {
     if let Some(old) = previous.filter(|p| !same_file(p, &dir)) {
         msg += &format!("\nThe service no longer runs from {}; you can delete that copy once everything works.", old.display());
     }
-    if !fw {
+    if fw {
+        msg += "\nThe firewall lets TVs in on private and domain networks only: if Windows calls your home network Public, set it to Private.";
+    } else {
         msg += "\nWarning: the firewall rules could not be added.";
     }
     Ok(msg)
@@ -329,7 +334,7 @@ pub fn uninstall() -> Result<String, String> {
     }
     svc.delete().map_err(|e| format!("Cannot delete the service: {e}"))?;
     let exe = std::env::current_exe().unwrap_or_default();
-    firewall(&exe, 0, false);
+    firewall(&exe, false);
     Ok("Service removed. bindings.json and tv-config.json were left in place.".into())
 }
 

@@ -91,6 +91,12 @@ function Install-Pc {
     $exe = Find-ServiceExe
     & $exe install 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'The service could not be installed (see above).' }
+    # The firewall only lets the TV in on private and domain networks
+    $public = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue | Where-Object NetworkCategory -eq 'Public')
+    foreach ($n in $public) {
+        Write-Host "Windows treats the network '$($n.Name)' ($($n.InterfaceAlias)) as Public, so the TV can't connect through it." -ForegroundColor Yellow
+        Write-Host "If it is your home network, set it to Private: Settings > Network & internet > (the connection) > Network profile type." -ForegroundColor Yellow
+    }
 }
 
 function Confirm-Yes([string]$Question) {
@@ -177,8 +183,10 @@ function Install-Tv {
     $config.mask = $net.mask
     $config.mac = $net.mac
     $config.port = [int]$pc.port
-    # The TV must present this token to connect; without one any device on the network could
-    if (-not $config.token) { $config.token = [guid]::NewGuid().ToString('N') }
+    # The TV must present a token to connect; without one any device on the network could.
+    # The service never shows its token (it reports hasToken) and keeps it when none is sent.
+    $config.Remove('hasToken')
+    if (-not $config.token -and -not $saved.hasToken) { $config.token = [guid]::NewGuid().ToString('N') }
 
     $null = Invoke-Api POST '/api/config' $config
     Write-Host 'Packaging and installing the TV app (this can take a minute)...'

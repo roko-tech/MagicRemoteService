@@ -202,6 +202,12 @@ pub fn run(opts: Options) -> i32 {
         return 0;
     };
     let files = Files { dir: crate::win::exe_dir() };
+    // The device token is in tv-config.json: as the service, keep ordinary accounts out of it
+    if proc::is_system() && files.tv_config().exists() {
+        if let Err(e) = crate::win::acl::restrict_to_admins(&files.tv_config()) {
+            log::warn(format!("Could not restrict access to tv-config.json: {e}"));
+        }
+    }
     migrate_legacy_bindings(scope, &files);
     screens::refresh();
     let shared = Shared::new(files, pc.clone());

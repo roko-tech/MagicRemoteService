@@ -92,6 +92,9 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
 .map-row select{flex:1;background:#0d1117;color:#e0e0e0;border:1px solid #30363d;border-radius:6px;padding:8px;font-size:13px}
 .log{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px;max-height:260px;overflow:auto;font:12px/1.5 ui-monospace,Consolas,monospace}
 .log div{white-space:pre-wrap;word-break:break-word}
+.token-row{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13px;color:#aaa}
+.token-row span{flex:1}
+.token-row .on{color:#4ecca3}.token-row .off{color:#f87171}
 .log .t{color:#555}.log .warn{color:#f59e0b}.log .error{color:#f87171}
 @media(max-width:700px){
   .main{flex-direction:column;align-items:center}
@@ -282,6 +285,10 @@ h1{color:#fff;margin-bottom:4px;font-size:22px}
   <div class="cfg-actions">
     <button class="btn-apply" id="btn-cfg-save" onclick="saveConfig()">Save Config</button>
     <button class="btn-apply" id="btn-cfg-reinstall" onclick="reinstallTV()" style="background:#e6a817;color:#000">Reinstall TV App</button>
+  </div>
+  <div class="token-row" id="token-row" style="display:none">
+    <span id="token-state"></span>
+    <button class="btn-reset" id="btn-token" onclick="generateToken()" style="width:auto;margin-top:0">Generate new token</button>
   </div>
   <div id="cfg-status" class="note" style="margin-top:8px"></div>
 </div>
@@ -654,6 +661,36 @@ function saveConfig() {
     .catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-cfg-save", false); });
 }
 
+// The service never shows the token itself, only whether one is set
+function renderToken() {
+  if (!savedCfg || typeof savedCfg.hasToken !== "boolean") return;
+  document.getElementById("token-row").style.display = "";
+  var el = document.getElementById("token-state");
+  el.innerHTML = "";
+  var state = document.createElement("strong");
+  state.className = savedCfg.hasToken ? "on" : "off";
+  state.textContent = savedCfg.hasToken ? "Device token on" : "Device token off";
+  el.appendChild(state);
+  el.appendChild(document.createTextNode(savedCfg.hasToken
+    ? " \u2014 only TVs carrying this PC's token can connect."
+    : " \u2014 any device on your network can control this PC."));
+}
+
+function generateToken() {
+  if (!confirm("Generate a new device token? Every TV then needs Reinstall TV App before it can connect again.")) return;
+  setLoading("btn-token", true);
+  postJson("/api/token", {})
+    .then(function() {
+      savedCfg.hasToken = true;
+      renderToken();
+      updateStatus();
+      setLoading("btn-token", false);
+      if (confirm("New token saved. Reinstall the TV app now so the TV gets it?")) reinstallTV();
+      else showToast("New token saved. Reinstall the TV app to apply it.", "ok");
+    })
+    .catch(function(e) { showToast("Error: " + e.message, "err"); setLoading("btn-token", false); });
+}
+
 function reinstallTV() {
   document.getElementById("cfg-status").textContent = "Reinstalling...";
   setLoading("btn-cfg-reinstall", true);
@@ -714,6 +751,7 @@ function renderStatus(d) {
     (connected ? safeIp + " connected" : "No TV") + '</div>' +
     '<div class="chip"><span class="dot ' + (d.inactivity ? "dot-y" : "dot-g") + '"></span> Shutdown ' +
     (d.inactivity ? "On" : "Off") + '</div>' +
+    (d.hasToken === false ? '<div class="chip" title="Any device on your network can control this PC. Generate a token under TV App Configuration."><span class="dot dot-r"></span> No device token</div>' : "") +
     (d.version ? '<div class="chip">v' + sanitize(d.version) + (d.mode ? " &middot; " + sanitize(d.mode) : "") + '</div>' : "");
 }
 
@@ -868,6 +906,7 @@ fetch("/api/config")
   .then(function(r) { if (r.ok) return r.json(); throw new Error(); })
   .then(function(cfg) {
     savedCfg = cfg || {};
+    renderToken();
     if (cfg && cfg.inputId) {
       var num = cfg.inputId.replace("HDMI_", "");
       document.getElementById("cfg-hdmi").value = num;

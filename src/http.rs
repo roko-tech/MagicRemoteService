@@ -112,11 +112,12 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 })).collect::<Vec<_>>(),
                 "version": env!("CARGO_PKG_VERSION"),
                 "mode": ctx.host.mode(),
+                "hasToken": !shared.token().is_empty(),
             }))
         }
         ("GET", "/api/defaults") => ok(bindings::to_json(&bindings::defaults())),
         ("GET", "/api/pcinfo") => ok(ctx.host.pc_info()),
-        ("GET", "/api/config") => ok(settings::read_json(&shared.files.tv_config()).unwrap_or_else(|| json!({}))),
+        ("GET", "/api/config") => ok(settings::config_for_api(settings::read_json(&shared.files.tv_config()))),
         ("GET", "/api/pc") => {
             let s = shared.settings();
             ok(json!({
@@ -154,12 +155,32 @@ pub fn route(req: &Request, ctx: &Ctx) -> Response {
                 Ok(o) => o,
                 Err(r) => return r,
             };
-            if let Err(e) = settings::write_atomic(&shared.files.tv_config(), &serde_json::to_vec_pretty(&doc).unwrap_or_default()) {
+            let saved = settings::read_json(&shared.files.tv_config());
+            let config = Value::Object(settings::merge_posted_config(doc, saved.as_ref()));
+            if let Err(e) = settings::save_tv_config(&shared.files, &config) {
                 return error(500, &format!("cannot save tv-config.json: {e}"));
             }
             shared.reload_tv_config();
             log::info("TV config saved from the web UI");
             ok(json!({ "saved": true }))
+        }
+        ("POST", "/api/token") => {
+            // A new device token; TVs need the TV app reinstalled to carry it
+            let token = match crate::win::acl::random_token() {
+                Ok(t) => t,
+                Err(e) => return error(500, &format!("cannot generate a token: {e}")),
+            };
+            let mut config = match settings::read_json(&shared.files.tv_config()) {
+                Some(Value::Object(m)) => m,
+                _ => serde_json::Map::new(),
+            };
+            config.insert("token".into(), Value::String(token));
+            if let Err(e) = settings::save_tv_config(&shared.files, &Value::Object(config)) {
+                return error(500, &format!("cannot save tv-config.json: {e}"));
+            }
+            shared.reload_tv_config();
+            log::info("New device token generated from the web UI");
+            ok(json!({ "saved": true, "hasToken": true }))
         }
         ("POST", "/api/pc") => {
             let doc = match parse_object(req.body) {

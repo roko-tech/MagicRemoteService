@@ -17,6 +17,8 @@ pub struct Handshake {
     pub key: String,
     /// Request target, such as `/?t=TOKEN`.
     pub target: String,
+    /// The `Origin` header, which browsers add to every WebSocket upgrade.
+    pub origin: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -41,13 +43,20 @@ pub fn parse_handshake(head: &str) -> Result<Handshake, HandshakeError> {
     if !parts.next().is_some_and(|v| v.starts_with("HTTP/")) {
         return Err(HandshakeError::NotGet);
     }
-    let key = lines
-        .filter_map(|l| l.split_once(':'))
-        .find(|(name, _)| name.trim().eq_ignore_ascii_case("sec-websocket-key"))
-        .map(|(_, value)| value.trim().to_string())
-        .filter(|v| !v.is_empty())
-        .ok_or(HandshakeError::MissingKey)?;
-    Ok(Handshake { key, target })
+    let headers: Vec<(&str, &str)> = lines.filter_map(|l| l.split_once(':')).map(|(n, v)| (n.trim(), v.trim())).collect();
+    let header = |name: &str| headers.iter().find(|(n, _)| n.eq_ignore_ascii_case(name)).map(|(_, v)| v.to_string());
+    let key = header("sec-websocket-key").filter(|v| !v.is_empty()).ok_or(HandshakeError::MissingKey)?;
+    Ok(Handshake { key, target, origin: header("origin") })
+}
+
+/// Whether an upgrade with this `Origin` may connect. The TV app is a local `file://` app, so it
+/// sends `null`, `file://` or nothing; a web page sends its own http(s) origin. Refusing those
+/// stops any web page, on the LAN or open on this PC, from driving the PC.
+pub fn origin_allowed(origin: Option<&str>) -> bool {
+    !origin.is_some_and(|o| {
+        let o = o.trim().to_ascii_lowercase();
+        o.starts_with("http://") || o.starts_with("https://")
+    })
 }
 
 /// The value of query parameter `name` in a request target, percent-decoded.
@@ -224,6 +233,19 @@ mod tests {
         assert_eq!(query_param("/", "t"), None);
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%zz%41"), "%zzA");
+    }
+
+    #[test]
+    fn web_page_origins_are_refused_and_the_tv_app_is_not() {
+        let h = parse_handshake("GET / HTTP/1.1\r\nOrigin: https://evil.example\r\nSec-WebSocket-Key: k\r\n\r\n").unwrap();
+        assert_eq!(h.origin.as_deref(), Some("https://evil.example"));
+        assert_eq!(parse_handshake(HANDSHAKE).unwrap().origin, None);
+        for ok in [None, Some("null"), Some("file://"), Some("FILE://"), Some("")] {
+            assert!(origin_allowed(ok), "{ok:?}");
+        }
+        for bad in ["http://192.168.1.5:8080", "https://evil.example", " HTTPS://x", "http://localhost:41231"] {
+            assert!(!origin_allowed(Some(bad)), "{bad}");
+        }
     }
 
     #[test]

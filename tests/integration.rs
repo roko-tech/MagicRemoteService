@@ -350,7 +350,17 @@ fn http_api_keeps_the_c_sharp_contract_and_guards_requests() {
     // TV config: the token applies at once
     assert_eq!(api(&shared, &host, "POST", "/api/config", r#"{"token":"abc","appId":"com.cathwyler.magicremoteservice.hdmi1"}"#, true).0, 200);
     assert_eq!(shared.token(), "abc");
-    assert_eq!(api(&shared, &host, "GET", "/api/config", "", false).1["token"], "abc");
+    // The API never shows the token, and saving what it shows keeps it
+    let shown = api(&shared, &host, "GET", "/api/config", "", false).1;
+    assert_eq!((shown.get("token"), &shown["hasToken"]), (None, &json!(true)));
+    assert_eq!(api(&shared, &host, "POST", "/api/config", &shown.to_string(), true).0, 200);
+    assert_eq!(shared.token(), "abc");
+    assert_eq!(api(&shared, &host, "GET", "/api/settings", "", false).1["hasToken"], true);
+    // A generated token replaces it at once
+    assert_eq!(api(&shared, &host, "POST", "/api/token", "", true), (200, json!({"saved": true, "hasToken": true})));
+    let token = shared.token();
+    assert!(token.len() == 32 && token != "abc");
+    assert_eq!(api(&shared, &host, "GET", "/api/config", "", false).1["appId"], "com.cathwyler.magicremoteservice.hdmi1");
 
     // PC settings are validated; a port change needs a restart, timeouts don't
     assert_eq!(api(&shared, &host, "POST", "/api/pc", r#"{"port": 80}"#, true).0, 400);
@@ -415,4 +425,22 @@ fn a_trickled_handshake_is_cut_off_after_ten_seconds() {
     assert!(took >= Duration::from_millis(9_500) && took < Duration::from_secs(13), "{took:?}");
     drop(s);
     let _ = writer.join();
+}
+
+#[test]
+fn web_pages_cannot_open_the_websocket() {
+    let rig = Rig::new("origin", None);
+    let attempt = |origin: &str| {
+        let mut s = TcpStream::connect((Ipv4Addr::LOCALHOST, rig.port())).unwrap();
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        write!(s, "GET / HTTP/1.1\r\nHost: pc\r\nOrigin: {origin}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n").unwrap();
+        let mut head = [0u8; 12];
+        s.read_exact(&mut head).unwrap();
+        String::from_utf8_lossy(&head).into_owned()
+    };
+    assert_eq!(attempt("https://evil.example"), "HTTP/1.1 403");
+    assert_eq!(attempt("http://192.168.1.50"), "HTTP/1.1 403");
+    // What the TV app sends
+    assert_eq!(attempt("file://"), "HTTP/1.1 101");
+    assert_eq!(attempt("null"), "HTTP/1.1 101");
 }
