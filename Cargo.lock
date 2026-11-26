@@ -2475,7 +2475,7 @@ dependencies = [
 
 [[package]]
 name = "magic-remote-service"
-version = "3.0.1"
+version = "3.1.0"
 dependencies = [
  "embed-resource",
  "flate2",

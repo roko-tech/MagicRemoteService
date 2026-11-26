@@ -164,6 +164,7 @@ Don't enter passwords via the remote.
 
 ## History
 
+- **3.1** — a native settings window; deploying the TV app without Node.js, with pairing from the settings and the installer; cursor speed, scroll speed and long press applied live on the TV; per-app binding profiles; per-TV diagnostics; a heartbeat so the TV notices a PC that went quiet; the device token kept inside the service and web pages refused on the TV connection.
 - **3.0** — the PC service rebuilt in Rust: one exe with no .NET dependency; a supervisor that restarts its worker; settings that apply without a restart; PC settings, pointer display and an event log in the web UI. It also fixes mouse speed not being restored, Wake-on-LAN waking the PC right after a shutdown, and reconnect timers stacking up. See [Releases](https://github.com/roko-tech/MagicRemoteService/releases).
 - **2.x** — the C# version: `config.json` instead of patching JavaScript at install, SSDP discovery, the web UI, smooth scrolling with per-app exclusions, non-blocking toasts, CPU use near zero, a keepalive for the webOS 25 TV service, a Node.js 22 polyfill for the webOS CLI, and device token auth.
 
