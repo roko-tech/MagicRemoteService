@@ -50,15 +50,8 @@ component RemoteButton {
         border-color: #16191f;
     }
 
-    touch := TouchArea {
-        enabled: root.mappable;
-        mouse-cursor: root.mappable ? MouseCursor.pointer : MouseCursor.default;
-        clicked => {
-            root.clicked();
-        }
-    }
-
     focus := FocusScope {
+        // Under the TouchArea, so a click reaches the TouchArea on the first try
         enabled: root.mappable;
         key-pressed(event) => {
             if (event.text == " " || event.text == "\n") {
@@ -68,6 +61,15 @@ component RemoteButton {
             return reject;
         }
     }
+
+    touch := TouchArea {
+        enabled: root.mappable;
+        mouse-cursor: root.mappable ? MouseCursor.pointer : MouseCursor.default;
+        clicked => {
+            root.clicked();
+        }
+    }
+
 
     if focus.has-focus: Rectangle {
         x: -3px;

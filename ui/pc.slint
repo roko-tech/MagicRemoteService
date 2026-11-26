@@ -29,6 +29,7 @@ component SwitchRow {
         VerticalLayout {
             alignment: center;
             AppSwitch {
+                label: root.title;
                 checked <=> root.checked;
             }
         }
