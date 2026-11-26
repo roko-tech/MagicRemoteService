@@ -1,173 +1,196 @@
+<div align="center">
+
 # MagicRemoteService
 
+**Your LG Magic Remote, now a mouse and keyboard for your Windows PC.**<br>
+Point, click, scroll and type from the couch.
+
 [![Build](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml/badge.svg)](https://github.com/roko-tech/MagicRemoteService/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/roko-tech/MagicRemoteService?color=4ecca3&label=release)](https://github.com/roko-tech/MagicRemoteService/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4)
 
-Control your Windows PC with the LG Magic Remote — point, click, scroll, and type from your couch.
+[Quick start](#quick-start) · [Using the remote](#using-the-remote) · [Settings](#settings) · [How it works](#how-it-works) · [Troubleshooting](#troubleshooting)
 
-Forked from [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRemoteService). Tested on LG C2 (webOS 25), LG C1 (webOS 6.0), Windows 10/11.
+<img src="docs/images/settings.png" alt="The settings window: the Magic Remote drawn on the left, the editor for the CH + button on the right" width="860">
 
-## Install
+</div>
 
-You need:
-- the [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) on the TV, with Dev Mode Status on, and Key Server on while you pair the TV (turn it off afterwards: the key it serves is protected only by the short passphrase);
-- Windows' OpenSSH Client on the PC, which Windows 10 (1809 and later) and 11 include. If it was removed, add it back under Settings > System > Optional features.
+## Highlights
 
-No Node.js or webOS CLI is needed: the service builds the TV app's package itself and installs it over the TV's Developer Mode SSH.
+- **Feels like a mouse** — wave the remote to move the pointer. OK clicks, a long press right-clicks, the wheel scrolls with momentum, and the TV's keyboard types.
+- **Every button is yours** — map any button to a click, a key, a shortcut, a command or a TV action, and give apps such as VLC their own layout.
+- **Set up from the PC** — pair the TV and install its app in seconds. No Node.js, no webOS CLI.
+- **Tune it live** — cursor speed, scroll speed and long-press time reach the TV the moment you save.
+- **Stays out of the way** — one small Windows service. It starts with Windows, wakes the PC from the TV, and can shut it down when you're done.
+- **Private by design** — other devices on your network can't take over the PC, and the settings are only reachable from the PC itself.
 
-### From a release (recommended)
+## Quick start
 
-1. Download `MagicRemoteService-<version>.zip` from [Releases](https://github.com/roko-tech/MagicRemoteService/releases) and extract it.
-2. Double-click `install.bat` and accept the administrator prompt.
+| You need | |
+|---|---|
+| **A PC** | Windows 10 (1809 or later) or Windows 11, connected to the TV over HDMI |
+| **A TV** | An LG TV with webOS (tested on the C2 and C1) and the free [Developer Mode app](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app), which needs an LG developer account |
+| **A network** | The PC and the TV on the same local network |
 
-### From source
+1. **Prepare the TV.** Install the Developer Mode app from the LG Content Store, sign in, and turn on **Dev Mode Status** and **Key Server**. Note the TV's IP address and the passphrase the app shows.
+2. **Install on the PC.** Download `MagicRemoteService-<version>.zip` from the [latest release](https://github.com/roko-tech/MagicRemoteService/releases/latest), extract it, and double-click `install.bat`. Accept the administrator prompt.
+3. **Answer the installer.** It installs the service, pairs the TV (its IP and the passphrase), asks which network the TV is on and which HDMI input the PC uses, then installs and opens the TV app.
+4. **Turn Key Server off** in the Developer Mode app. It's only needed while pairing.
 
-Install [Rust](https://rustup.rs) (MSVC toolchain), then:
+Then open the app on the TV, or switch the TV to the PC's input, and point.
 
-```
-git clone https://github.com/roko-tech/MagicRemoteService.git
-cd MagicRemoteService
-install.bat
-```
+> [!TIP]
+> Already set up the TV with the webOS CLI (`ares-setup-device`)? The service picks it up by itself, so there's nothing to pair.
 
-`install.bat` builds the exe with `cargo` when `target\release\MagicRemoteService.exe` doesn't exist yet.
+<details>
+<summary><b>Updating, uninstalling and installer options</b></summary>
 
-### What the installer does
+- **Update:** run `install.bat` from the new release. Your bindings, TV settings and registry settings are kept. Then click **Reinstall TV App** in the settings so the TV gets the matching app.
+- **Uninstall:** run `"C:\Program Files\MagicRemoteService\MagicRemoteService.exe" uninstall` from an administrator prompt, then remove the app from the TV's app list.
+- **Options:** choose "PC service only" or "TV app only" in the installer's menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4`, for example `install.bat -Part Tv -Hdmi 4`.
+- **From source:** install [Rust](https://rustup.rs) (MSVC toolchain), clone the repository and run `install.bat`; it builds the exe with `cargo` if there isn't one yet.
 
-1. Copies `MagicRemoteService.exe` to `C:\Program Files\MagicRemoteService` and registers the Windows service there, restarting it automatically if it fails. It also adds the firewall rules and starts it. Settings from an earlier version (`bindings.json`, `tv-config.json` and the registry) are kept.
-2. Pairs the TV if none is paired yet (its IP and the passphrase its Developer Mode app shows). Then it asks which network the TV is on and which HDMI input the PC is plugged into, generates a device token if there is none, and installs and launches the TV app on the default TV. A TV already set up in the webOS CLI (`ares-setup-device`) is picked up without pairing again.
+</details>
 
-Choose "PC service only" or "TV app only" in its menu, or pass `-Part Pc|Tv` and `-Hdmi 1-4` (for example `install.bat -Part Tv -Hdmi 4`).
+## Using the remote
 
-To update, run the installer of the new version. To uninstall, run `"C:\Program Files\MagicRemoteService\MagicRemoteService.exe" uninstall` from an administrator prompt. Then remove the TV app from the TV's app list.
+| On the remote | On the PC |
+|---|---|
+| Point and wave | Move the pointer |
+| **OK**, short press | Left click |
+| **OK**, long press, or **Yellow** | Right click |
+| Wheel | Scroll, with momentum |
+| **Arrows** · **OK** · **Back** | Arrow keys · Enter · Escape |
+| **CH +** · **CH −** | Copy · Paste |
+| **0–9** | Number keys |
+| **Red** | Shut down the PC (the TV asks first) |
+| **Green** | Start menu |
+| **Blue** | Show or hide the TV's keyboard |
+| **Play** · **Pause** · **Stop** | Play/pause · Pause · Stop |
+| **Fast forward** · **Rewind** | Next track · Previous track |
+| Hold **Back** for a second | Leave the TV app |
 
-## Usage
+Every button can be changed in the [settings](#settings).
 
-| Action | How |
-|--------|-----|
-| Move cursor | Point and wave the Magic Remote |
-| Left click | Short press the OK/wheel button |
-| Right click | Long press the OK/wheel button, or press Yellow |
-| Scroll | Roll the scroll wheel (smooth momentum) |
-| Arrow keys | Press the D-pad directions |
-| Enter | Press OK |
-| Escape | Press Back |
-| Copy | Press CH + |
-| Paste | Press CH - |
-| Shutdown PC | Press Red button |
-| Open Windows menu | Press Green button |
-| Toggle TV keyboard | Press Blue button |
-| Numbers 0-9 | Press number pad |
-| Media keys | On remotes that have them: Play toggles play/pause, Stop stops, Fast-forward and Rewind skip to the next and previous track, and Pause sends the keyboard Pause key |
-| Exit TV app | Hold Back button for 1 second |
+**Volume** stays with the TV while Windows plays through it (HDMI, DisplayPort or S/PDIF, such as the TV or a soundbar on its eARC). While Windows plays somewhere else, such as headphones, the volume buttons change the PC's volume instead.
 
-All mappings can be changed in the settings.
-
-The remote's volume buttons stay with the TV while Windows plays through it (HDMI, DisplayPort, or S/PDIF, such as the TV or a soundbar on its eARC). While Windows plays on another device, such as headphones, they change the PC volume instead, and the TV app sets the TV volume back after each step. This works while the TV app shows the PC input.
-
-When the PC is off, opening the TV app (or switching back to the PC's input) sends Wake-on-LAN for 15 seconds. Shutting the PC down never wakes it again by itself.
+**Wake-on-LAN:** with the PC off, opening the TV app or switching to the PC's input wakes it. Shutting the PC down never wakes it again by itself.
 
 ## Settings
 
-Double-click the tray icon (or right-click it and choose **Open settings**) to open the settings window. It is a native window that runs as you, not as the service, and talks to the service through its local API. The same settings are at **http://localhost:41231** in a browser on this PC (**Open in browser** in the window).
+Double-click the tray icon to open the settings. The window runs as you, never with the service's rights, and works with the keyboard and screen readers. The same settings are at <http://localhost:41231> in a browser on the PC.
 
-- **Overview** — whether the service is running, the connected TVs (how long, last input, latency, pointer, and activity counts, never which keys or text), and the recent events: TVs connecting and leaving, refused connections, saved settings.
-- **Remote** — pick any button on the drawn remote to map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a command, or a TV action (shut down the PC, toggle the TV keyboard). Bindings apply as soon as they're saved; a dot marks changed buttons.
-  - **Profiles** — create one for some apps (their process names, as in Task Manager's Details tab, such as `vlc`). Buttons you change in it act differently while one of those apps is in front; the others keep their normal binding.
-  - **Smooth scrolling exceptions** — apps (such as media players) that use the wheel for volume get single scroll steps instead of momentum.
-- **TVs** — pair a TV with its IP and the passphrase its Developer Mode app shows (Key Server on while pairing; turn it off afterwards), pick the default TV, or unpair one. Pairing downloads the TV's key and checks it opens a session before saving it.
-  - **TV app** — the HDMI input the PC is on, the network the TV is on (the PC's IP, MAC for Wake-on-LAN, and subnet), the port, and the cursor speed, scroll speed and long-press time. The last three reach connected TVs as soon as you save (with a TV app from this version on); the rest need **Reinstall TV App**, which builds the TV app with this configuration and installs and launches it on the default TV.
-- **PC** — start with Windows, the shutdown timeouts and the TV port:
-  - **Remote idle:** with the TV connected and no remote input for that long, Windows shuts down. Using the PC in the last five minutes cancels it; the remote counts.
-  - **Monitor off:** the same countdown, starting when the PC's monitor turns off.
-  - **Pointer display** — with several monitors, pick the one each TV shows so its pointer lands there.
+| Page | What you can do |
+|---|---|
+| **Overview** | See whether the service is running, each connected TV (connected for, last input, latency, activity counts, never which keys or text) and recent events. |
+| **Remote** | Pick a button on the drawn remote and map it to a mouse click, a key, a shortcut (Ctrl+C, Alt+Tab, Win+D…), a command, or a TV action. Create **profiles** so buttons act differently while particular apps are in front, and list apps that should scroll one step at a time. |
+| **TVs** | Pair a TV, choose the default one, or unpair it. Set up the TV app: the HDMI input, the network, the port, and the cursor speed, scroll speed and long-press time, which apply at once. **Reinstall TV App** builds and installs it on the default TV. |
+| **PC** | Start with Windows, shut down when the remote is idle or the monitor is off, change the port, and pick the monitor each TV's pointer lands on. |
 
-The window works with the keyboard (**Tab** between controls, **Space** or **Enter** to press) and with screen readers.
+## How it works
 
-## Commands
-
-| Command | What it does |
-|---------|--------------|
-| `MagicRemoteService.exe install` | Copy this exe to `C:\Program Files\MagicRemoteService` and install or update the service from there (administrator) |
-| `MagicRemoteService.exe uninstall` | Stop and remove the service (administrator) |
-| `MagicRemoteService.exe status` | Service state, port and connected TVs |
-| `MagicRemoteService.exe ui` | Open the settings window (also what starting the exe by hand does while the service runs) |
-| `MagicRemoteService.exe --port 41330 --no-ssdp` | Run a second copy on its own beside the service, to try a build |
-
-These are window-less programs: in PowerShell, pipe them (`… status | Out-Host`) to see their output.
-
-## How It Works
-
-```
-LG Magic Remote → TV App (webOS) → WebSocket → PC Service (Windows) → Mouse/Keyboard
-  gyroscope        captures input    port 41230   translates to          controls your
-  buttons          sends binary                   Win32 SendInput        desktop
-  scroll wheel     messages
+```mermaid
+flowchart LR
+    remote([Magic Remote]) --> app["TV app<br/>webOS"]
+    app -- "WebSocket · TCP 41230" --> worker["Worker<br/>your session"]
+    service["Windows service<br/>session 0"] -. "keeps running" .-> worker
+    worker -- "SendInput" --> desktop([Your desktop])
+    window["Settings window<br/>runs as you"] -- "API · 127.0.0.1:41231" --> worker
+    worker -. "installs the app over SSH" .-> app
 ```
 
-**On the PC**, one exe runs as two processes:
-- the **service**, in session 0 as SYSTEM, starts at boot and keeps the worker running, restarting it after a crash or when another session takes the console;
-- the **worker**, in the console session as SYSTEM, does the actual work. It listens for the TV on TCP 41230, answers the TV's network search on UDP 1900, serves the settings API and web page on port 41231 (this PC only), and injects input with `SendInput`.
-
-The **settings window** is the same exe started with `ui`, as the signed-in user. It loads none of its window libraries (DirectWrite, UI Automation and the like) into the service: they're delay-loaded when a window opens.
-
-**Settings** live in `C:\Program Files\MagicRemoteService` (`bindings.json`, `tv-config.json`, and the paired TVs in `tvs.json` with their keys in `tv-<name>.key`) and in `HKLM\SOFTWARE\WOW6432Node\MagicRemoteService` (port, timeouts, per-TV display). **Logs** go to Event Viewer (Windows Logs → Application, source MagicRemoteService) and to Recent Events in the settings.
-
-**On the TV**, the web app (`tv/app`) captures the remote and talks to the PC. A small JS service (`tv/service`) finds the PC on the network, sends Wake-on-LAN, and relaunches the app when the PC input is selected. The app reads its settings from a `config.json` packaged from `tv-config.json`; the speeds and long-press time also come over the connection when they change.
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| "Service is busy" or "not running" | Reboot TV, then relaunch the app |
-| Pointer doesn't work but scroll does | Wave the remote at the TV to activate the gyroscope. It auto-retries every 3 seconds |
-| "Failed to get sensor data [1003]" | Normal on webOS 25 — auto-retries in the background |
-| TV can't reach the PC after its IP changed | Run the installer again ("TV app only"), or on the TVs page choose the network, Save and Reinstall TV App. A DHCP reservation in your router stops it changing |
-| TV keeps retrying; Recent Events shows "invalid or missing token" | The TV app carries an old token: click Reinstall TV App |
-| Settings say the service isn't answering | Start the service (or run `MagicRemoteService.exe` on its own), then Try again. Check `MagicRemoteService.exe status` |
-| Pairing says it can't reach the key server | In the TV's Developer Mode app, turn on Key Server (and check the IP) |
-| Reinstall TV App says it can't reach the TV | Turn the TV on and check Dev Mode Status in its Developer Mode app: the Developer Mode session runs out unless you extend it there |
-| Reinstall TV App says the TV refused the key, or the TV isn't the one paired | Developer Mode was reinstalled or the TV was reset: pair it again under TVs |
-| Reinstall TV App says the OpenSSH Client isn't installed | Add it under Settings > System > Optional features |
-| Worried about burn-in on an OLED TV | The TV app keeps the TV's screensaver off while the PC is connected, so a video never gets interrupted. Set Windows to turn off the display after a few minutes (Settings › System › Power): it stays on while a video plays, and an idle desktop then goes dark |
-| TV says "Disconnected" a few seconds after the PC sleeps | Expected: the PC sends a heartbeat every 5 seconds, and the TV reconnects when it wakes |
-| Home launcher pointer blocked | Expected in overlay mode — use D-pad to navigate the TV launcher |
-| TV app shows after long delay | Normal on cold boot — webOS takes ~60s to initialize developer apps |
-| Can't exit TV app | Press and hold the Back button for 1 second |
-| Forgot what a button does | Pick it on the Remote page: the editor shows what it does now |
-
-## Building from Source
-
-Rust 1.95 or newer with the MSVC toolchain (`rustup` installs it; the Windows SDK supplies the resource compiler).
-
-```
-cargo test
-cargo build --release
-```
-
-The exe is `target\release\MagicRemoteService.exe`. `cargo build` then `cargo test -- --ignored` also runs two tests that need this PC's hardware and a TV: one reads the default audio device; the other installs a throwaway copy of the TV app (`…hdmi9`, never launched) on the TV set up in the webOS CLI, checks the TV lists it, and removes it.
-
-Layout: `src/` is the PC service (`src/win/` holds the Windows calls, `src/ui/` the settings window's logic), `ui/` the settings window in [Slint](https://slint.dev), `tv/app` and `tv/service` the webOS app and service, `resources/` the web page, icon, cursor and manifest built into the exe. Pushes and pull requests run formatting, lint and tests in CI; pushing a `v*` tag publishes a release.
+- **One exe, three roles.** The service starts with Windows and keeps the worker running. The worker listens for the TV on TCP 41230, answers its network search on UDP 1900, serves the settings on 127.0.0.1:41231 and moves the pointer with `SendInput`. The settings window is the same exe, started as you.
+- **On the TV,** the app (`tv/app`) captures the remote and talks to the PC. A small service (`tv/service`) finds the PC, wakes it, and relaunches the app when you switch to the PC's input.
+- **Installing the TV app** needs no developer tools: the service builds the package itself and installs it through the TV's Developer Mode, with the SSH client built into Windows.
+- **Settings** are kept in `C:\Program Files\MagicRemoteService` (`bindings.json`, `tv-config.json`, and paired TVs in `tvs.json` with their keys) and in `HKLM\SOFTWARE\WOW6432Node\MagicRemoteService`. **Logs** go to Event Viewer (Application, source MagicRemoteService) and to the Overview page.
 
 ## Security
 
-- **Device token** — the TV presents a shared token in the WebSocket URL, and connections without it are refused, so other devices on your LAN can't drive the PC. The installer generates it; **New token** on the TVs page replaces it. Every TV must carry the same token, so reinstall a TV's app after the token changes. The service keeps the token to itself: the API only reports whether one is set, and `tv-config.json` is readable only by SYSTEM and administrators. With no token the service runs in open mode, anything on the LAN can control the PC, and the settings show "Device token off" in red.
-  - *What it protects against:* blind LAN devices and malicious web pages, which can neither read it cross-origin nor sniff your network. *What it does **not**:* the token travels in cleartext over `ws://` (no TLS), so a sniffer on your network segment could capture and replay it. It raises the bar within a trusted LAN; it is not a substitute for one.
-- **Local network only** — no encryption between TV and PC. The firewall rules let the TV in on networks Windows treats as Private or Domain, never Public ones.
-- **Service location** — the service runs as SYSTEM from `C:\Program Files\MagicRemoteService`, where only administrators can change files. Never point it at a folder ordinary accounts can write to.
-- **Least privilege** — shell-command bindings and the browser run as the user signed in at the PC, never as SYSTEM.
-- **TV keys** — a paired TV's SSH key stays encrypted with its passphrase. `tvs.json` (which holds the passphrase) and the key files are readable only by SYSTEM and administrators, and the API never returns a passphrase. The service trusts a TV's SSH host key the first time it connects and refuses a different one afterwards, until the TV is paired again.
-- **Settings window, web page and API** — the window runs as the signed-in user, never as SYSTEM, and uses the same API as the web page. The API listens on loopback only. Requests with other `Host` names (DNS rebinding) or foreign origins are refused. Changes (POST) need an `X-Requested-With` header, which cross-site pages can't send; send it if you script the API. Any program running on the PC can still use the API: it can change bindings and settings, pair a TV and reinstall the TV app (whose package carries the token). It can't read the token or a TV's passphrase through the API, but treat programs on this PC as trusted.
-- **WebSocket** — upgrades from web pages (an `http` or `https` `Origin`) are refused, so a page open in any browser can't drive the PC even in open mode. Frame sizes are capped, the handshake must finish within 10 seconds, at most 16 connections are open at once, and the token is compared in constant time. Refused connections are logged at most once a minute per address.
-- **Command bindings** — `& | ; < >` are refused so a binding can't chain commands, but a binding still runs whatever program it names.
+- **Only your TVs.** A TV must present the device token the installer generates; other devices on the network are refused. **New token** on the TVs page replaces it.
+- **Only this PC can change settings.** The API listens on loopback, refuses other host names and cross-site requests, and never reveals the token or a TV's passphrase.
+- **Least privilege.** The settings window, command bindings and the browser run as you. The service runs from Program Files, where only administrators can change files.
+- **Secrets stay with the service.** The token, TV keys and passphrases are readable only by SYSTEM and administrators.
+- **Home networks only.** The firewall lets TVs in on Private and Domain networks, never Public ones.
 
-Don't enter passwords via the remote.
+<details>
+<summary><b>The details, and the limits</b></summary>
 
-## History
+- **Device token.** The TV sends the token in the WebSocket URL and the service compares it in constant time. Every TV must carry the same token, so reinstall the TV app after **New token**. Without a token the service runs in open mode, where anything on the LAN can control the PC, and the settings show "Device token off" in red.
+- **What the token doesn't cover.** It travels in cleartext over `ws://`, with no TLS, so a sniffer on your network segment could capture and replay it. It raises the bar on a trusted LAN; it isn't a substitute for one.
+- **WebSocket.** Connections from web pages (an `http` or `https` origin) are refused, even in open mode. Frame sizes are capped, the handshake must finish within 10 seconds, at most 16 connections are open at once, and refused connections are logged at most once a minute per address.
+- **API.** Changes (POST) need an `X-Requested-With` header, which cross-site pages can't send; send it if you script the API. Any program on the PC can still use the API to change bindings and settings, pair a TV or reinstall the TV app (whose package carries the token), so treat programs on this PC as trusted.
+- **TV keys.** A paired TV's SSH key stays encrypted with its passphrase. The service trusts a TV's SSH host key the first time and refuses a different one until the TV is paired again. Turn Key Server off after pairing: the key it serves is protected only by the short passphrase.
+- **Command bindings.** `& | ; < >` are refused so a binding can't chain commands, but a binding still runs whatever program it names.
+- **Typing.** Don't enter passwords with the remote.
 
-- **3.1** — a native settings window; deploying the TV app without Node.js, with pairing from the settings and the installer; cursor speed, scroll speed and long press applied live on the TV; per-app binding profiles; per-TV diagnostics; a heartbeat so the TV notices a PC that went quiet; the device token kept inside the service and web pages refused on the TV connection.
-- **3.0** — the PC service rebuilt in Rust: one exe with no .NET dependency; a supervisor that restarts its worker; settings that apply without a restart; PC settings, pointer display and an event log in the web UI. It also fixes mouse speed not being restored, Wake-on-LAN waking the PC right after a shutdown, and reconnect timers stacking up. See [Releases](https://github.com/roko-tech/MagicRemoteService/releases).
-- **2.x** — the C# version: `config.json` instead of patching JavaScript at install, SSDP discovery, the web UI, smooth scrolling with per-app exclusions, non-blocking toasts, CPU use near zero, a keepalive for the webOS 25 TV service, a Node.js 22 polyfill for the webOS CLI, and device token auth.
+</details>
 
-## License
+## Troubleshooting
 
-GPL-3.0 — see [LICENSE](LICENSE)
+| Problem | What to do |
+|---|---|
+| The TV can't reach the PC after its IP changed | On the TVs page, choose the network, **Save** and **Reinstall TV App**, or run the installer again ("TV app only"). A DHCP reservation in your router stops it changing. |
+| The TV keeps retrying; Overview shows "invalid or missing token" | The TV app carries an old token: click **Reinstall TV App**. |
+| The settings say the service isn't answering | Start the service, then **Try again**. `MagicRemoteService.exe status` shows its state. |
+| Pairing can't reach the key server | Turn on **Key Server** in the TV's Developer Mode app, and check the IP. |
+| Reinstall TV App can't reach the TV | Turn the TV on and check **Dev Mode Status** in the Developer Mode app; the session runs out unless you extend it there. |
+| The TV refused the key, or isn't the TV that was paired | Developer Mode was reinstalled or the TV was reset: pair it again on the TVs page. |
+| "The OpenSSH Client isn't installed" | Add it under Settings › System › Optional features. |
+| The pointer doesn't move but scrolling works | Wave the remote at the TV to wake the gyroscope; the app retries every 3 seconds. |
+| "Service is busy" or "not running" on the TV | Restart the TV, then open the app again. |
+| "Failed to get sensor data [1003]" | Normal on webOS 25; the app retries in the background. |
+| The TV app takes a minute to appear | Normal after a cold boot: webOS takes about a minute to start developer apps. |
+| The TV shows "Disconnected" soon after the PC sleeps | Expected: the TV notices within 15 seconds and reconnects when the PC wakes. |
+| The pointer can't reach the TV's home launcher | Expected in overlay mode: use the arrows on the launcher. |
+| Worried about burn-in on an OLED | The app keeps the TV's screensaver off while the PC is connected, so videos aren't interrupted. Set Windows to turn the display off after a few minutes (Settings › System › Power): it stays on during video, and an idle desktop goes dark. |
+
+## Command line
+
+| Command | What it does |
+|---|---|
+| `MagicRemoteService.exe install` | Copy the exe to `C:\Program Files\MagicRemoteService` and install or update the service from there (administrator) |
+| `MagicRemoteService.exe uninstall` | Stop and remove the service (administrator) |
+| `MagicRemoteService.exe status` | Show the service's state, port and connected TVs |
+| `MagicRemoteService.exe ui` | Open the settings window |
+| `MagicRemoteService.exe --port 41330 --no-ssdp` | Run a second copy beside the service, to try a build |
+
+The exe has no console window: in PowerShell, pipe it (`… status | Out-Host`) to see the output.
+
+## Building from source
+
+You need Rust 1.95 or newer with the MSVC toolchain (`rustup` installs it; the Windows SDK supplies the resource compiler).
+
+```powershell
+cargo test
+cargo build --release   # target\release\MagicRemoteService.exe
+```
+
+`cargo test -- --ignored` (after `cargo build`) also runs two tests that need real hardware: one reads the default audio device; the other installs a throwaway copy of the TV app on the TV set up in the webOS CLI, checks the TV lists it, and removes it.
+
+```
+src/          the PC service, in Rust
+  win/        Windows calls
+  ui/         the settings window's logic
+ui/           the settings window, in Slint
+tv/app/       the webOS app
+tv/service/   its webOS service
+resources/    the web page, icon, cursor and manifest built into the exe
+tests/        integration tests
+```
+
+Every push runs formatting, lint and tests in CI. Pushing a `v*` tag publishes a release.
+
+## Release history
+
+- **3.1** — a native settings window; the TV app installed without Node.js, with pairing in the settings and the installer; cursor speed, scroll speed and long press applied live; per-app profiles; per-TV diagnostics; a heartbeat so the TV notices a PC that went quiet; the device token kept inside the service.
+- **3.0** — the PC side rebuilt in Rust: one exe with no .NET, a supervisor that restarts its worker, and settings that apply without a restart.
+- **2.x** — the C# version: discovery, the web settings page, smooth scrolling and device token auth.
+
+See [Releases](https://github.com/roko-tech/MagicRemoteService/releases) for the full notes.
+
+## Credits and license
+
+Based on [Cathwyler/MagicRemoteService](https://github.com/Cathwyler/MagicRemoteService). Licensed under the [GPL-3.0](LICENSE).
+
+LG, webOS and Magic Remote are trademarks of LG Electronics. This project isn't affiliated with or endorsed by LG.
