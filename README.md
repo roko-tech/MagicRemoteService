@@ -92,12 +92,11 @@ Double-click the tray icon to open the settings. The window runs as you, never w
 
 ```mermaid
 flowchart LR
-    remote([Magic Remote]) --> app["TV app<br/>webOS"]
-    app -- "WebSocket · TCP 41230" --> worker["Worker<br/>your session"]
-    service["Windows service<br/>session 0"] -. "keeps running" .-> worker
+    remote([Magic Remote]) --> app[TV app]
+    app -- "WebSocket" --> worker[Worker]
     worker -- "SendInput" --> desktop([Your desktop])
-    window["Settings window<br/>runs as you"] -- "API · 127.0.0.1:41231" --> worker
-    worker -. "installs the app over SSH" .-> app
+    service[Windows service] -. "keeps running" .-> worker
+    window[Settings window] -- "local API" --> worker
 ```
 
 - **One exe, three roles.** The service starts with Windows and keeps the worker running. The worker listens for the TV on TCP 41230, answers its network search on UDP 1900, serves the settings on 127.0.0.1:41231 and moves the pointer with `SendInput`. The settings window is the same exe, started as you.
