@@ -8,6 +8,7 @@ component RemoteButton {
     in property <bool> selected;
     callback clicked;
     property <bool> mappable: root.key.code != "";
+    forward-focus: focus;
     accessible-role: button;
     accessible-enabled: root.mappable;
     accessible-label: root.key.name;
@@ -55,6 +56,27 @@ component RemoteButton {
         clicked => {
             root.clicked();
         }
+    }
+
+    focus := FocusScope {
+        enabled: root.mappable;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -3px;
+        y: -3px;
+        width: root.width + 6px;
+        height: root.height + 6px;
+        border-radius: root.key.round ? self.height / 2 : 10px;
+        border-width: 2px;
+        border-color: Theme.accent;
     }
 }
 
@@ -119,7 +141,7 @@ component ProfileBar inherits Card {
         spacing: 10px;
         ComboBox {
             model: App.profile-names;
-            current-index: App.profile-index;
+            current-index <=> App.profile-index;
             selected => {
                 App.choose-profile(self.current-index);
             }
@@ -147,11 +169,8 @@ component ProfileBar inherits Card {
         label: "Applies while one of these apps is in front";
         hint: "Process names as in Task Manager's Details tab, without .exe, separated by commas.";
         LineEdit {
-            text: App.profile-apps;
+            text <=> App.profile-apps;
             placeholder-text: "vlc, PotPlayerMini64";
-            accepted(text) => {
-                App.set-profile-apps(text);
-            }
             edited(text) => {
                 App.set-profile-apps(text);
             }

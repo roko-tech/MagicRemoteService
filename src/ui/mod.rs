@@ -46,6 +46,8 @@ enum Confirm {
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
+    /// The timer that styles the window once it exists.
+    static STYLING: RefCell<Option<Timer>> = const { RefCell::new(None) };
 }
 
 fn with<T>(f: impl FnOnce(&mut State) -> T) -> T {
@@ -176,6 +178,7 @@ fn apply_snapshot(ui: &MainWindow, snap: Snapshot) {
     });
     app.set_key_names(strings(model::keys().into_iter().map(|(_, n)| n)));
     render_bindings(ui);
+    show_profile_apps(ui);
 
     // TVs and the TV app
     render_tvs(ui, &snap.tvs);
@@ -296,7 +299,7 @@ fn poll(ui: &MainWindow) {
 
 fn render_bindings(ui: &MainWindow) {
     let app = ui.global::<App>();
-    let (keys, names, index, apps, exclude) = with(|s| {
+    let (keys, names, index, exclude) = with(|s| {
         let keys: Vec<RemoteKey> = model::REMOTE
             .iter()
             .map(|k| {
@@ -326,18 +329,23 @@ fn render_bindings(ui: &MainWindow) {
                 }
             }))
             .collect();
-        let apps = s.profile.and_then(|p| s.bindings.profiles.get(p)).map(|p| p.apps.join(", ")).unwrap_or_default();
-        (keys, names, s.profile.map_or(0, |p| p as i32 + 1), apps, s.bindings.scroll_exclude.clone())
+        (keys, names, s.profile.map_or(0, |p| p as i32 + 1), s.bindings.scroll_exclude.clone())
     });
     app.set_remote_keys(ModelRc::new(VecModel::from(keys)));
     app.set_profile_names(strings(names));
     app.set_profile_index(index);
-    app.set_profile_apps(apps.into());
     app.set_scroll_exclude(strings(exclude));
     let selected = app.get_selected_code().to_string();
     if !selected.is_empty() {
         show_key(ui, &selected, false);
     }
+}
+
+/// Puts the selected profile's apps in the apps box: when the profile changes, not after each
+/// save (which would rewrite the box while someone types in it).
+fn show_profile_apps(ui: &MainWindow) {
+    let apps = with(|s| s.profile.and_then(|p| s.bindings.profiles.get(p)).map(|p| p.apps.join(", ")).unwrap_or_default());
+    ui.global::<App>().set_profile_apps(apps.into());
 }
 
 /// Shows `code` in the editor; `reload_form` also puts its binding into the form.
@@ -554,6 +562,7 @@ fn wire(ui: &MainWindow) {
         with(|s| s.profile = (index > 0).then(|| index as usize - 1));
         ui.global::<App>().set_new_profile_open(false);
         render_bindings(&ui);
+        show_profile_apps(&ui);
         let code = ui.global::<App>().get_selected_code().to_string();
         if !code.is_empty() {
             show_key(&ui, &code, true);
@@ -572,6 +581,7 @@ fn wire(ui: &MainWindow) {
             s.profile = Some(s.bindings.profiles.len() - 1);
         });
         ui.global::<App>().set_new_profile_open(false);
+        show_profile_apps(&ui);
         save_bindings(&ui, format!("Profile {name} created. Pick a button to change it there."));
     });
     let weak = w.clone();
@@ -867,6 +877,7 @@ fn wire(ui: &MainWindow) {
                         s.bindings.profiles.remove(p);
                     }
                 });
+                show_profile_apps(&ui);
                 save_bindings(&ui, "Profile deleted.".into());
             }
             Confirm::NewToken => {
@@ -898,7 +909,7 @@ fn wire(ui: &MainWindow) {
 /// Gives the window the app's icon and a title bar that matches the dark theme, and centres it
 /// on its monitor, no bigger than the work area (at 250% scaling a 800 px tall window is most of
 /// a 4K screen), once it exists.
-fn style_window() {
+fn style_window() -> bool {
     use crate::win::wide;
     use windows_sys::Win32::Foundation::RECT;
     use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
@@ -910,7 +921,7 @@ fn style_window() {
     unsafe {
         let hwnd = FindWindowW(std::ptr::null(), wide(TITLE).as_ptr());
         if hwnd.is_null() {
-            return;
+            return false;
         }
         let mut info: MONITORINFO = std::mem::zeroed();
         info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
@@ -933,6 +944,7 @@ fn style_window() {
         DwmSetWindowAttribute(hwnd, 35, &caption as *const u32 as _, 4);
         SetForegroundWindow(hwnd);
     }
+    true
 }
 
 /// When the window is already open, brings it to the front instead of opening another.
@@ -988,7 +1000,16 @@ pub fn run(http_port: u16) -> i32 {
             poll(&ui);
         }
     });
-    Timer::single_shot(Duration::from_millis(30), style_window);
+    // The window exists once the event loop runs: try until it's there (about 2 s at most)
+    let styling = Timer::default();
+    let tries = std::cell::Cell::new(0);
+    styling.start(TimerMode::Repeated, Duration::from_millis(25), move || {
+        tries.set(tries.get() + 1);
+        if style_window() || tries.get() > 80 {
+            STYLING.with(|t| t.borrow_mut().take());
+        }
+    });
+    STYLING.with(|t| *t.borrow_mut() = Some(styling));
     match ui.run() {
         Ok(()) => 0,
         Err(_) => 1,

@@ -35,13 +35,17 @@ component StatTile inherits Rectangle {
 
         VerticalLayout {
             spacing: 3px;
+            min-width: 0px;
             Text {
+                min-width: 0px;
+                overflow: elide;
                 text: root.label;
                 font-size: 12px;
                 color: Theme.muted;
             }
 
             Text {
+                min-width: 0px;
                 text: root.value;
                 font-size: 18px;
                 font-weight: 600;
@@ -50,6 +54,7 @@ component StatTile inherits Rectangle {
             }
 
             Text {
+                min-width: 0px;
                 text: root.detail;
                 font-size: 12px;
                 color: Theme.faint;
@@ -85,9 +90,9 @@ component ClientCard inherits Rectangle {
     border-radius: 10px;
     HorizontalLayout {
         padding: 14px;
-        spacing: 22px;
+        spacing: 14px;
         VerticalLayout {
-            alignment: center;
+            alignment: start;
             Rectangle {
                 width: 36px;
                 height: 36px;
@@ -104,47 +109,52 @@ component ClientCard inherits Rectangle {
         }
 
         VerticalLayout {
-            alignment: center;
-            spacing: 2px;
-            min-width: 140px;
-            Text {
-                text: root.client.ip;
-                font-size: 14px;
-                font-weight: 600;
-                color: Theme.text;
+            spacing: 12px;
+            VerticalLayout {
+                spacing: 2px;
+                Text {
+                    text: root.client.ip;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: Theme.text;
+                }
+
+                Text {
+                    text: "Connected for " + root.client.connected;
+                    font-size: 12px;
+                    color: Theme.muted;
+                }
             }
 
-            Text {
-                text: "Connected for " + root.client.connected;
-                font-size: 12px;
-                color: Theme.muted;
+            HorizontalLayout {
+                spacing: 22px;
+                alignment: start;
+                Metric {
+                    label: "Last input";
+                    value: root.client.last-input;
+                }
+
+                Metric {
+                    label: "Latency";
+                    value: root.client.latency;
+                }
+
+                Metric {
+                    label: "Pointer";
+                    value: root.client.pointer;
+                }
+
+                Metric {
+                    label: "Moves · wheel · keys · text";
+                    value: root.client.counts;
+                }
+
+                Metric {
+                    label: "Live settings";
+                    value: root.client.live ? "Yes" : "After reinstall";
+                    ink: root.client.live ? Theme.accent : Theme.faint;
+                }
             }
-        }
-
-        Metric {
-            label: "Last input";
-            value: root.client.last-input;
-        }
-
-        Metric {
-            label: "Latency";
-            value: root.client.latency;
-        }
-
-        Metric {
-            label: "Pointer";
-            value: root.client.pointer;
-        }
-
-        Metric {
-            label: "Moves · wheel · keys · text";
-            value: root.client.counts;
-        }
-
-        Metric {
-            label: "Live settings";
-            value: root.client.live ? "Yes" : "After reinstall";
-            ink: root.client.live ? Theme.accent : Theme.faint;
         }
     }
 }
